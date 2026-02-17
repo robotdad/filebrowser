@@ -1,0 +1,4 @@
+FILEBROWSER_FQDN {
+    tls CERT_PATH KEY_PATH
+    reverse_proxy localhost:8000
+}

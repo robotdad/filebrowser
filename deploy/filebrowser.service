@@ -1,0 +1,16 @@
+[Unit]
+Description=File Browser
+After=network.target tailscaled.service
+Wants=tailscaled.service
+
+[Service]
+Type=simple
+User=FILEBROWSER_USER
+WorkingDirectory=FILEBROWSER_DIR
+ExecStart=FILEBROWSER_DIR/.venv/bin/uvicorn filebrowser.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+Environment=FILEBROWSER_SECRET_KEY=FILEBROWSER_SECRET
+
+[Install]
+WantedBy=multi-user.target

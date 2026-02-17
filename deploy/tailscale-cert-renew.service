@@ -1,0 +1,6 @@
+[Unit]
+Description=Renew Tailscale TLS certificates
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/tailscale cert --cert-file CERT_PATH --key-file KEY_PATH FILEBROWSER_FQDN
