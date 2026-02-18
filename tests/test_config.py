@@ -10,6 +10,7 @@ def test_settings_has_correct_defaults():
     assert s.upload_max_size == 1_073_741_824
     assert isinstance(s.secret_key, str)
     assert len(s.secret_key) >= 32
+    assert s.secure_cookies is False
 
 
 def test_settings_accepts_custom_values(tmp_path):

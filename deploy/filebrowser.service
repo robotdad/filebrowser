@@ -11,6 +11,7 @@ ExecStart=FILEBROWSER_DIR/.venv/bin/uvicorn filebrowser.main:app --host 127.0.0.
 Restart=always
 RestartSec=5
 Environment=FILEBROWSER_SECRET_KEY=FILEBROWSER_SECRET
+Environment=FILEBROWSER_SECURE_COOKIES=true
 
 [Install]
 WantedBy=multi-user.target

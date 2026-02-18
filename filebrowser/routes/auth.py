@@ -27,7 +27,7 @@ async def login(body: LoginRequest, response: Response):
         key="session",
         value=token,
         httponly=True,
-        secure=True,
+        secure=settings.secure_cookies,
         samesite="strict",
     )
     return {"username": body.username}

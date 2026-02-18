@@ -14,6 +14,11 @@ class Settings:
             "FILEBROWSER_SECRET_KEY", secrets.token_hex(32)
         )
     )
+    secure_cookies: bool = field(
+        default_factory=lambda: (
+            os.environ.get("FILEBROWSER_SECURE_COOKIES", "false").lower() == "true"
+        )
+    )
 
 
 settings = Settings()
