@@ -99,8 +99,10 @@ sed \
 # --- Enable and start services ---
 echo "Starting services..."
 systemctl daemon-reload
-systemctl enable --now filebrowser
-systemctl enable --now caddy
+systemctl enable filebrowser
+systemctl restart filebrowser
+systemctl enable caddy
+systemctl restart caddy
 
 if [ "$HTTPS" = true ]; then
     sed \

@@ -75,13 +75,16 @@ sudo /tmp/filebrowser/deploy/install.sh
 `install.sh` does the following:
 
 1. Detects the Tailscale FQDN via `tailscale status --json`
-2. Copies the project to `/opt/filebrowser`
-3. Creates a virtualenv and installs dependencies
-4. Generates a Tailscale/Let's Encrypt TLS certificate
-5. Installs Caddy (if not present) and writes the Caddyfile
-6. Writes and enables systemd units (`filebrowser.service`, `caddy`, cert renewal timer)
+2. Adds your user to the `shadow` group (required for PAM auth)
+3. Copies the project to `/opt/filebrowser`
+4. Creates a virtualenv and installs dependencies
+5. Attempts Tailscale/Let's Encrypt TLS certificate generation (requires paid Tailscale plan)
+6. Installs Caddy (if not present) and writes the Caddyfile
+7. Writes, enables, and **restarts** both `filebrowser` and `caddy` systemd services
 
-After install, browse to `https://<hostname>/` from any device on the tailnet.
+If TLS cert generation fails (free Tailscale plan), the script falls back to plain HTTP on port 80. Tailscale's WireGuard tunnel already encrypts traffic between your devices, so HTTP inside your tailnet is safe.
+
+After install, browse to `http://<hostname>/` (or `https://` if you have a paid plan) from any device on the tailnet.
 
 Check status:
 
