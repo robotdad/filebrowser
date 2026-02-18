@@ -57,6 +57,10 @@ export function ActionBar({ currentPath, selectedFile, onRefresh }) {
             <button onClick=${() => setShowUpload(true)}>Upload</button>
             <button onClick=${handleNewFolder}>New Folder</button>
             ${selectedFile && !renaming && html`
+                <a
+                    class="action-download-btn"
+                    href=${`/api/files/download?path=${encodeURIComponent(selectedFile)}`}
+                >Download</a>
                 <button onClick=${startRename}>Rename</button>
                 <button class="danger" onClick=${handleDelete}>Delete</button>
             `}

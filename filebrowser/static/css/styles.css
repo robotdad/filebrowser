@@ -232,6 +232,18 @@ body {
 .action-bar button.danger { color: var(--danger); border-color: var(--danger); }
 .action-bar button.danger:hover { background: var(--danger); color: #fff; }
 
+.action-download-btn {
+    padding: 6px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 13px;
+    text-decoration: none;
+}
+.action-download-btn:hover { background: var(--bg-tertiary); }
+
 .action-bar input {
     padding: 4px 8px;
     border: 1px solid var(--accent);
