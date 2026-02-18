@@ -2,18 +2,25 @@ import { useState, useEffect } from 'preact/hooks';
 import { html } from '../html.js';
 import { api } from '../api.js';
 
-export function FileTree({ currentPath, onNavigate, onSelectFile, refreshKey }) {
+export function FileTree({ currentPath, onNavigate, onSelectFile, refreshKey, showHidden }) {
     const [entries, setEntries] = useState({});
     const [expanded, setExpanded] = useState({});
     const [selected, setSelected] = useState(null);
 
     useEffect(() => {
-        loadDirectory('');
-    }, [refreshKey]);
+        reloadAll();
+    }, [refreshKey, showHidden]);
+
+    const reloadAll = async () => {
+        const paths = ['', ...Object.keys(expanded)];
+        for (const p of paths) {
+            await loadDirectory(p);
+        }
+    };
 
     const loadDirectory = async (path) => {
         try {
-            const data = await api.get(`/api/files?path=${encodeURIComponent(path)}`);
+            const data = await api.get(`/api/files?path=${encodeURIComponent(path)}&show_hidden=${showHidden}`);
             setEntries((prev) => ({ ...prev, [path]: data }));
         } catch {
             // toast is shown by api.js

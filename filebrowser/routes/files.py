@@ -16,11 +16,12 @@ def get_fs() -> FilesystemService:
 @router.get("")
 async def list_directory(
     path: str = "",
+    show_hidden: bool = False,
     username: str = Depends(require_auth),
     fs: FilesystemService = Depends(get_fs),
 ):
     try:
-        return fs.list_directory(path)
+        return fs.list_directory(path, show_hidden=show_hidden)
     except PermissionError:
         raise HTTPException(
             status_code=403, detail={"error": "Access denied", "code": "PATH_FORBIDDEN"}

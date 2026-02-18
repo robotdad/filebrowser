@@ -11,6 +11,7 @@ export function Layout({ username, onLogout }) {
     const [selectedFile, setSelectedFile] = useState(null);
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
+    const [showHidden, setShowHidden] = useState(false);
 
     const refresh = () => setRefreshKey((k) => k + 1);
 
@@ -35,6 +36,10 @@ export function Layout({ username, onLogout }) {
                 <button class="hamburger" onClick=${() => setSidebarOpen(!sidebarOpen)}>\u2630</button>
                 <${Breadcrumb} path=${currentPath} onNavigate=${setCurrentPath} />
                 <div class="header-right">
+                    <label class="hidden-toggle">
+                        <input type="checkbox" checked=${showHidden} onChange=${() => setShowHidden(!showHidden)} />
+                        Show hidden
+                    </label>
                     <span class="username">${username}</span>
                     <button class="logout-btn" onClick=${handleLogout}>Logout</button>
                 </div>
@@ -46,6 +51,7 @@ export function Layout({ username, onLogout }) {
                         onNavigate=${handleNavigate}
                         onSelectFile=${handleSelectFile}
                         refreshKey=${refreshKey}
+                        showHidden=${showHidden}
                     />
                 </aside>
                 <div

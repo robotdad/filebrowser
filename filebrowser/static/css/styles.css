@@ -77,6 +77,17 @@ body {
 
 .username { color: var(--text-secondary); font-size: 14px; }
 
+.hidden-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+}
+.hidden-toggle input { cursor: pointer; }
+
 .logout-btn {
     background: none;
     border: 1px solid var(--border-color);

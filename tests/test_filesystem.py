@@ -77,6 +77,20 @@ class TestListDirectory:
         with pytest.raises(NotADirectoryError):
             fs.list_directory("hello.txt")
 
+    def test_hidden_files_excluded_by_default(self, fs):
+        entries = fs.list_directory("")
+        names = [e["name"] for e in entries]
+        assert ".hidden_file" not in names
+        assert ".config" not in names
+        assert "hello.txt" in names
+
+    def test_hidden_files_included_when_requested(self, fs):
+        entries = fs.list_directory("", show_hidden=True)
+        names = [e["name"] for e in entries]
+        assert ".hidden_file" in names
+        assert ".config" in names
+        assert "hello.txt" in names
+
 
 class TestDetectFileType:
     @pytest.mark.parametrize(

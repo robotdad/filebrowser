@@ -50,7 +50,7 @@ class FilesystemService:
             raise PermissionError(f"Path outside home directory: {path}")
         return resolved
 
-    def list_directory(self, path: str = "") -> list[dict]:
+    def list_directory(self, path: str = "", show_hidden: bool = False) -> list[dict]:
         resolved = self.validate_path(path)
         if not resolved.exists():
             raise FileNotFoundError(f"Not found: {path}")
@@ -60,6 +60,8 @@ class FilesystemService:
         for entry in sorted(
             resolved.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower())
         ):
+            if not show_hidden and entry.name.startswith("."):
+                continue
             stat = entry.stat()
             entries.append(
                 {

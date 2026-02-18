@@ -16,6 +16,10 @@ def tmp_home(tmp_path):
     (tmp_path / "data.csv").write_text("a,b,c\n1,2,3")
     # Code files
     (tmp_path / "script.py").write_text("print('hello')")
+    # Hidden files/dirs
+    (tmp_path / ".hidden_file").write_text("secret")
+    (tmp_path / ".config").mkdir()
+    (tmp_path / ".config" / "settings.json").write_text("{}")
     # Binary files
     (tmp_path / "images" / "photo.jpg").write_bytes(b"\xff\xd8\xff\xe0fake-jpg")
     return tmp_path
