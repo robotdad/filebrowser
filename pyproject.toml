@@ -12,6 +12,7 @@ dependencies = [
     "python-pam",
     "python-multipart",
     "itsdangerous",
+    "six",
 ]
 
 [project.optional-dependencies]
