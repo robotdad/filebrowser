@@ -28,6 +28,15 @@ else
     echo "  Generated new secret key"
 fi
 
+# --- Ensure PAM access ---
+echo "Ensuring PAM access (shadow group)..."
+if ! groups "$USER" | grep -q '\bshadow\b'; then
+    sudo usermod -aG shadow "$USER"
+    echo "  Added $USER to shadow group"
+else
+    echo "  $USER already in shadow group"
+fi
+
 # --- Install application ---
 echo "Installing application to $INSTALL_DIR..."
 sudo mkdir -p "$INSTALL_DIR"

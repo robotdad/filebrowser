@@ -32,18 +32,28 @@ Web-based remote file browser for headless Linux machines, accessible over Tails
 +---------------------------------------------------+
 ```
 
-## Quick start (local dev)
+## Quick start (remote dev)
 
-Requires Python 3.11+.
+Requires Python 3.11+ on a Linux box. This is designed for headless machines you connect to over the network.
 
 ```bash
 git clone https://github.com/robotdad/filebrowser.git && cd filebrowser
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-uvicorn filebrowser.main:app --reload
+uvicorn filebrowser.main:app --reload --host 0.0.0.0
 ```
 
-Open `http://localhost:8000`. Login uses PAM, so provide your Linux user credentials. On macOS, PAM auth may not work -- see deployment for the intended environment.
+Open `http://<hostname>:8000` from any machine that can reach it. Login uses PAM, so provide your Linux user credentials.
+
+**PAM requires read access to `/etc/shadow`.** Add your user to the `shadow` group:
+
+```bash
+sudo usermod -aG shadow $(whoami)
+```
+
+Log out and back in (or start a new shell) for the group change to take effect.
+
+Note: PAM auth does not work on macOS -- use a Linux box or skip straight to deployment.
 
 Run tests:
 
