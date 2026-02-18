@@ -7,7 +7,7 @@ from pathlib import Path
 @dataclass
 class Settings:
     home_dir: Path = field(default_factory=Path.home)
-    session_timeout: int = 86400  # 24 hours in seconds
+    session_timeout: int = 2592000  # 30 days in seconds
     upload_max_size: int = 1_073_741_824  # 1 GB in bytes
     secret_key: str = field(
         default_factory=lambda: os.environ.get(

@@ -29,6 +29,7 @@ async def login(body: LoginRequest, response: Response):
         httponly=True,
         secure=settings.secure_cookies,
         samesite="strict",
+        max_age=settings.session_timeout,
     )
     return {"username": body.username}
 

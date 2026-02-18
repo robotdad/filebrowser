@@ -6,7 +6,7 @@ def test_settings_has_correct_defaults():
 
     s = Settings()
     assert s.home_dir == Path.home()
-    assert s.session_timeout == 86400
+    assert s.session_timeout == 2592000
     assert s.upload_max_size == 1_073_741_824
     assert isinstance(s.secret_key, str)
     assert len(s.secret_key) >= 32
