@@ -6,9 +6,11 @@ echo "=== File Browser Installer ==="
 # --- Detect environment ---
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-USER="$(whoami)"
+# When run via sudo, whoami returns root. Use SUDO_USER to get the real user.
+USER="${SUDO_USER:-$(whoami)}"
 INSTALL_DIR="/opt/filebrowser"
 CERT_DIR="/etc/ssl/tailscale"
+HTTPS=false
 
 # --- Detect Tailscale FQDN ---
 echo "Detecting Tailscale FQDN..."
@@ -31,7 +33,7 @@ fi
 # --- Ensure PAM access ---
 echo "Ensuring PAM access (shadow group)..."
 if ! groups "$USER" | grep -q '\bshadow\b'; then
-    sudo usermod -aG shadow "$USER"
+    usermod -aG shadow "$USER"
     echo "  Added $USER to shadow group"
 else
     echo "  $USER already in shadow group"
@@ -39,8 +41,8 @@ fi
 
 # --- Install application ---
 echo "Installing application to $INSTALL_DIR..."
-sudo mkdir -p "$INSTALL_DIR"
-sudo chown "$USER:$USER" "$INSTALL_DIR"
+mkdir -p "$INSTALL_DIR"
+chown "$USER:$USER" "$INSTALL_DIR"
 rsync -a --exclude='.venv' --exclude='__pycache__' --exclude='.git' "$PROJECT_DIR/" "$INSTALL_DIR/"
 
 # Save secret key
@@ -53,15 +55,21 @@ python3 -m venv "$INSTALL_DIR/.venv"
 "$INSTALL_DIR/.venv/bin/pip" install --quiet --upgrade pip
 "$INSTALL_DIR/.venv/bin/pip" install --quiet "$INSTALL_DIR"
 
-# --- Generate Tailscale cert ---
-echo "Generating Tailscale certificate..."
-sudo mkdir -p "$CERT_DIR"
-sudo tailscale cert --cert-file "$CERT_PATH" --key-file "$KEY_PATH" "$FQDN"
+# --- Try to generate Tailscale cert (requires paid plan) ---
+echo "Attempting Tailscale certificate generation..."
+mkdir -p "$CERT_DIR"
+if tailscale cert --cert-file "$CERT_PATH" --key-file "$KEY_PATH" "$FQDN" 2>/dev/null; then
+    echo "  Certificate generated (HTTPS enabled)"
+    HTTPS=true
+else
+    echo "  Certificate unavailable (free Tailscale plan) -- using HTTP"
+    echo "  Note: Tailscale encrypts traffic between devices, so HTTP is safe on your tailnet"
+fi
 
 # --- Install Caddy ---
 if ! command -v caddy &>/dev/null; then
     echo "Installing Caddy..."
-    sudo apt-get update -qq && sudo apt-get install -y -qq caddy
+    apt-get update -qq && apt-get install -y -qq caddy
 else
     echo "Caddy already installed"
 fi
@@ -69,41 +77,53 @@ fi
 # --- Write config files from templates ---
 echo "Writing configuration files..."
 
-sudo sed \
-    -e "s|FILEBROWSER_FQDN|$FQDN|g" \
-    -e "s|CERT_PATH|$CERT_PATH|g" \
-    -e "s|KEY_PATH|$KEY_PATH|g" \
-    "$INSTALL_DIR/deploy/Caddyfile.template" \
-    | sudo tee /etc/caddy/Caddyfile > /dev/null
+if [ "$HTTPS" = true ]; then
+    sed \
+        -e "s|FILEBROWSER_FQDN|$FQDN|g" \
+        -e "s|CERT_PATH|$CERT_PATH|g" \
+        -e "s|KEY_PATH|$KEY_PATH|g" \
+        "$INSTALL_DIR/deploy/Caddyfile.template" \
+        > /etc/caddy/Caddyfile
+else
+    cp "$INSTALL_DIR/deploy/Caddyfile.http.template" /etc/caddy/Caddyfile
+fi
 
-sudo sed \
+sed \
     -e "s|FILEBROWSER_USER|$USER|g" \
     -e "s|FILEBROWSER_DIR|$INSTALL_DIR|g" \
     -e "s|FILEBROWSER_SECRET|$SECRET_KEY|g" \
+    -e "s|FILEBROWSER_HTTPS_ENABLED|$HTTPS|g" \
     "$INSTALL_DIR/deploy/filebrowser.service" \
-    | sudo tee /etc/systemd/system/filebrowser.service > /dev/null
-
-sudo sed \
-    -e "s|CERT_PATH|$CERT_PATH|g" \
-    -e "s|KEY_PATH|$KEY_PATH|g" \
-    -e "s|FILEBROWSER_FQDN|$FQDN|g" \
-    "$INSTALL_DIR/deploy/tailscale-cert-renew.service" \
-    | sudo tee /etc/systemd/system/tailscale-cert-renew.service > /dev/null
-
-sudo cp "$INSTALL_DIR/deploy/tailscale-cert-renew.timer" \
-    /etc/systemd/system/tailscale-cert-renew.timer
+    > /etc/systemd/system/filebrowser.service
 
 # --- Enable and start services ---
 echo "Starting services..."
-sudo systemctl daemon-reload
-sudo systemctl enable --now filebrowser
-sudo systemctl enable --now caddy
-sudo systemctl enable --now tailscale-cert-renew.timer
+systemctl daemon-reload
+systemctl enable --now filebrowser
+systemctl enable --now caddy
+
+if [ "$HTTPS" = true ]; then
+    sed \
+        -e "s|CERT_PATH|$CERT_PATH|g" \
+        -e "s|KEY_PATH|$KEY_PATH|g" \
+        -e "s|FILEBROWSER_FQDN|$FQDN|g" \
+        "$INSTALL_DIR/deploy/tailscale-cert-renew.service" \
+        > /etc/systemd/system/tailscale-cert-renew.service
+    cp "$INSTALL_DIR/deploy/tailscale-cert-renew.timer" \
+        /etc/systemd/system/tailscale-cert-renew.timer
+    systemctl enable --now tailscale-cert-renew.timer
+fi
 
 echo ""
 echo "=== Installation complete ==="
-echo "File Browser is running at: https://$FQDN"
+if [ "$HTTPS" = true ]; then
+    echo "File Browser is running at: https://$FQDN"
+else
+    HOSTNAME=$(echo "$FQDN" | cut -d. -f1)
+    echo "File Browser is running at: http://$HOSTNAME/"
+    echo "(or http://$FQDN/)"
+fi
 echo ""
 echo "To check status:"
-echo "  sudo systemctl status filebrowser"
-echo "  sudo systemctl status caddy"
+echo "  systemctl status filebrowser"
+echo "  systemctl status caddy"
