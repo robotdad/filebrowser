@@ -43,7 +43,7 @@ pip install -e ".[dev]"
 uvicorn filebrowser.main:app --reload --host 0.0.0.0
 ```
 
-Open `http://<hostname>:8000` from any machine that can reach it. Login uses PAM, so provide your Linux user credentials.
+Open `http://<hostname>:8000` from any machine that can reach it (uvicorn defaults to port 8000; the production install uses a random high port behind Caddy). Login uses PAM, so provide your Linux user credentials.
 
 **PAM requires read access to `/etc/shadow`.** Add your user to the `shadow` group:
 
@@ -135,7 +135,7 @@ Settings are in `filebrowser/config.py`. Override via environment variables or b
 | `upload_max_size` | `1073741824` (1GB) | Maximum upload file size in bytes |
 | `home_dir` | `Path.home()` | Root directory for file browsing |
 
-The Caddy reverse proxy terminates HTTPS on port 443 using Tailscale certs stored in `/etc/ssl/tailscale/` and forwards to uvicorn on `localhost:8000`.
+The Caddy reverse proxy terminates HTTPS on port 443 using Tailscale certs stored in `/etc/ssl/tailscale/` and forwards to uvicorn on a random high port (assigned at install time, persisted in `/opt/filebrowser/.port`).
 
 ## Tech stack
 

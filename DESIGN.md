@@ -32,7 +32,7 @@ Browser (any device on tailnet)
    │  HTTPS (Tailscale cert)
    ▼
 ┌──────────┐
-│  Caddy   │  :443 → localhost:8000
+│  Caddy   │  :443 → localhost:<random>
 │          │  :80  → redirect to :443
 └────┬─────┘
      │  HTTP
@@ -230,7 +230,7 @@ Upload size limit is configurable (default 1GB).
 
 - HTTPS termination using Tailscale-generated certs
 - HTTP (80) to HTTPS (443) redirect
-- Reverse proxy to uvicorn on `localhost:8000`
+- Reverse proxy to uvicorn on a random high port (assigned at install time)
 
 ### systemd Services
 

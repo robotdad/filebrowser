@@ -10,6 +10,7 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 USER="${SUDO_USER:-$(whoami)}"
 INSTALL_DIR="/opt/filebrowser"
 CERT_DIR="/etc/ssl/tailscale"
+PORT_FILE="$INSTALL_DIR/.port"
 HTTPS=false
 
 # --- Detect Tailscale FQDN ---
@@ -30,6 +31,15 @@ else
     echo "  Generated new secret key"
 fi
 
+# --- Pick a local port (only if not already set) ---
+if [ -f "$PORT_FILE" ]; then
+    PORT=$(cat "$PORT_FILE")
+    echo "  Using existing port $PORT"
+else
+    PORT=$(python3 -c "import random; print(random.randint(49152, 65535))")
+    echo "  Generated random port $PORT"
+fi
+
 # --- Ensure PAM access ---
 echo "Ensuring PAM access (shadow group)..."
 if ! groups "$USER" | grep -q '\bshadow\b'; then
@@ -45,9 +55,11 @@ mkdir -p "$INSTALL_DIR"
 chown "$USER:$USER" "$INSTALL_DIR"
 rsync -a --exclude='.venv' --exclude='__pycache__' --exclude='.git' "$PROJECT_DIR/" "$INSTALL_DIR/"
 
-# Save secret key
+# Save secret key and port
 echo "$SECRET_KEY" > "$SECRET_FILE"
 chmod 600 "$SECRET_FILE"
+echo "$PORT" > "$PORT_FILE"
+chmod 600 "$PORT_FILE"
 
 # --- Create venv and install ---
 echo "Setting up Python environment..."
@@ -82,10 +94,14 @@ if [ "$HTTPS" = true ]; then
         -e "s|FILEBROWSER_FQDN|$FQDN|g" \
         -e "s|CERT_PATH|$CERT_PATH|g" \
         -e "s|KEY_PATH|$KEY_PATH|g" \
+        -e "s|FILEBROWSER_PORT|$PORT|g" \
         "$INSTALL_DIR/deploy/Caddyfile.template" \
         > /etc/caddy/Caddyfile
 else
-    cp "$INSTALL_DIR/deploy/Caddyfile.http.template" /etc/caddy/Caddyfile
+    sed \
+        -e "s|FILEBROWSER_PORT|$PORT|g" \
+        "$INSTALL_DIR/deploy/Caddyfile.http.template" \
+        > /etc/caddy/Caddyfile
 fi
 
 sed \
@@ -93,6 +109,7 @@ sed \
     -e "s|FILEBROWSER_DIR|$INSTALL_DIR|g" \
     -e "s|FILEBROWSER_SECRET|$SECRET_KEY|g" \
     -e "s|FILEBROWSER_HTTPS_ENABLED|$HTTPS|g" \
+    -e "s|FILEBROWSER_PORT|$PORT|g" \
     "$INSTALL_DIR/deploy/filebrowser.service" \
     > /etc/systemd/system/filebrowser.service
 

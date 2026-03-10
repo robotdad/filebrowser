@@ -7,7 +7,7 @@ Wants=tailscaled.service
 Type=simple
 User=FILEBROWSER_USER
 WorkingDirectory=FILEBROWSER_DIR
-ExecStart=FILEBROWSER_DIR/.venv/bin/uvicorn filebrowser.main:app --host 127.0.0.1 --port 8000
+ExecStart=FILEBROWSER_DIR/.venv/bin/uvicorn filebrowser.main:app --host 127.0.0.1 --port FILEBROWSER_PORT
 Restart=always
 RestartSec=5
 Environment=FILEBROWSER_SECRET_KEY=FILEBROWSER_SECRET
