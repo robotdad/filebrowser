@@ -4,33 +4,48 @@ Web-based remote file browser for headless Linux machines, accessible over Tails
 
 ## What it does
 
-- **Browse** -- tree-style navigation of the filesystem rooted at `$HOME`
-- **Preview** -- text (with line numbers), code (syntax-highlighted), rendered markdown, images, audio, video, PDF
-- **Manage** -- upload, download, rename, delete, create directories
-- **Auth** -- PAM authentication using Linux user accounts, signed session cookies
+- **Browse** -- tree-style navigation with color-coded file type icons, resizable sidebar, list/grid view toggle
+- **Preview** -- text (line numbers), code (syntax-highlighted), rendered markdown, HTML (iframe with source toggle), images, audio, video, PDF
+- **Manage** -- upload (drag-drop anywhere), download, rename, delete, create directories, batch operations (multi-select)
+- **Search** -- command palette (Ctrl+K / Cmd+K) for quick file navigation across all expanded directories
+- **Context menus** -- right-click any file or folder for quick actions (open, download, rename, copy path, delete)
+- **Auth** -- PAM authentication using Linux user accounts, 30-day signed session cookies
 - **Always on** -- systemd services, starts on boot, ~30MB RAM idle
-- **Responsive** -- two-panel layout on desktop, slide-out drawer on mobile
-- **Light/dark mode** -- follows system preference
+- **Responsive** -- resizable two-panel layout on desktop, slide-out drawer on mobile
+- **Light/dark mode** -- follows system preference, Apple HIG-inspired design
 
 ## Layout
 
 ```
-+---------------------------------------------------+
-|  Header: breadcrumb path  |  user  |  logout      |
-+---------------+-----------------------------------+
-|               |                                   |
-|  File Tree    |      Preview Pane                 |
-|  (sidebar)    |                                   |
-|               |  Text: line numbers + content     |
-|  folders/     |  Code: syntax highlighted         |
-|    files      |  Markdown: rendered HTML           |
-|               |  Images: inline preview            |
-|               |  Audio/Video: native player        |
-|               |                                   |
-+---------------+-----------------------------------+
-|  Actions: upload | new folder | rename | delete   |
-+---------------------------------------------------+
++-----------------------------------------------------------+
+|  Header: breadcrumb pills | [Search Cmd+K] | user | logout|
++-----------------+-----------------------------------------+
+| [List|Grid] view|                                         |
+|                 |      Preview Pane                       |
+|  File Tree     ||                                         |
+|  (resizable)   ||  Text: line numbers + content           |
+|                ||  Code: syntax highlighted               |
+|  color-coded   ||  Markdown: fully rendered               |
+|  file icons    ||  HTML: iframe preview / source toggle   |
+|                ||  Images: inline preview                 |
+|  right-click   ||  Audio/Video: native player             |
+|  for context   ||  PDF: embedded viewer                   |
+|  menu          ||                                         |
++-----------------+-----------------------------------------+
+|  Actions: upload | new folder | download | rename | delete|
+|  (or batch toolbar when multi-selecting with Ctrl+click)  |
++-----------------------------------------------------------+
 ```
+
+## Keyboard shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| Ctrl+K / Cmd+K | Open command palette (file search) |
+| Ctrl+click / Cmd+click | Multi-select files for batch operations |
+| Right-click | Context menu on files and folders |
+| Escape | Close command palette, context menu, or modal |
+| Arrow keys + Enter | Navigate command palette results |
 
 ## Quick start (remote dev)
 
@@ -107,12 +122,22 @@ filebrowser/
     services/
       filesystem.py         # Path validation, file ops, type detection
     static/
-      index.html            # Single-page shell
-      css/styles.css        # Light/dark mode via CSS custom properties
+      index.html            # Single-page shell (CDN imports for Preact, fonts, icons)
+      css/styles.css        # Design token system, light/dark mode
       js/
         app.js              # Entry point, auth routing
         api.js              # Fetch wrapper for backend API
-        components/         # Preact components (login, tree, preview, etc.)
+        html.js             # HTM tagged template binding
+        components/
+          layout.js         # Main shell, resizable sidebar, drag-drop, keyboard shortcuts
+          tree.js           # File tree with color-coded icons, grid view, multi-select
+          preview.js        # Type-aware previewer (text, code, markdown, HTML, media, PDF)
+          actions.js        # Action bar with batch toolbar mode
+          breadcrumb.js     # Pill-shaped breadcrumb navigation
+          login.js          # Login form
+          upload.js         # Drag-drop upload modal
+          command-palette.js # Cmd+K file search overlay
+          context-menu.js   # Right-click context menu
   deploy/
     install.sh              # Automated deployment script
     filebrowser.service     # systemd unit template
@@ -131,7 +156,7 @@ Settings are in `filebrowser/config.py`. Override via environment variables or b
 | Setting | Default | Description |
 |---|---|---|
 | `FILEBROWSER_SECRET_KEY` | Random (generated) | Signing key for session cookies. The install script persists one to `/opt/filebrowser/.secret_key`. |
-| `session_timeout` | `86400` (24h) | Session cookie lifetime in seconds |
+| `session_timeout` | `2592000` (30 days) | Session cookie lifetime in seconds |
 | `upload_max_size` | `1073741824` (1GB) | Maximum upload file size in bytes |
 | `home_dir` | `Path.home()` | Root directory for file browsing |
 
@@ -141,7 +166,7 @@ The Caddy reverse proxy terminates HTTPS on port 443 using Tailscale certs store
 
 **Backend** -- Python 3.11+, FastAPI, uvicorn, python-pam, itsdangerous, python-multipart
 
-**Frontend** -- Preact + HTM (no build step), highlight.js (syntax), marked.js (markdown), all via CDN
+**Frontend** -- Preact + HTM (no build step), highlight.js (syntax), marked.js (markdown), Phosphor Icons, Inter + JetBrains Mono fonts, all via CDN
 
 **Infrastructure** -- Caddy (reverse proxy / TLS), systemd (process management), Tailscale (network / certs)
 
