@@ -5,13 +5,14 @@ import hljs from 'highlight.js';
 import { marked } from 'marked';
 
 const FILE_TYPES = {
-    text: ['.txt', '.log', '.csv', '.json', '.xml', '.yaml', '.yml', '.toml', '.env', '.conf'],
-    code: ['.py', '.js', '.ts', '.go', '.rs', '.c', '.cpp', '.java', '.sh', '.sql', '.html', '.css'],
+    text:     ['.txt', '.log', '.csv', '.json', '.xml', '.yaml', '.yml', '.toml', '.env', '.conf'],
+    code:     ['.py', '.js', '.ts', '.go', '.rs', '.c', '.cpp', '.java', '.sh', '.sql', '.css'],
+    html:     ['.html', '.htm'],
     markdown: ['.md'],
-    image: ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp'],
-    audio: ['.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a'],
-    video: ['.mp4', '.webm', '.mkv', '.mov', '.avi'],
-    pdf: ['.pdf'],
+    image:    ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp'],
+    audio:    ['.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a'],
+    video:    ['.mp4', '.webm', '.mkv', '.mov', '.avi'],
+    pdf:      ['.pdf'],
 };
 
 function getFileType(path) {
@@ -68,56 +69,111 @@ function MarkdownViewer({ text }) {
     return html`<div class="markdown-viewer" dangerouslySetInnerHTML=${{ __html: htmlContent }}></div>`;
 }
 
+function HtmlViewer({ text, path, contentUrl }) {
+    const [showSource, setShowSource] = useState(false);
+    const codeRef = useRef(null);
+
+    useEffect(() => {
+        if (showSource && codeRef.current) {
+            codeRef.current.textContent = text;
+            hljs.highlightElement(codeRef.current);
+        }
+    }, [showSource, text]);
+
+    return html`
+        <div class="html-viewer">
+            <div class="html-viewer-toolbar">
+                <button class=${!showSource ? 'active' : ''} onClick=${() => setShowSource(false)}>Preview</button>
+                <button class=${showSource ? 'active' : ''} onClick=${() => setShowSource(true)}>Source</button>
+            </div>
+            ${showSource
+                ? html`<div class="code-viewer"><pre><code ref=${codeRef} class="language-html">${text}</code></pre></div>`
+                : html`<iframe class="html-preview-frame" src=${contentUrl}></iframe>`
+            }
+        </div>
+    `;
+}
+
+// Animated wrapper — remounts (via key) on each new filePath to retrigger animation
+function AnimatedContent({ filePath, children }) {
+    return html`
+        <div key=${filePath} class="preview-content-animate">
+            ${children}
+        </div>
+    `;
+}
+
 export function PreviewPane({ filePath }) {
     const [content, setContent] = useState(null);
     const [loading, setLoading] = useState(false);
+    // Track previous filePath to detect actual changes
+    const prevPath = useRef(null);
 
     useEffect(() => {
         if (!filePath) {
             setContent(null);
+            prevPath.current = null;
             return;
         }
 
+        // Fade out then load new content
+        prevPath.current = filePath;
         const type = getFileType(filePath);
         setLoading(true);
+        setContent(null);
 
-        if (['text', 'code', 'markdown'].includes(type)) {
+        if (['text', 'code', 'markdown', 'html'].includes(type)) {
             api.get(`/api/files/content?path=${encodeURIComponent(filePath)}`)
-                .then((text) => setContent({ type, text }))
-                .catch(() => setContent(null))
-                .finally(() => setLoading(false));
+                .then((text) => { if (prevPath.current === filePath) setContent({ type, text }); })
+                .catch(() => { if (prevPath.current === filePath) setContent(null); })
+                .finally(() => { if (prevPath.current === filePath) setLoading(false); });
         } else {
             api.get(`/api/files/info?path=${encodeURIComponent(filePath)}`)
-                .then((info) => setContent({ type, info }))
-                .catch(() => setContent(null))
-                .finally(() => setLoading(false));
+                .then((info) => { if (prevPath.current === filePath) setContent({ type, info }); })
+                .catch(() => { if (prevPath.current === filePath) setContent(null); })
+                .finally(() => { if (prevPath.current === filePath) setLoading(false); });
         }
     }, [filePath]);
 
     if (!filePath) return html`<div class="preview-empty">Select a file to preview</div>`;
-    if (loading) return html`<div class="preview-loading">Loading...</div>`;
+
+    if (loading) return html`
+        <div class="preview-loading preview-loading-fade">Loading…</div>
+    `;
+
     if (!content) return html`<div class="preview-empty">Unable to load file</div>`;
 
-    const contentUrl = `/api/files/content?path=${encodeURIComponent(filePath)}`;
+    const contentUrl  = `/api/files/content?path=${encodeURIComponent(filePath)}`;
     const downloadUrl = `/api/files/download?path=${encodeURIComponent(filePath)}`;
 
+    let inner;
     switch (content.type) {
         case 'text':
-            return html`<${TextViewer} text=${content.text} />`;
+            inner = html`<${TextViewer} text=${content.text} />`;
+            break;
         case 'code':
-            return html`<${CodeViewer} text=${content.text} path=${filePath} />`;
+            inner = html`<${CodeViewer} text=${content.text} path=${filePath} />`;
+            break;
         case 'markdown':
-            return html`<${MarkdownViewer} text=${content.text} />`;
+            inner = html`<${MarkdownViewer} text=${content.text} />`;
+            break;
+        case 'html':
+            inner = html`<${HtmlViewer} text=${content.text} path=${filePath} contentUrl=${contentUrl} />`;
+            break;
         case 'image':
-            return html`<div class="preview-image"><img src=${contentUrl} alt=${filePath} /></div>`;
+            inner = html`<div class="preview-image"><img src=${contentUrl} alt=${filePath} /></div>`;
+            break;
         case 'audio':
-            return html`<div class="preview-audio"><audio controls src=${contentUrl}></audio></div>`;
+            inner = html`<div class="preview-audio"><audio controls src=${contentUrl}></audio></div>`;
+            break;
         case 'video':
-            return html`<div class="preview-video"><video controls src=${contentUrl}></video></div>`;
+            inner = html`<div class="preview-video"><video controls src=${contentUrl}></video></div>`;
+            break;
         case 'pdf':
-            return html`<div class="preview-pdf"><iframe src=${contentUrl}></iframe></div>`;
+            inner = html`<div class="preview-pdf"><iframe src=${contentUrl}></iframe></div>`;
+            break;
         default:
-            return html`
+            inner = html`
                 <div class="preview-other">
                     <h3>${filePath.split('/').pop()}</h3>
                     ${content.info && html`<p>Size: ${formatSize(content.info.size)}</p>`}
@@ -126,4 +182,7 @@ export function PreviewPane({ filePath }) {
                 </div>
             `;
     }
+
+    // AnimatedContent uses filePath as key — forces remount + animation on every file switch
+    return html`<${AnimatedContent} filePath=${filePath}>${inner}</${AnimatedContent}>`;
 }

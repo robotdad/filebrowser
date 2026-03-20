@@ -72,6 +72,8 @@ echo "Attempting Tailscale certificate generation..."
 mkdir -p "$CERT_DIR"
 if tailscale cert --cert-file "$CERT_PATH" --key-file "$KEY_PATH" "$FQDN" 2>/dev/null; then
     echo "  Certificate generated (HTTPS enabled)"
+    chown root:caddy "$KEY_PATH"
+    chmod 640 "$KEY_PATH"
     HTTPS=true
 else
     echo "  Certificate unavailable (free Tailscale plan) -- using HTTP"

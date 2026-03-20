@@ -40,10 +40,10 @@ Requires Python 3.11+ on a Linux box. This is designed for headless machines you
 git clone https://github.com/robotdad/filebrowser.git && cd filebrowser
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-uvicorn filebrowser.main:app --reload --host 0.0.0.0
+uvicorn filebrowser.main:app --reload --host 0.0.0.0 --port 58080
 ```
 
-Open `http://<hostname>:8000` from any machine that can reach it (uvicorn defaults to port 8000; the production install uses a random high port behind Caddy). Login uses PAM, so provide your Linux user credentials.
+Open `http://<hostname>:58080` from any machine that can reach it (the production install uses a random high port behind Caddy). Login uses PAM, so provide your Linux user credentials.
 
 **PAM requires read access to `/etc/shadow`.** Add your user to the `shadow` group:
 

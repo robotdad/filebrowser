@@ -2,78 +2,187 @@ import { useState, useEffect } from 'preact/hooks';
 import { html } from '../html.js';
 import { api } from '../api.js';
 
-export function FileTree({ currentPath, onNavigate, onSelectFile, refreshKey, showHidden }) {
+const FILE_ICON_TYPES = [
+    { exts: ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp'], icon: 'ph-image', cls: 'file-icon-image' },
+    { exts: ['.py', '.js', '.ts', '.go', '.rs', '.c', '.cpp', '.java', '.sh', '.sql', '.html', '.css'], icon: 'ph-code', cls: 'file-icon-code' },
+    { exts: ['.md'], icon: 'ph-article', cls: 'file-icon-markdown' },
+    { exts: ['.txt', '.log', '.csv', '.json', '.xml', '.yaml', '.yml', '.toml', '.env', '.conf'], icon: 'ph-file-text', cls: 'file-icon-text' },
+    { exts: ['.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a'], icon: 'ph-music-note', cls: 'file-icon-audio' },
+    { exts: ['.mp4', '.webm', '.mkv', '.mov', '.avi'], icon: 'ph-film-strip', cls: 'file-icon-video' },
+    { exts: ['.pdf'], icon: 'ph-file-pdf', cls: 'file-icon-pdf' },
+];
+
+function getFileIcon(name) {
+    const dot = name.lastIndexOf('.');
+    if (dot !== -1) {
+        const ext = name.slice(dot).toLowerCase();
+        for (const t of FILE_ICON_TYPES) {
+            if (t.exts.includes(ext)) return t;
+        }
+    }
+    return { icon: 'ph-file', cls: 'file-icon-default' };
+}
+
+export function FileTree({
+    currentPath,
+    onNavigate,
+    onSelectFile,
+    onBatchToggle,
+    onContextMenu,
+    onEntriesChange,
+    refreshKey,
+    showHidden,
+    viewMode,
+    selectedFile,
+    selectedFiles,
+}) {
     const [entries, setEntries] = useState({});
     const [expanded, setExpanded] = useState({});
-    const [selected, setSelected] = useState(null);
 
+    useEffect(() => { reloadAll(); }, [refreshKey, showHidden]);
+
+    // Report flat file list upward whenever entries change
     useEffect(() => {
-        reloadAll();
-    }, [refreshKey, showHidden]);
+        if (!onEntriesChange) return;
+        const flat = [];
+        for (const [dirPath, items] of Object.entries(entries)) {
+            for (const item of items) {
+                const p = dirPath ? `${dirPath}/${item.name}` : item.name;
+                flat.push({ name: item.name, path: p, type: item.type });
+            }
+        }
+        onEntriesChange(flat);
+    }, [entries]);
 
     const reloadAll = async () => {
         const paths = ['', ...Object.keys(expanded)];
-        for (const p of paths) {
-            await loadDirectory(p);
-        }
+        for (const p of paths) await loadDirectory(p);
     };
 
     const loadDirectory = async (path) => {
         try {
             const data = await api.get(`/api/files?path=${encodeURIComponent(path)}&show_hidden=${showHidden}`);
             setEntries((prev) => ({ ...prev, [path]: data }));
-        } catch {
-            // toast is shown by api.js
-        }
+        } catch { /* toast shown by api.js */ }
     };
 
     const toggleFolder = (path) => {
         setExpanded((prev) => {
             const next = { ...prev };
-            if (next[path]) {
-                delete next[path];
-            } else {
-                next[path] = true;
-                loadDirectory(path);
-            }
+            if (next[path]) { delete next[path]; }
+            else { next[path] = true; loadDirectory(path); }
             return next;
         });
         onNavigate(path);
     };
 
-    const selectFile = (path) => {
-        setSelected(path);
-        onSelectFile(path);
+    const handleFileClick = (e, itemPath) => {
+        if (e.ctrlKey || e.metaKey) {
+            // Ctrl/⌘+click → batch toggle, don't change preview
+            onBatchToggle?.(itemPath);
+        } else {
+            // Normal click → single select, open preview
+            onSelectFile(itemPath);
+        }
     };
 
+    const handleContextMenu = (e, itemPath, itemType) => {
+        e.preventDefault();
+        onContextMenu?.({ x: e.clientX, y: e.clientY, path: itemPath, type: itemType });
+    };
+
+    // ── Grid View ──────────────────────────────────────────────────
+    if (viewMode === 'grid') {
+        const items = entries[currentPath] || entries[''] || [];
+        return html`
+            <div class="file-tree grid-view">
+                ${items.map((item) => {
+                    const itemPath = currentPath ? `${currentPath}/${item.name}` : item.name;
+                    if (item.type === 'directory') {
+                        return html`
+                            <div
+                                key=${itemPath}
+                                class="tree-item tree-folder ${selectedFiles?.has(itemPath) ? 'multi-selected' : ''}"
+                                onClick=${(e) => { if (e.ctrlKey || e.metaKey) { onBatchToggle?.(itemPath); } else { toggleFolder(itemPath); } }}
+                                onContextMenu=${(e) => handleContextMenu(e, itemPath, 'directory')}
+                                title=${item.name}
+                            >
+                                <span class="file-icon file-icon-folder">
+                                    <i class="ph ph-folder"></i>
+                                </span>
+                                <span class="tree-name">${item.name}</span>
+                            </div>
+                        `;
+                    }
+                    const fi = getFileIcon(item.name);
+                    const isSelected = selectedFile === itemPath;
+                    const isBatch = selectedFiles?.has(itemPath);
+                    return html`
+                        <div
+                            key=${itemPath}
+                            class="tree-item tree-file ${isSelected ? 'selected' : ''} ${isBatch ? 'multi-selected' : ''}"
+                            onClick=${(e) => handleFileClick(e, itemPath)}
+                            onContextMenu=${(e) => handleContextMenu(e, itemPath, 'file')}
+                            title=${item.name}
+                        >
+                            <span class="file-icon ${fi.cls}">
+                                <i class="ph ${fi.icon}"></i>
+                            </span>
+                            <span class="tree-name">${item.name}</span>
+                        </div>
+                    `;
+                })}
+                ${items.length === 0 && html`
+                    <div style="grid-column:1/-1;padding:var(--space-lg);color:var(--text-muted);font-size:13px;text-align:center">
+                        Empty folder
+                    </div>
+                `}
+            </div>
+        `;
+    }
+
+    // ── List View (default) ───────────────────────────────────────
     const renderEntries = (path, depth = 0) => {
         const items = entries[path] || [];
         return items.map((item) => {
             const itemPath = path ? `${path}/${item.name}` : item.name;
             if (item.type === 'directory') {
+                const isExpanded = !!expanded[itemPath];
                 return html`
                     <div key=${itemPath}>
                         <div
-                            class="tree-item tree-folder ${expanded[itemPath] ? 'expanded' : ''}"
+                            class="tree-item tree-folder ${isExpanded ? 'expanded' : ''} ${selectedFiles?.has(itemPath) ? 'multi-selected' : ''}"
                             style=${{ paddingLeft: `${depth * 16 + 12}px` }}
-                            onClick=${() => toggleFolder(itemPath)}
+                            onClick=${(e) => {
+                                if (e.ctrlKey || e.metaKey) { onBatchToggle?.(itemPath); }
+                                else { toggleFolder(itemPath); }
+                            }}
+                            onContextMenu=${(e) => handleContextMenu(e, itemPath, 'directory')}
+                            title=${item.name}
                         >
-                            <span class="tree-icon">${expanded[itemPath] ? '\u{1F4C2}' : '\u{1F4C1}'}</span>
-                            ${item.name}
+                            <span class="file-icon file-icon-folder">
+                                <i class="ph ${isExpanded ? 'ph-folder-open' : 'ph-folder'}"></i>
+                            </span>
+                            <span class="tree-name">${item.name}</span>
                         </div>
-                        ${expanded[itemPath] && renderEntries(itemPath, depth + 1)}
+                        ${isExpanded && renderEntries(itemPath, depth + 1)}
                     </div>
                 `;
             }
+            const fi = getFileIcon(item.name);
+            const isSelected = selectedFile === itemPath;
+            const isBatch = selectedFiles?.has(itemPath);
             return html`
                 <div
                     key=${itemPath}
-                    class="tree-item tree-file ${selected === itemPath ? 'selected' : ''}"
+                    class="tree-item tree-file ${isSelected ? 'selected' : ''} ${isBatch ? 'multi-selected' : ''}"
                     style=${{ paddingLeft: `${depth * 16 + 12}px` }}
-                    onClick=${() => selectFile(itemPath)}
+                    onClick=${(e) => handleFileClick(e, itemPath)}
+                    onContextMenu=${(e) => handleContextMenu(e, itemPath, 'file')}
+                    title=${item.name}
                 >
-                    <span class="tree-icon">\u{1F4C4}</span>
-                    ${item.name}
+                    <span class="file-icon ${fi.cls}"><i class="ph ${fi.icon}"></i></span>
+                    <span class="tree-name">${item.name}</span>
                 </div>
             `;
         });

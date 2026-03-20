@@ -1740,7 +1740,7 @@ echo "<h1>File Browser</h1>" > filebrowser/static/index.html
 uvicorn filebrowser.main:app --reload
 ```
 
-Expected: server starts on http://127.0.0.1:8000. Visiting it shows "File Browser". Press Ctrl+C to stop.
+Expected: server starts on http://127.0.0.1:58080. Visiting it shows "File Browser". Press Ctrl+C to stop.
 
 **Step 3: Run full test suite to verify nothing broke**
 
@@ -1760,7 +1760,7 @@ git add -A && git commit -m "feat: main app — mounts routers, static files, gl
 
 ## Phase 4: Frontend
 
-Frontend tasks produce static files. There is no build step. Verify each task by running `uvicorn filebrowser.main:app --reload` and checking the browser at `http://127.0.0.1:8000`.
+Frontend tasks produce static files. There is no build step. Verify each task by running `uvicorn filebrowser.main:app --reload --port 58080` and checking the browser at `http://127.0.0.1:58080`.
 
 ### Task 11: HTML Shell
 
@@ -1804,7 +1804,7 @@ Frontend tasks produce static files. There is no build step. Verify each task by
 
 **Step 2: Verify**
 
-Run `uvicorn filebrowser.main:app --reload` and visit `http://127.0.0.1:8000`. You should see a blank page with no console errors (the app.js doesn't exist yet — just confirm the HTML loads and the import map is valid by checking the Network tab).
+Run `uvicorn filebrowser.main:app --reload --port 58080` and visit `http://127.0.0.1:58080`. You should see a blank page with no console errors (the app.js doesn't exist yet — just confirm the HTML loads and the import map is valid by checking the Network tab).
 
 **Step 3: Commit**
 
@@ -2977,7 +2977,7 @@ Wants=tailscaled.service
 Type=simple
 User=FILEBROWSER_USER
 WorkingDirectory=FILEBROWSER_DIR
-ExecStart=FILEBROWSER_DIR/.venv/bin/uvicorn filebrowser.main:app --host 127.0.0.1 --port 8000
+ExecStart=FILEBROWSER_DIR/.venv/bin/uvicorn filebrowser.main:app --host 127.0.0.1 --port FILEBROWSER_PORT
 Restart=always
 RestartSec=5
 Environment=FILEBROWSER_SECRET_KEY=FILEBROWSER_SECRET
@@ -3010,7 +3010,7 @@ Create `deploy/Caddyfile.template`:
 ```
 FILEBROWSER_FQDN {
     tls CERT_PATH KEY_PATH
-    reverse_proxy localhost:8000
+    reverse_proxy localhost:FILEBROWSER_PORT
 }
 ```
 
@@ -3194,7 +3194,7 @@ All tests across `test_config.py`, `test_filesystem.py`, `test_auth.py`, and `te
 uvicorn filebrowser.main:app --reload
 ```
 
-Visit `http://127.0.0.1:8000` and verify:
+Visit `http://127.0.0.1:58080` and verify:
 1. Login form appears
 2. Valid Linux credentials authenticate successfully
 3. File tree loads with home directory contents
