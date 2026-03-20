@@ -1,0 +1,223 @@
+digraph filebrowser_architecture {
+    // ── Graph Attributes ──────────────────────────────────────────────
+    graph [
+        label="File Browser — Architecture"
+        labelloc=t
+        fontname="Helvetica"
+        fontsize=20
+        rankdir=TB
+        compound=true
+        nodesep=0.6
+        ranksep=0.8
+        pad=0.4
+    ]
+    node  [fontname="Helvetica", fontsize=11, style=filled]
+    edge  [fontname="Helvetica", fontsize=9, color="#555555", arrowsize=0.7]
+
+    // ── User ──────────────────────────────────────────────────────────
+    user [label="User\n(Browser)", shape=oval, fillcolor="#f0f0f0"]
+
+    // ── CDN Dependencies ──────────────────────────────────────────────
+    subgraph cluster_cdn {
+        label="CDN (esm.sh / jsdelivr / Google Fonts)"
+        style="filled,rounded"
+        fillcolor="#fff8e1"
+        color="#e0c860"
+        fontsize=11
+
+        cdn_preact     [label="Preact 10\n+ Hooks", shape=component, fillcolor="#ffe082"]
+        cdn_htm        [label="htm 3\n(tagged templates)", shape=component, fillcolor="#ffe082"]
+        cdn_hljs       [label="highlight.js 11\n(syntax coloring)", shape=component, fillcolor="#ffe082"]
+        cdn_marked     [label="marked 15\n(Markdown)", shape=component, fillcolor="#ffe082"]
+        cdn_phosphor   [label="Phosphor Icons", shape=component, fillcolor="#ffe082"]
+        cdn_fonts      [label="Inter +\nJetBrains Mono", shape=component, fillcolor="#ffe082"]
+    }
+
+    // ── Infrastructure Layer ──────────────────────────────────────────
+    subgraph cluster_infra {
+        label="Infrastructure"
+        style="filled,rounded"
+        fillcolor="#e8eaf6"
+        color="#7986cb"
+        fontsize=12
+
+        tailscale [label="Tailscale\n(VPN mesh)", shape=hexagon, fillcolor="#c5cae9"]
+        caddy     [label="Caddy\n(reverse proxy, TLS)", shape=box, fillcolor="#c5cae9"]
+        systemd   [label="systemd\n(filebrowser.service)", shape=box, fillcolor="#c5cae9"]
+        uvicorn   [label="Uvicorn\n(ASGI server\n127.0.0.1:PORT)", shape=box, fillcolor="#c5cae9"]
+
+        tailscale -> caddy [label="encrypted\ntraffic"]
+        caddy -> uvicorn [label="reverse_proxy\nlocalhost:PORT"]
+        systemd -> uvicorn [label="manages", style=dashed]
+    }
+
+    // ── Frontend Layer (runs in browser) ──────────────────────────────
+    subgraph cluster_frontend {
+        label="Frontend — Preact SPA (no-build, ES modules)"
+        style="filled,rounded"
+        fillcolor="#e8f5e9"
+        color="#66bb6a"
+        fontsize=12
+
+        subgraph cluster_app_shell {
+            label="Application Shell"
+            style="filled,rounded"
+            fillcolor="#c8e6c9"
+            color="#81c784"
+            fontsize=10
+
+            index_html [label="index.html\n(importmap, CDN links)", shape=tab, fillcolor="#a5d6a7"]
+            app_js     [label="App\n(app.js)\nauth routing", shape=box, fillcolor="#a5d6a7"]
+            api_js     [label="ApiClient\n(api.js)\nfetch wrapper", shape=box, fillcolor="#a5d6a7"]
+            login_form [label="LoginForm\n(login.js)", shape=box, fillcolor="#a5d6a7"]
+
+            index_html -> app_js
+            app_js -> login_form [label="no session"]
+        }
+
+        subgraph cluster_components {
+            label="UI Components"
+            style="filled,rounded"
+            fillcolor="#c8e6c9"
+            color="#81c784"
+            fontsize=10
+
+            layout       [label="Layout\n(layout.js)\nresizable sidebar,\nkeyboard shortcuts,\ndrag-drop", shape=box, fillcolor="#a5d6a7"]
+            breadcrumb   [label="Breadcrumb\n(breadcrumb.js)\npath nav", shape=box, fillcolor="#a5d6a7"]
+            file_tree    [label="FileTree\n(tree.js)\nlist/grid view,\nmulti-select", shape=box, fillcolor="#a5d6a7"]
+            preview_pane [label="PreviewPane\n(preview.js)\ntext, code, markdown,\nHTML, image, audio,\nvideo, PDF", shape=box, fillcolor="#a5d6a7"]
+            action_bar   [label="ActionBar\n(actions.js)\nbatch mode", shape=box, fillcolor="#a5d6a7"]
+            cmd_palette  [label="CommandPalette\n(command-palette.js)\nCmd+K search", shape=box, fillcolor="#a5d6a7"]
+            context_menu [label="ContextMenu\n(context-menu.js)\nright-click actions", shape=box, fillcolor="#a5d6a7"]
+            upload_modal [label="UploadModal\n(upload.js)\ndrag-drop upload", shape=box, fillcolor="#a5d6a7"]
+
+            layout -> breadcrumb
+            layout -> file_tree
+            layout -> preview_pane
+            layout -> action_bar
+            layout -> cmd_palette
+            layout -> context_menu
+            action_bar -> upload_modal [label="opens"]
+        }
+
+        app_js -> layout [label="authenticated"]
+    }
+
+    // ── Backend Layer ─────────────────────────────────────────────────
+    subgraph cluster_backend {
+        label="Backend — FastAPI Application"
+        style="filled,rounded"
+        fillcolor="#e3f2fd"
+        color="#42a5f5"
+        fontsize=12
+
+        fastapi_app [label="FastAPI\n(main.py)\nexception handler,\nstatic mount", shape=box, fillcolor="#90caf9"]
+
+        subgraph cluster_routes {
+            label="API Routes"
+            style="filled,rounded"
+            fillcolor="#bbdefb"
+            color="#64b5f6"
+            fontsize=10
+
+            auth_routes [label="/api/auth/*\nPOST login\nPOST logout\nGET me", shape=box, fillcolor="#90caf9"]
+            file_routes [label="/api/files/*\nGET list, info,\ncontent, download\nPOST upload, mkdir\nPUT rename\nDELETE", shape=box, fillcolor="#90caf9"]
+        }
+
+        subgraph cluster_services {
+            label="Services & Modules"
+            style="filled,rounded"
+            fillcolor="#bbdefb"
+            color="#64b5f6"
+            fontsize=10
+
+            auth_module [label="auth.py\nPAM auth\nitsdangerous\nsession tokens", shape=box, fillcolor="#90caf9"]
+            config      [label="config.py\nSettings\n(home_dir, secrets,\nupload_max, timeouts)", shape=box, fillcolor="#90caf9"]
+            fs_service  [label="FilesystemService\n(filesystem.py)\npath validation,\ntype detection,\nfile CRUD", shape=box, fillcolor="#90caf9"]
+        }
+
+        fastapi_app -> auth_routes
+        fastapi_app -> file_routes
+        auth_routes -> auth_module [label="authenticate"]
+        auth_routes -> config [label="reads"]
+        file_routes -> auth_module [label="require_auth\n(dependency)"]
+        file_routes -> fs_service [label="delegates"]
+        file_routes -> config [label="reads"]
+        fs_service -> config [label="home_dir,\nupload_max"]
+    }
+
+    // ── Storage Layer ─────────────────────────────────────────────────
+    subgraph cluster_storage {
+        label="Storage"
+        style="filled,rounded"
+        fillcolor="#fce4ec"
+        color="#ef9a9a"
+        fontsize=12
+
+        filesystem [label="Home Directory\n(~/)\npath-jailed\nfile system", shape=cylinder, fillcolor="#f8bbd0"]
+        pam        [label="PAM\n(Linux auth)", shape=cylinder, fillcolor="#f8bbd0"]
+    }
+
+    // ── Cross-Layer Edges ─────────────────────────────────────────────
+
+    // User to infrastructure
+    user -> tailscale [label="HTTPS/HTTP\n(Tailscale DNS)"]
+
+    // CDN to frontend
+    user -> cdn_preact [label="import", style=dashed, color="#e0c860", lhead=cluster_cdn]
+
+    // Static serving: Uvicorn serves frontend
+    uvicorn -> fastapi_app
+    fastapi_app -> index_html [label="serves static\n(StaticFiles mount)", style=dashed, color="#888888"]
+
+    // Frontend API calls (through ApiClient)
+    api_js -> auth_routes [label="POST /api/auth/*\n(credentials,\nsession cookie)", color="#2e7d32", fontcolor="#2e7d32"]
+    api_js -> file_routes [label="GET/POST/PUT/DELETE\n/api/files/*\n(session cookie)", color="#2e7d32", fontcolor="#2e7d32"]
+
+    // Components use ApiClient
+    file_tree -> api_js [label="list dirs", style=dotted, color="#388e3c"]
+    preview_pane -> api_js [label="get content", style=dotted, color="#388e3c"]
+    action_bar -> api_js [label="CRUD ops", style=dotted, color="#388e3c"]
+    upload_modal -> api_js [label="upload", style=dotted, color="#388e3c"]
+    login_form -> api_js [label="login", style=dotted, color="#388e3c"]
+
+    // Frontend uses CDN libs
+    preview_pane -> cdn_hljs [label="highlight", style=dotted, color="#e0c860"]
+    preview_pane -> cdn_marked [label="parse MD", style=dotted, color="#e0c860"]
+    app_js -> cdn_preact [label="render", style=dotted, color="#e0c860"]
+    app_js -> cdn_htm [label="html``\ntemplates", style=dotted, color="#e0c860"]
+    index_html -> cdn_phosphor [label="icons CSS", style=dotted, color="#e0c860"]
+    index_html -> cdn_fonts [label="font import", style=dotted, color="#e0c860"]
+
+    // Backend to storage
+    fs_service -> filesystem [label="read/write/delete\n(path-jailed)"]
+    auth_module -> pam [label="PAM\nauthenticate"]
+
+    // ── Legend ─────────────────────────────────────────────────────────
+    subgraph cluster_legend {
+        label="Legend"
+        style="filled,rounded"
+        fillcolor="white"
+        color="#999999"
+        fontsize=10
+
+        node [fontsize=9, width=0.1, height=0.1]
+
+        l_svc     [label="Service /\nModule", shape=box, fillcolor="#ddeeff"]
+        l_store   [label="Storage /\nExternal", shape=cylinder, fillcolor="#f8bbd0"]
+        l_file    [label="Static File /\nArtifact", shape=tab, fillcolor="#a5d6a7"]
+        l_comp    [label="CDN\nDependency", shape=component, fillcolor="#ffe082"]
+        l_infra   [label="Infrastructure", shape=hexagon, fillcolor="#c5cae9"]
+
+        l_e1 [label="", shape=point, width=0.01]
+        l_e2 [label="", shape=point, width=0.01]
+        l_e3 [label="", shape=point, width=0.01]
+        l_e4 [label="", shape=point, width=0.01]
+
+        l_e1 -> l_e2 [label="data flow", color="#555555"]
+        l_e2 -> l_e3 [label="API call", color="#2e7d32", fontcolor="#2e7d32"]
+        l_e3 -> l_e4 [label="uses / imports", style=dotted, color="#888888"]
+
+        l_svc -> l_store -> l_file -> l_comp -> l_infra [style=invis]
+    }
+}

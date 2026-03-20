@@ -1,0 +1,309 @@
+digraph auth_and_tls {
+    // === Graph attributes ===
+    graph [
+        label="File Browser: Authentication & SSL/TLS Architecture"
+        labelloc=t
+        fontname="Helvetica"
+        fontsize=18
+        rankdir=TB
+        compound=true
+        nodesep=0.7
+        ranksep=0.9
+        pad=0.4
+    ]
+    node  [fontname="Helvetica", fontsize=10, style=filled]
+    edge  [fontname="Helvetica", fontsize=9, color="#555555", arrowsize=0.8]
+
+    // =====================================================================
+    //  BROWSER / FRONTEND
+    // =====================================================================
+    subgraph cluster_browser {
+        label="Browser (Frontend JS)"
+        style="filled,rounded"
+        fillcolor="#e8f5e9"
+        color="#388e3c"
+        fontcolor="#1b5e20"
+        fontsize=12
+
+        app_js [label="App (app.js)\nuseEffect: GET /api/auth/me\non load to check session", shape=box, fillcolor="#c8e6c9"]
+        login_form [label="LoginForm (login.js)\nusername + password form", shape=box, fillcolor="#c8e6c9"]
+        api_js [label="ApiClient (api.js)\ncredentials: same-origin\n401 -> dispatch 'auth:logout'", shape=box, fillcolor="#c8e6c9"]
+        session_cookie [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+            <TR><TD COLSPAN="2" BGCOLOR="#fff176"><B>Cookie: session=&lt;token&gt;</B></TD></TR>
+            <TR><TD ALIGN="LEFT">httponly</TD><TD ALIGN="LEFT">always true</TD></TR>
+            <TR><TD ALIGN="LEFT">secure</TD><TD ALIGN="LEFT">true if HTTPS mode</TD></TR>
+            <TR><TD ALIGN="LEFT">samesite</TD><TD ALIGN="LEFT">strict</TD></TR>
+            <TR><TD ALIGN="LEFT">max_age</TD><TD ALIGN="LEFT">2592000 (30 days)</TD></TR>
+        </TABLE>>, shape=plain]
+    }
+
+    // =====================================================================
+    //  TLS / NETWORK LAYER
+    // =====================================================================
+    subgraph cluster_network {
+        label="Network / TLS Termination Layer"
+        style="filled,rounded"
+        fillcolor="#e3f2fd"
+        color="#1565c0"
+        fontcolor="#0d47a1"
+        fontsize=12
+
+        tailscale_net [label="Tailscale Network\n(WireGuard-encrypted tunnel)", shape=parallelogram, fillcolor="#bbdefb"]
+
+        subgraph cluster_https_path {
+            label="HTTPS Mode (certs available)"
+            style="filled,dashed"
+            fillcolor="#e1f5fe"
+            color="#0288d1"
+
+            caddy_https [label="Caddy\nhttps://FQDN\ntls /etc/ssl/tailscale/FQDN.crt\n    /etc/ssl/tailscale/FQDN.key", shape=box, fillcolor="#81d4fa"]
+        }
+
+        subgraph cluster_http_path {
+            label="HTTP Fallback (free Tailscale plan)"
+            style="filled,dashed"
+            fillcolor="#fff3e0"
+            color="#e65100"
+
+            caddy_http [label="Caddy\nhttp://:80\n(no TLS -- tailnet encrypts transport)", shape=box, fillcolor="#ffcc80"]
+        }
+    }
+
+    // =====================================================================
+    //  APPLICATION LAYER
+    // =====================================================================
+    subgraph cluster_app {
+        label="Application (localhost only -- never internet-exposed)"
+        style="filled,rounded"
+        fillcolor="#fce4ec"
+        color="#c62828"
+        fontcolor="#b71c1c"
+        fontsize=12
+
+        uvicorn [label="uvicorn\n--host 127.0.0.1 --port PORT\n(filebrowser.service)", shape=box, fillcolor="#ef9a9a"]
+        fastapi [label="FastAPI App\n(main.py)\ninclude_router(auth, files)", shape=box, fillcolor="#ef9a9a"]
+
+        subgraph cluster_auth_endpoints {
+            label="Auth Routes (routes/auth.py)"
+            style=filled
+            fillcolor="#ffebee"
+            color="#e57373"
+
+            login_ep [label="POST /api/auth/login\nauthenticate + set cookie", shape=box, fillcolor="#ffcdd2"]
+            logout_ep [label="POST /api/auth/logout\ndelete_cookie('session')", shape=box, fillcolor="#ffcdd2"]
+            me_ep [label="GET /api/auth/me\nvalidate cookie -> username", shape=box, fillcolor="#ffcdd2"]
+        }
+
+        subgraph cluster_file_endpoints {
+            label="File Routes (routes/files.py)"
+            style=filled
+            fillcolor="#ffebee"
+            color="#e57373"
+
+            file_ep [label="/api/files/*\nlist | info | content\ndownload | upload | mkdir\nrename | delete", shape=box, fillcolor="#ffcdd2"]
+        }
+
+        subgraph cluster_auth_core {
+            label="Auth Core (auth.py)"
+            style=filled
+            fillcolor="#f3e5f5"
+            color="#7b1fa2"
+            fontcolor="#4a148c"
+
+            require_auth [label="require_auth(request)\ncookies.get('session')\nFastAPI Depends()", shape=box, fillcolor="#ce93d8"]
+            validate_token [label="validate_session_token()\nTimestampSigner.unsign(\n  token, max_age=2592000)", shape=box, fillcolor="#ce93d8"]
+            pam_auth [label="authenticate_pam()\npam.pam().authenticate(\n  username, password)", shape=box, fillcolor="#ce93d8"]
+            create_token [label="create_session_token()\nTimestampSigner.sign(\n  username)", shape=box, fillcolor="#ce93d8"]
+        }
+    }
+
+    // External: Linux PAM
+    pam_system [label="Linux PAM\n(/etc/shadow)", shape=cylinder, fillcolor="#d7ccc8"]
+
+    // =====================================================================
+    //  CERTIFICATE LIFECYCLE
+    // =====================================================================
+    subgraph cluster_cert_lifecycle {
+        label="Certificate Lifecycle"
+        style="filled,rounded"
+        fillcolor="#e0f2f1"
+        color="#00695c"
+        fontcolor="#004d40"
+        fontsize=12
+
+        ts_cert_cmd [label="tailscale cert\n--cert-file CERT_PATH\n--key-file KEY_PATH FQDN", shape=box, fillcolor="#b2dfdb"]
+        cert_files [label="/etc/ssl/tailscale/\nFQDN.crt + FQDN.key", shape=folder, fillcolor="#b2dfdb"]
+        cert_perms [label="chown root:caddy KEY\nchmod 640 KEY", shape=box, fillcolor="#b2dfdb"]
+        renew_timer [label="tailscale-cert-renew.timer\nOnCalendar=weekly\nPersistent=true", shape=box, fillcolor="#80cbc4"]
+        renew_service [label="tailscale-cert-renew.service\n(oneshot)\nExecStartPost: fix perms", shape=box, fillcolor="#80cbc4"]
+    }
+
+    // =====================================================================
+    //  SECRET KEY LIFECYCLE
+    // =====================================================================
+    subgraph cluster_secret_key {
+        label="Secret Key Lifecycle"
+        style="filled,rounded"
+        fillcolor="#fff8e1"
+        color="#f9a825"
+        fontcolor="#f57f17"
+        fontsize=12
+
+        sk_decision [label="FILEBROWSER_SECRET_KEY\nenv var set?", shape=diamond, fillcolor="#fff59d"]
+        sk_random [label="secrets.token_hex(32)\n(random -- lost on restart\nif not persisted)", shape=box, fillcolor="#fff59d"]
+        sk_file [label="/opt/filebrowser/.secret_key\nchmod 600\n(persisted by install.sh)", shape=folder, fillcolor="#fff59d"]
+        sk_systemd [label="systemd Environment=\nFILEBROWSER_SECRET_KEY=<key>", shape=box, fillcolor="#fff59d"]
+        sk_settings [label="Settings.secret_key\n(config.py dataclass)", shape=box, fillcolor="#ffe082"]
+    }
+
+    // =====================================================================
+    //  INSTALL.SH DECISION TREE
+    // =====================================================================
+    subgraph cluster_install {
+        label="install.sh Decision Tree"
+        style="filled,rounded"
+        fillcolor="#ede7f6"
+        color="#512da8"
+        fontcolor="#311b92"
+        fontsize=12
+
+        install_sh [label="install.sh", shape=box, fillcolor="#d1c4e9"]
+        cert_decision [label="tailscale cert\nsucceeds?", shape=diamond, fillcolor="#d1c4e9"]
+        mode_https [label="HTTPS=true\nCaddyfile.template\nSECURE_COOKIES=true", shape=box, fillcolor="#81d4fa"]
+        mode_http [label="HTTPS=false\nCaddyfile.http.template\nSECURE_COOKIES=false", shape=box, fillcolor="#ffcc80"]
+    }
+
+    // =====================================================================
+    //  EDGES: TLS termination path
+    // =====================================================================
+    tailscale_net -> caddy_https [label="  TLS termination\n  (certs from /etc/ssl/tailscale/)"]
+    tailscale_net -> caddy_http [label="  plain HTTP\n  (fallback)", style=dashed]
+    caddy_https -> uvicorn [label="reverse_proxy\nlocalhost:PORT"]
+    caddy_http -> uvicorn [label="reverse_proxy\nlocalhost:PORT"]
+    uvicorn -> fastapi [label="ASGI"]
+
+    // =====================================================================
+    //  EDGES: Login authentication flow
+    // =====================================================================
+    login_form -> api_js [label="api.post('/api/auth/login',\n{username, password})"]
+    api_js -> logout_ep [label="POST /api/auth/logout\n(on user sign-out)"]
+    api_js -> login_ep [label="POST /api/auth/login\n{username, password}"]
+    login_ep -> pam_auth [label="authenticate_pam(\n  username, password)"]
+    pam_auth -> pam_system [label="PAM check"]
+    pam_system -> pam_auth [label="pass/fail", style=dashed, color="#888888"]
+    pam_auth -> login_ep [label="bool result", style=dashed, color="#888888"]
+    login_ep -> create_token [label="on success:\ncreate_session_token()"]
+    create_token -> login_ep [label="signed token", style=dashed, color="#888888"]
+    login_ep -> session_cookie [label="response.set_cookie()", color="#c62828"]
+
+    // =====================================================================
+    //  EDGES: Session validation on every request
+    // =====================================================================
+    file_ep -> require_auth [label="Depends(require_auth)"]
+    require_auth -> validate_token [label="token from\ncookies.get('session')"]
+    validate_token -> file_ep [label="username\n(request proceeds)", color="#2e7d32", style=dashed]
+    validate_token -> api_js [label="401 HTTPException\n(no token or expired)", color="#c62828", style=dashed, lhead=cluster_browser]
+
+    // =====================================================================
+    //  EDGES: /api/auth/me session check on app load
+    // =====================================================================
+    app_js -> api_js [label="GET /api/auth/me\n(on page load)"]
+    api_js -> me_ep [label="GET + session cookie"]
+    me_ep -> validate_token [label="validate cookie"]
+
+    // =====================================================================
+    //  EDGES: 401 redirect loop
+    // =====================================================================
+    api_js -> app_js [label="401 -> dispatch\n'auth:logout' CustomEvent", color="#c62828", style=dashed]
+    app_js -> login_form [label="setUser(null)\nrender LoginForm", color="#c62828", style=dashed]
+
+    // =====================================================================
+    //  EDGES: Certificate lifecycle
+    // =====================================================================
+    ts_cert_cmd -> cert_files [label="generates"]
+    cert_files -> cert_perms [label="fix key permissions\nfor caddy group"]
+    cert_perms -> caddy_https [label="caddy reads certs", style=dotted, color="#00695c"]
+    renew_timer -> renew_service [label="weekly trigger"]
+    renew_service -> ts_cert_cmd [label="re-run\ntailscale cert"]
+
+    // =====================================================================
+    //  EDGES: Secret key lifecycle
+    // =====================================================================
+    install_sh -> sk_file [label="generate or\nread existing key"]
+    sk_file -> sk_systemd [label="written into\n.service file"]
+    sk_systemd -> sk_decision [label="uvicorn reads\nenv var at start"]
+    sk_decision -> sk_settings [label="env set", color="#2e7d32"]
+    sk_decision -> sk_random [label="env not set\n(dev mode)", color="#e65100", style=dashed]
+    sk_random -> sk_settings [style=dashed, color="#e65100"]
+    sk_settings -> create_token [label="signing key", style=dotted, color="#f57f17"]
+    sk_settings -> validate_token [label="validation key", style=dotted, color="#f57f17"]
+
+    // =====================================================================
+    //  EDGES: Install decision tree
+    // =====================================================================
+    install_sh -> cert_decision
+    cert_decision -> mode_https [label="success", color="#2e7d32"]
+    cert_decision -> mode_http [label="failure\n(free plan)", color="#e65100", style=dashed]
+    mode_https -> caddy_https [style=dotted, color="#1565c0", label="configures"]
+    mode_http -> caddy_http [style=dotted, color="#e65100", label="configures"]
+    install_sh -> ts_cert_cmd [label="initial cert gen", style=dotted, color="#00695c"]
+    install_sh -> renew_timer [label="enable timer\n(HTTPS only)", style=dotted, color="#00695c"]
+
+    // =====================================================================
+    //  LEGEND
+    // =====================================================================
+    subgraph cluster_legend {
+        label="Legend"
+        labelloc=t
+        style=filled
+        fillcolor=white
+        color="#333333"
+        fontsize=11
+
+        node [fontsize=9]
+
+        lg_ext [label="External / Network", shape=parallelogram, fillcolor="#bbdefb"]
+        lg_svc [label="Service / Process", shape=box, fillcolor="#ef9a9a"]
+        lg_store [label="System Store", shape=cylinder, fillcolor="#d7ccc8"]
+        lg_files [label="File / Config", shape=folder, fillcolor="#b2dfdb"]
+        lg_decide [label="Decision", shape=diamond, fillcolor="#d1c4e9"]
+        lg_note [label="Annotation / Detail", shape=plain, fillcolor=white]
+
+        lg_ext -> lg_svc [style=invis]
+        lg_svc -> lg_store [style=invis]
+        lg_store -> lg_files [style=invis]
+        lg_files -> lg_decide [style=invis]
+        lg_decide -> lg_note [style=invis]
+
+        // Edge styles
+        lg_e1a [label="", shape=point, width=0.01]
+        lg_e1b [label="", shape=point, width=0.01]
+        lg_e2a [label="", shape=point, width=0.01]
+        lg_e2b [label="", shape=point, width=0.01]
+        lg_e3a [label="", shape=point, width=0.01]
+        lg_e3b [label="", shape=point, width=0.01]
+
+        lg_e1a -> lg_e1b [label="primary flow", color="#555555"]
+        lg_e2a -> lg_e2b [label="response / fallback", style=dashed, color="#c62828"]
+        lg_e3a -> lg_e3b [label="config reference", style=dotted, color="#00695c"]
+
+        lg_note -> lg_e1a [style=invis]
+        lg_e1b -> lg_e2a [style=invis]
+        lg_e2b -> lg_e3a [style=invis]
+
+        // Cluster colors
+        lg_c1 [label="  Green cluster = Browser/Frontend  ", shape=box, style="filled,rounded", fillcolor="#e8f5e9", color="#388e3c", fontsize=8]
+        lg_c2 [label="  Blue cluster = Network/TLS  ", shape=box, style="filled,rounded", fillcolor="#e3f2fd", color="#1565c0", fontsize=8]
+        lg_c3 [label="  Red/Pink cluster = Application/Auth  ", shape=box, style="filled,rounded", fillcolor="#fce4ec", color="#c62828", fontsize=8]
+        lg_c4 [label="  Teal cluster = Cert Lifecycle  ", shape=box, style="filled,rounded", fillcolor="#e0f2f1", color="#00695c", fontsize=8]
+        lg_c5 [label="  Yellow cluster = Secret Key  ", shape=box, style="filled,rounded", fillcolor="#fff8e1", color="#f9a825", fontsize=8]
+        lg_c6 [label="  Purple cluster = Install Decision  ", shape=box, style="filled,rounded", fillcolor="#ede7f6", color="#512da8", fontsize=8]
+
+        lg_e3b -> lg_c1 [style=invis]
+        lg_c1 -> lg_c2 [style=invis]
+        lg_c2 -> lg_c3 [style=invis]
+        lg_c3 -> lg_c4 [style=invis]
+        lg_c4 -> lg_c5 [style=invis]
+        lg_c5 -> lg_c6 [style=invis]
+    }
+}
