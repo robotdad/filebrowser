@@ -28,6 +28,32 @@ export function Layout({ username, authSource, onLogout }) {
     const [showUpload, setShowUpload] = useState(false);     // upload modal
     const dragCounter = useRef(0);
 
+    // ── Pinned favorites ─────────────────────────────────────────
+    const [favorites, setFavorites] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('fb-favorites') || '[]'); }
+        catch { return []; }
+    });
+
+    const saveFavorites = (next) => {
+        setFavorites(next);
+        localStorage.setItem('fb-favorites', JSON.stringify(next));
+    };
+
+    const toggleFavorite = (path) => {
+        saveFavorites(
+            favorites.includes(path)
+                ? favorites.filter(p => p !== path)
+                : [...favorites, path]
+        );
+    };
+
+    const reorderFavorite = (fromIndex, toIndex) => {
+        const next = [...favorites];
+        const [moved] = next.splice(fromIndex, 1);
+        next.splice(toIndex, 0, moved);
+        saveFavorites(next);
+    };
+
     const refresh = () => setRefreshKey((k) => k + 1);
 
     // ── Keyboard shortcuts ───────────────────────────────────────
@@ -240,6 +266,61 @@ export function Layout({ username, authSource, onLogout }) {
                         </div>
                     </div>
 
+                    ${favorites.length > 0 && html`
+                        <div class="favorites-section">
+                            <div class="favorites-header">
+                                <i class="ph ph-push-pin-simple"></i>
+                                <span>Pinned</span>
+                            </div>
+                            ${favorites.map((path, i) => html`
+                                <div
+                                    key=${path}
+                                    class="tree-item favorites-item ${currentPath === path ? 'selected' : ''}"
+                                    draggable="true"
+                                    onClick=${() => handleNavigate(path)}
+                                    onDragStart=${(e) => {
+                                        e.dataTransfer.effectAllowed = 'move';
+                                        e.dataTransfer.setData('text/x-fav-index', String(i));
+                                        e.currentTarget.classList.add('dragging');
+                                    }}
+                                    onDragEnd=${(e) => {
+                                        e.currentTarget.classList.remove('dragging');
+                                    }}
+                                    onDragOver=${(e) => {
+                                        e.preventDefault();
+                                        e.dataTransfer.dropEffect = 'move';
+                                        const rect = e.currentTarget.getBoundingClientRect();
+                                        const mid = rect.top + rect.height / 2;
+                                        e.currentTarget.classList.toggle('drop-above', e.clientY < mid);
+                                        e.currentTarget.classList.toggle('drop-below', e.clientY >= mid);
+                                    }}
+                                    onDragLeave=${(e) => {
+                                        e.currentTarget.classList.remove('drop-above', 'drop-below');
+                                    }}
+                                    onDrop=${(e) => {
+                                        e.preventDefault();
+                                        e.currentTarget.classList.remove('drop-above', 'drop-below');
+                                        const from = parseInt(e.dataTransfer.getData('text/x-fav-index'), 10);
+                                        if (!isNaN(from) && from !== i) reorderFavorite(from, i);
+                                    }}
+                                >
+                                    <span class="file-icon file-icon-folder">
+                                        <i class="ph ph-folder"></i>
+                                    </span>
+                                    <span class="tree-name">${path.split('/').pop() || 'Home'}</span>
+                                    <button
+                                        class="favorites-unpin"
+                                        onClick=${(e) => { e.stopPropagation(); toggleFavorite(path); }}
+                                        title="Unpin"
+                                    >
+                                        <i class="ph ph-x"></i>
+                                    </button>
+                                </div>
+                            `)}
+                        </div>
+                        <div class="favorites-divider"></div>
+                    `}
+
                     <${FileTree}
                         currentPath=${currentPath}
                         onNavigate=${handleNavigate}
@@ -296,6 +377,8 @@ export function Layout({ username, authSource, onLogout }) {
                 onRename=${handleCtxRename}
                 onDelete=${handleCtxDelete}
                 onCopyPath=${handleCtxCopyPath}
+                onTogglePin=${toggleFavorite}
+                isPinned=${contextMenu && favorites.includes(contextMenu.path)}
             />
 
             <!-- Full-page drag-drop overlay (Feature 6) -->

@@ -12,8 +12,10 @@ import { html } from '../html.js';
  *   onRename(path)
  *   onDelete(path)
  *   onCopyPath(path)
+ *   onTogglePin(path) — pin/unpin directories
+ *   isPinned          — whether the current item is pinned
  */
-export function ContextMenu({ menu, onClose, onOpen, onDownload, onRename, onDelete, onCopyPath }) {
+export function ContextMenu({ menu, onClose, onOpen, onDownload, onRename, onDelete, onCopyPath, onTogglePin, isPinned }) {
     const ref = useRef(null);
 
     // Close on outside click or Escape
@@ -41,7 +43,7 @@ export function ContextMenu({ menu, onClose, onOpen, onDownload, onRename, onDel
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const menuW = 192;
-    const menuH = menu.type === 'file' ? 200 : 120;
+    const menuH = menu.type === 'file' ? 200 : 160;
     const x = menu.x + menuW > vw ? vw - menuW - 8 : menu.x;
     const y = menu.y + menuH > vh ? vh - menuH - 8 : menu.y;
 
@@ -64,6 +66,13 @@ export function ContextMenu({ menu, onClose, onOpen, onDownload, onRename, onDel
                 </button>
                 <button class="context-menu-item" onClick=${act(onDownload)}>
                     <i class="ph ph-download-simple"></i> Download
+                </button>
+                <div class="context-menu-divider"></div>
+            `}
+            ${menu.type === 'directory' && onTogglePin && html`
+                <button class="context-menu-item" onClick=${act(onTogglePin)}>
+                    <i class="ph ${isPinned ? 'ph-push-pin-simple-slash' : 'ph-push-pin-simple'}"></i>
+                    ${isPinned ? 'Unpin from favorites' : 'Pin to favorites'}
                 </button>
                 <div class="context-menu-divider"></div>
             `}

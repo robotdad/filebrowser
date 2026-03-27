@@ -224,6 +224,66 @@ body {
 
 .sidebar-overlay { display: none; }
 
+/* === Pinned Favorites === */
+.favorites-section {
+    padding: var(--space-xs) 0;
+}
+.favorites-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px var(--space-md);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    user-select: none;
+}
+.favorites-header i {
+    font-size: 12px;
+    color: var(--yellow, #FF9500);
+}
+.favorites-item {
+    position: relative;
+}
+.favorites-item.dragging {
+    opacity: 0.4;
+}
+.favorites-item.drop-above {
+    box-shadow: 0 -2px 0 0 var(--accent) inset;
+}
+.favorites-item.drop-below {
+    box-shadow: 0 2px 0 0 var(--accent) inset;
+}
+.favorites-unpin {
+    margin-left: auto;
+    flex-shrink: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px;
+    border-radius: var(--radius-xs);
+    font-size: 12px;
+    line-height: 1;
+}
+.favorites-item:hover .favorites-unpin {
+    display: flex;
+}
+.favorites-unpin:hover {
+    background: var(--fill);
+    color: var(--danger);
+}
+.favorites-divider {
+    height: 0.5px;
+    background: var(--border-color);
+    margin: var(--space-xs) var(--space-md);
+}
+
 .tree-item {
     display: flex;
     align-items: center;
