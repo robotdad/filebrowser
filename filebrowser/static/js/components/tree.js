@@ -23,6 +23,174 @@ function getFileIcon(name) {
     return { icon: 'ph-file', cls: 'file-icon-default' };
 }
 
+/**
+ * PinnedFavorites — each pinned folder is a fully browsable mini file tree.
+ */
+export function PinnedFavorites({
+    favorites,
+    onNavigate,
+    onSelectFile,
+    onBatchToggle,
+    onContextMenu,
+    selectedFile,
+    selectedFiles,
+    showHidden,
+    refreshKey,
+    onReorder,
+    onUnpin,
+}) {
+    const [entries, setEntries] = useState({});
+    const [expanded, setExpanded] = useState({});
+
+    // Reload expanded directories when refresh or showHidden changes
+    useEffect(() => {
+        const paths = Object.keys(expanded);
+        for (const p of paths) loadDirectory(p);
+    }, [refreshKey, showHidden]);
+
+    const loadDirectory = async (path) => {
+        try {
+            const data = await api.get(`/api/files?path=${encodeURIComponent(path)}&show_hidden=${showHidden}`);
+            setEntries((prev) => ({ ...prev, [path]: data }));
+        } catch { /* toast shown by api.js */ }
+    };
+
+    const toggleFolder = (path) => {
+        setExpanded((prev) => {
+            const next = { ...prev };
+            if (next[path]) { delete next[path]; }
+            else { next[path] = true; loadDirectory(path); }
+            return next;
+        });
+        onNavigate(path);
+    };
+
+    const handleFileClick = (e, itemPath) => {
+        if (e.ctrlKey || e.metaKey) { onBatchToggle?.(itemPath); }
+        else { onSelectFile(itemPath); }
+    };
+
+    const handleContextMenu = (e, itemPath, itemType) => {
+        e.preventDefault();
+        onContextMenu?.({ x: e.clientX, y: e.clientY, path: itemPath, type: itemType });
+    };
+
+    // Render contents of a directory (recursive, identical to FileTree list view)
+    const renderChildren = (path, depth) => {
+        const items = entries[path] || [];
+        return items.map((item) => {
+            const itemPath = path ? `${path}/${item.name}` : item.name;
+            if (item.type === 'directory') {
+                const isExpanded = !!expanded[itemPath];
+                return html`
+                    <div key=${itemPath}>
+                        <div
+                            class="tree-item tree-folder ${isExpanded ? 'expanded' : ''} ${selectedFiles?.has(itemPath) ? 'multi-selected' : ''}"
+                            style=${{ paddingLeft: `${depth * 16 + 12}px` }}
+                            onClick=${(e) => {
+                                if (e.ctrlKey || e.metaKey) { onBatchToggle?.(itemPath); }
+                                else { toggleFolder(itemPath); }
+                            }}
+                            onContextMenu=${(e) => handleContextMenu(e, itemPath, 'directory')}
+                            title=${item.name}
+                        >
+                            <span class="file-icon file-icon-folder">
+                                <i class="ph ${isExpanded ? 'ph-folder-open' : 'ph-folder'}"></i>
+                            </span>
+                            <span class="tree-name">${item.name}</span>
+                        </div>
+                        ${isExpanded && renderChildren(itemPath, depth + 1)}
+                    </div>
+                `;
+            }
+            const fi = getFileIcon(item.name);
+            const isSelected = selectedFile === itemPath;
+            const isBatch = selectedFiles?.has(itemPath);
+            return html`
+                <div
+                    key=${itemPath}
+                    class="tree-item tree-file ${isSelected ? 'selected' : ''} ${isBatch ? 'multi-selected' : ''}"
+                    style=${{ paddingLeft: `${depth * 16 + 12}px` }}
+                    onClick=${(e) => handleFileClick(e, itemPath)}
+                    onContextMenu=${(e) => handleContextMenu(e, itemPath, 'file')}
+                    title=${item.name}
+                >
+                    <span class="file-icon ${fi.cls}"><i class="ph ${fi.icon}"></i></span>
+                    <span class="tree-name">${item.name}</span>
+                </div>
+            `;
+        });
+    };
+
+    if (!favorites.length) return null;
+
+    return html`
+        <div class="favorites-section">
+            <div class="favorites-header">
+                <i class="ph ph-push-pin-simple"></i>
+                <span>Pinned</span>
+            </div>
+            ${favorites.map((path, i) => {
+                const isExpanded = !!expanded[path];
+                const name = path.split('/').pop() || 'Home';
+                return html`
+                    <div key=${'pin-' + path}>
+                        <div
+                            class="tree-item favorites-item tree-folder ${isExpanded ? 'expanded' : ''}"
+                            draggable="true"
+                            onClick=${(e) => {
+                                if (e.ctrlKey || e.metaKey) return;
+                                toggleFolder(path);
+                            }}
+                            onDragStart=${(e) => {
+                                e.dataTransfer.effectAllowed = 'move';
+                                e.dataTransfer.setData('text/x-fav-index', String(i));
+                                e.currentTarget.classList.add('dragging');
+                            }}
+                            onDragEnd=${(e) => {
+                                e.currentTarget.classList.remove('dragging');
+                            }}
+                            onDragOver=${(e) => {
+                                e.preventDefault();
+                                e.dataTransfer.dropEffect = 'move';
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const mid = rect.top + rect.height / 2;
+                                e.currentTarget.classList.toggle('drop-above', e.clientY < mid);
+                                e.currentTarget.classList.toggle('drop-below', e.clientY >= mid);
+                            }}
+                            onDragLeave=${(e) => {
+                                e.currentTarget.classList.remove('drop-above', 'drop-below');
+                            }}
+                            onDrop=${(e) => {
+                                e.preventDefault();
+                                e.currentTarget.classList.remove('drop-above', 'drop-below');
+                                const from = parseInt(e.dataTransfer.getData('text/x-fav-index'), 10);
+                                if (!isNaN(from) && from !== i) onReorder(from, i);
+                            }}
+                            onContextMenu=${(e) => handleContextMenu(e, path, 'directory')}
+                            title=${path}
+                        >
+                            <span class="file-icon file-icon-folder">
+                                <i class="ph ${isExpanded ? 'ph-folder-open' : 'ph-folder'}"></i>
+                            </span>
+                            <span class="tree-name">${name}</span>
+                            <button
+                                class="favorites-unpin"
+                                onClick=${(e) => { e.stopPropagation(); onUnpin(path); }}
+                                title="Unpin"
+                            >
+                                <i class="ph ph-x"></i>
+                            </button>
+                        </div>
+                        ${isExpanded && renderChildren(path, 1)}
+                    </div>
+                `;
+            })}
+        </div>
+        <div class="favorites-divider"></div>
+    `;
+}
+
 export function FileTree({
     currentPath,
     onNavigate,
@@ -40,27 +208,6 @@ export function FileTree({
     const [expanded, setExpanded] = useState({});
 
     useEffect(() => { reloadAll(); }, [refreshKey, showHidden]);
-
-    // When currentPath changes (e.g. from pinned favorites), expand all ancestors
-    useEffect(() => {
-        if (!currentPath) return;
-        const segments = currentPath.split('/');
-        const toExpand = [];
-        for (let i = 1; i <= segments.length; i++) {
-            toExpand.push(segments.slice(0, i).join('/'));
-        }
-        const missing = toExpand.filter(p => !expanded[p]);
-        if (missing.length === 0) return;
-        setExpanded(prev => {
-            const next = { ...prev };
-            for (const p of missing) next[p] = true;
-            return next;
-        });
-        // Load directory contents for each newly expanded segment
-        (async () => {
-            for (const p of missing) await loadDirectory(p);
-        })();
-    }, [currentPath]);
 
     // Report flat file list upward whenever entries change
     useEffect(() => {

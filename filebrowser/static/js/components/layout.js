@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'preact/hooks';
 import { html } from '../html.js';
 import { api } from '../api.js';
 import { Breadcrumb } from './breadcrumb.js';
-import { FileTree } from './tree.js';
+import { FileTree, PinnedFavorites } from './tree.js';
 import { PreviewPane } from './preview.js';
 import { ActionBar } from './actions.js';
 import { CommandPalette } from './command-palette.js';
@@ -266,60 +266,19 @@ export function Layout({ username, authSource, onLogout }) {
                         </div>
                     </div>
 
-                    ${favorites.length > 0 && html`
-                        <div class="favorites-section">
-                            <div class="favorites-header">
-                                <i class="ph ph-push-pin-simple"></i>
-                                <span>Pinned</span>
-                            </div>
-                            ${favorites.map((path, i) => html`
-                                <div
-                                    key=${path}
-                                    class="tree-item favorites-item ${currentPath === path ? 'selected' : ''}"
-                                    draggable="true"
-                                    onClick=${() => handleNavigate(path)}
-                                    onDragStart=${(e) => {
-                                        e.dataTransfer.effectAllowed = 'move';
-                                        e.dataTransfer.setData('text/x-fav-index', String(i));
-                                        e.currentTarget.classList.add('dragging');
-                                    }}
-                                    onDragEnd=${(e) => {
-                                        e.currentTarget.classList.remove('dragging');
-                                    }}
-                                    onDragOver=${(e) => {
-                                        e.preventDefault();
-                                        e.dataTransfer.dropEffect = 'move';
-                                        const rect = e.currentTarget.getBoundingClientRect();
-                                        const mid = rect.top + rect.height / 2;
-                                        e.currentTarget.classList.toggle('drop-above', e.clientY < mid);
-                                        e.currentTarget.classList.toggle('drop-below', e.clientY >= mid);
-                                    }}
-                                    onDragLeave=${(e) => {
-                                        e.currentTarget.classList.remove('drop-above', 'drop-below');
-                                    }}
-                                    onDrop=${(e) => {
-                                        e.preventDefault();
-                                        e.currentTarget.classList.remove('drop-above', 'drop-below');
-                                        const from = parseInt(e.dataTransfer.getData('text/x-fav-index'), 10);
-                                        if (!isNaN(from) && from !== i) reorderFavorite(from, i);
-                                    }}
-                                >
-                                    <span class="file-icon file-icon-folder">
-                                        <i class="ph ph-folder"></i>
-                                    </span>
-                                    <span class="tree-name">${path.split('/').pop() || 'Home'}</span>
-                                    <button
-                                        class="favorites-unpin"
-                                        onClick=${(e) => { e.stopPropagation(); toggleFavorite(path); }}
-                                        title="Unpin"
-                                    >
-                                        <i class="ph ph-x"></i>
-                                    </button>
-                                </div>
-                            `)}
-                        </div>
-                        <div class="favorites-divider"></div>
-                    `}
+                    <${PinnedFavorites}
+                        favorites=${favorites}
+                        onNavigate=${handleNavigate}
+                        onSelectFile=${handleSelectFile}
+                        onBatchToggle=${handleBatchToggle}
+                        onContextMenu=${setContextMenu}
+                        selectedFile=${selectedFile}
+                        selectedFiles=${selectedFiles}
+                        showHidden=${showHidden}
+                        refreshKey=${refreshKey}
+                        onReorder=${reorderFavorite}
+                        onUnpin=${toggleFavorite}
+                    />
 
                     <${FileTree}
                         currentPath=${currentPath}
