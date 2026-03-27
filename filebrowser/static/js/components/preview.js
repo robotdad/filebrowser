@@ -32,6 +32,49 @@ function formatSize(bytes) {
     return `${(bytes / 1073741824).toFixed(1)} GB`;
 }
 
+function formatDate(isoString) {
+    const d = new Date(isoString);
+    const now = new Date();
+    const diffMs = now - d;
+    const diffMin = Math.floor(diffMs / 60000);
+    const diffHr = Math.floor(diffMs / 3600000);
+    const diffDay = Math.floor(diffMs / 86400000);
+    let relative;
+    if (diffMin < 1) relative = 'just now';
+    else if (diffMin < 60) relative = `${diffMin}m ago`;
+    else if (diffHr < 24) relative = `${diffHr}h ago`;
+    else if (diffDay < 7) relative = `${diffDay}d ago`;
+    else relative = null;
+
+    const absolute = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+        + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    return relative ? `${relative} (${absolute})` : absolute;
+}
+
+function FileInfoBar({ filePath }) {
+    const [info, setInfo] = useState(null);
+
+    useEffect(() => {
+        if (!filePath) { setInfo(null); return; }
+        api.get(`/api/files/info?path=${encodeURIComponent(filePath)}`)
+            .then(setInfo)
+            .catch(() => setInfo(null));
+    }, [filePath]);
+
+    if (!info) return null;
+
+    const name = filePath.split('/').pop();
+    return html`
+        <div class="file-info-bar">
+            <span class="file-info-name" title=${filePath}>${name}</span>
+            <span class="file-info-meta">
+                ${info.size != null && html`<span>${formatSize(info.size)}</span>`}
+                ${info.modified && html`<span>Modified ${formatDate(info.modified)}</span>`}
+            </span>
+        </div>
+    `;
+}
+
 function TextViewer({ text }) {
     const lines = text.split('\n');
     return html`
@@ -256,5 +299,8 @@ export function PreviewPane({ filePath }) {
     }
 
     // AnimatedContent uses filePath as key — forces remount + animation on every file switch
-    return html`<${AnimatedContent} filePath=${filePath}>${inner}</${AnimatedContent}>`;
+    return html`
+        <${FileInfoBar} filePath=${filePath} />
+        <${AnimatedContent} filePath=${filePath}>${inner}</${AnimatedContent}>
+    `;
 }

@@ -21,6 +21,7 @@ export function Layout({ username, authSource, onLogout }) {
 
     // ── Feature state ────────────────────────────────────────────
     const [viewMode, setViewMode] = useState('list');         // 'list' | 'grid'
+    const [sortBy, setSortBy] = useState('name');            // 'name' | 'modified' | 'size' | 'type'
     const [commandOpen, setCommandOpen] = useState(false);   // ⌘K palette
     const [contextMenu, setContextMenu] = useState(null);    // {x,y,path,type}
     const [allFiles, setAllFiles] = useState([]);             // flat file list for palette
@@ -248,6 +249,17 @@ export function Layout({ username, authSource, onLogout }) {
                 <aside class="sidebar ${sidebarOpen ? 'open' : ''}">
                     <!-- Sidebar header with view toggle -->
                     <div class="sidebar-header">
+                        <select
+                            class="sort-select"
+                            value=${sortBy}
+                            onChange=${(e) => setSortBy(e.target.value)}
+                            title="Sort by"
+                        >
+                            <option value="name">Name</option>
+                            <option value="modified">Modified</option>
+                            <option value="size">Size</option>
+                            <option value="type">Type</option>
+                        </select>
                         <div class="view-toggle">
                             <button
                                 class=${viewMode === 'list' ? 'active' : ''}
@@ -278,6 +290,7 @@ export function Layout({ username, authSource, onLogout }) {
                         refreshKey=${refreshKey}
                         onReorder=${reorderFavorite}
                         onUnpin=${toggleFavorite}
+                        sortBy=${sortBy}
                     />
 
                     <${FileTree}
@@ -292,6 +305,7 @@ export function Layout({ username, authSource, onLogout }) {
                         viewMode=${viewMode}
                         selectedFile=${selectedFile}
                         selectedFiles=${selectedFiles}
+                        sortBy=${sortBy}
                     />
                 </aside>
 

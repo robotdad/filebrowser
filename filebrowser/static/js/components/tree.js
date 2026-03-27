@@ -12,6 +12,50 @@ const FILE_ICON_TYPES = [
     { exts: ['.pdf'], icon: 'ph-file-pdf', cls: 'file-icon-pdf' },
 ];
 
+function formatSize(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1073741824) return `${(bytes / 1048576).toFixed(1)} MB`;
+    return `${(bytes / 1073741824).toFixed(1)} GB`;
+}
+
+function formatRelativeDate(isoString) {
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMin = Math.floor(diffMs / 60000);
+    const diffHr = Math.floor(diffMs / 3600000);
+    const diffDay = Math.floor(diffMs / 86400000);
+    if (diffMin < 1) return 'just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffHr < 24) return `${diffHr}h ago`;
+    if (diffDay < 7) return `${diffDay}d ago`;
+    if (diffDay < 365) return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function sortEntries(items, sortBy) {
+    const sorted = [...items];
+    sorted.sort((a, b) => {
+        // Always directories first
+        if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+        switch (sortBy) {
+            case 'modified':
+                return new Date(b.modified) - new Date(a.modified); // newest first
+            case 'size':
+                return b.size - a.size; // largest first
+            case 'type': {
+                const extA = a.name.includes('.') ? a.name.split('.').pop().toLowerCase() : '';
+                const extB = b.name.includes('.') ? b.name.split('.').pop().toLowerCase() : '';
+                return extA.localeCompare(extB) || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+            }
+            default: // 'name'
+                return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+        }
+    });
+    return sorted;
+}
+
 function getFileIcon(name) {
     const dot = name.lastIndexOf('.');
     if (dot !== -1) {
@@ -38,6 +82,7 @@ export function PinnedFavorites({
     refreshKey,
     onReorder,
     onUnpin,
+    sortBy,
 }) {
     const [entries, setEntries] = useState({});
     const [expanded, setExpanded] = useState({});
@@ -77,7 +122,7 @@ export function PinnedFavorites({
 
     // Render contents of a directory (recursive, identical to FileTree list view)
     const renderChildren = (path, depth) => {
-        const items = entries[path] || [];
+        const items = sortEntries(entries[path] || [], sortBy);
         return items.map((item) => {
             const itemPath = path ? `${path}/${item.name}` : item.name;
             if (item.type === 'directory') {
@@ -109,14 +154,17 @@ export function PinnedFavorites({
             return html`
                 <div
                     key=${itemPath}
-                    class="tree-item tree-file ${isSelected ? 'selected' : ''} ${isBatch ? 'multi-selected' : ''}"
+                    class="tree-item tree-file has-detail ${isSelected ? 'selected' : ''} ${isBatch ? 'multi-selected' : ''}"
                     style=${{ paddingLeft: `${depth * 16 + 12}px` }}
                     onClick=${(e) => handleFileClick(e, itemPath)}
                     onContextMenu=${(e) => handleContextMenu(e, itemPath, 'file')}
                     title=${item.name}
                 >
                     <span class="file-icon ${fi.cls}"><i class="ph ${fi.icon}"></i></span>
-                    <span class="tree-name">${item.name}</span>
+                    <div class="tree-item-text">
+                        <span class="tree-name">${item.name}</span>
+                        <span class="tree-detail">${formatSize(item.size)}${item.modified ? ` · ${formatRelativeDate(item.modified)}` : ''}</span>
+                    </div>
                 </div>
             `;
         });
@@ -203,6 +251,7 @@ export function FileTree({
     viewMode,
     selectedFile,
     selectedFiles,
+    sortBy,
 }) {
     const [entries, setEntries] = useState({});
     const [expanded, setExpanded] = useState({});
@@ -261,7 +310,7 @@ export function FileTree({
 
     // ── Grid View ──────────────────────────────────────────────────
     if (viewMode === 'grid') {
-        const items = entries[currentPath] || entries[''] || [];
+        const items = sortEntries(entries[currentPath] || entries[''] || [], sortBy);
         return html`
             <div class="file-tree grid-view">
                 ${items.map((item) => {
@@ -297,6 +346,7 @@ export function FileTree({
                                 <i class="ph ${fi.icon}"></i>
                             </span>
                             <span class="tree-name">${item.name}</span>
+                            <span class="tree-detail">${formatSize(item.size)}</span>
                         </div>
                     `;
                 })}
@@ -311,7 +361,7 @@ export function FileTree({
 
     // ── List View (default) ───────────────────────────────────────
     const renderEntries = (path, depth = 0) => {
-        const items = entries[path] || [];
+        const items = sortEntries(entries[path] || [], sortBy);
         return items.map((item) => {
             const itemPath = path ? `${path}/${item.name}` : item.name;
             if (item.type === 'directory') {
@@ -343,14 +393,17 @@ export function FileTree({
             return html`
                 <div
                     key=${itemPath}
-                    class="tree-item tree-file ${isSelected ? 'selected' : ''} ${isBatch ? 'multi-selected' : ''}"
+                    class="tree-item tree-file has-detail ${isSelected ? 'selected' : ''} ${isBatch ? 'multi-selected' : ''}"
                     style=${{ paddingLeft: `${depth * 16 + 12}px` }}
                     onClick=${(e) => handleFileClick(e, itemPath)}
                     onContextMenu=${(e) => handleContextMenu(e, itemPath, 'file')}
                     title=${item.name}
                 >
                     <span class="file-icon ${fi.cls}"><i class="ph ${fi.icon}"></i></span>
-                    <span class="tree-name">${item.name}</span>
+                    <div class="tree-item-text">
+                        <span class="tree-name">${item.name}</span>
+                        <span class="tree-detail">${formatSize(item.size)}${item.modified ? ` · ${formatRelativeDate(item.modified)}` : ''}</span>
+                    </div>
                 </div>
             `;
         });
