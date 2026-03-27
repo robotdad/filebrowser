@@ -41,6 +41,27 @@ export function FileTree({
 
     useEffect(() => { reloadAll(); }, [refreshKey, showHidden]);
 
+    // When currentPath changes (e.g. from pinned favorites), expand all ancestors
+    useEffect(() => {
+        if (!currentPath) return;
+        const segments = currentPath.split('/');
+        const toExpand = [];
+        for (let i = 1; i <= segments.length; i++) {
+            toExpand.push(segments.slice(0, i).join('/'));
+        }
+        const missing = toExpand.filter(p => !expanded[p]);
+        if (missing.length === 0) return;
+        setExpanded(prev => {
+            const next = { ...prev };
+            for (const p of missing) next[p] = true;
+            return next;
+        });
+        // Load directory contents for each newly expanded segment
+        (async () => {
+            for (const p of missing) await loadDirectory(p);
+        })();
+    }, [currentPath]);
+
     // Report flat file list upward whenever entries change
     useEffect(() => {
         if (!onEntriesChange) return;
