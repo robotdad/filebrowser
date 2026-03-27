@@ -69,6 +69,78 @@ function MarkdownViewer({ text }) {
     return html`<div class="markdown-viewer" dangerouslySetInnerHTML=${{ __html: htmlContent }}></div>`;
 }
 
+function ImageViewer({ contentUrl, filePath }) {
+    const [zoom, setZoom] = useState(1);
+    const [offset, setOffset] = useState({ x: 0, y: 0 });
+    const isDragging = useRef(false);
+    const dragStart = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
+    const canvasRef = useRef(null);
+
+    const clampZoom = (z) => Math.min(Math.max(z, 0.1), 20);
+
+    const handleWheel = (e) => {
+        e.preventDefault();
+        const factor = e.deltaY > 0 ? 0.9 : 1.1;
+        setZoom(z => clampZoom(z * factor));
+    };
+
+    const handleMouseDown = (e) => {
+        if (e.button !== 0) return;
+        isDragging.current = true;
+        dragStart.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y };
+        canvasRef.current?.classList.add('dragging');
+    };
+
+    const handleMouseMove = (e) => {
+        if (!isDragging.current) return;
+        setOffset({
+            x: dragStart.current.ox + e.clientX - dragStart.current.x,
+            y: dragStart.current.oy + e.clientY - dragStart.current.y,
+        });
+    };
+
+    const handleMouseUp = () => {
+        isDragging.current = false;
+        canvasRef.current?.classList.remove('dragging');
+    };
+
+    const reset = () => { setZoom(1); setOffset({ x: 0, y: 0 }); };
+
+    return html`
+        <div class="image-viewer">
+            <div class="image-viewer-toolbar">
+                <button onClick=${() => setZoom(z => clampZoom(z * 1.25))} title="Zoom in">
+                    <i class="ph ph-magnifying-glass-plus"></i>
+                </button>
+                <button onClick=${() => setZoom(z => clampZoom(z * 0.8))} title="Zoom out">
+                    <i class="ph ph-magnifying-glass-minus"></i>
+                </button>
+                <span class="zoom-level">${Math.round(zoom * 100)}%</span>
+                <button onClick=${reset} title="Reset zoom">
+                    <i class="ph ph-arrows-in"></i> Reset
+                </button>
+            </div>
+            <div class="image-viewer-canvas"
+                 ref=${canvasRef}
+                 onWheel=${handleWheel}
+                 onMouseDown=${handleMouseDown}
+                 onMouseMove=${handleMouseMove}
+                 onMouseUp=${handleMouseUp}
+                 onMouseLeave=${handleMouseUp}>
+                <img
+                    src=${contentUrl}
+                    alt=${filePath}
+                    style=${{
+                        transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
+                        transformOrigin: 'center center',
+                    }}
+                    draggable="false"
+                />
+            </div>
+        </div>
+    `;
+}
+
 function HtmlViewer({ text, path, contentUrl }) {
     const [showSource, setShowSource] = useState(false);
     const codeRef = useRef(null);
@@ -161,7 +233,7 @@ export function PreviewPane({ filePath }) {
             inner = html`<${HtmlViewer} text=${content.text} path=${filePath} contentUrl=${contentUrl} />`;
             break;
         case 'image':
-            inner = html`<div class="preview-image"><img src=${contentUrl} alt=${filePath} /></div>`;
+            inner = html`<${ImageViewer} contentUrl=${contentUrl} filePath=${filePath} />`;
             break;
         case 'audio':
             inner = html`<div class="preview-audio"><audio controls src=${contentUrl}></audio></div>`;
