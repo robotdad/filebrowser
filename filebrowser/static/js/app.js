@@ -7,11 +7,12 @@ import { Layout } from './components/layout.js';
 
 function App() {
     const [user, setUser] = useState(null);
+    const [authSource, setAuthSource] = useState(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         api.get('/api/auth/me')
-            .then((data) => setUser(data.username))
+            .then((data) => { setUser(data.username); setAuthSource(data.auth_source); })
             .catch(() => setUser(null))
             .finally(() => setLoading(false));
 
@@ -22,7 +23,7 @@ function App() {
 
     if (loading) return html`<div class="loading">Loading...</div>`;
     if (!user) return html`<${LoginForm} onLogin=${(u) => setUser(u)} />`;
-    return html`<${Layout} username=${user} onLogout=${() => setUser(null)} />`;
+    return html`<${Layout} username=${user} authSource=${authSource} onLogout=${() => setUser(null)} />`;
 }
 
 render(html`<${App} />`, document.getElementById('app'));

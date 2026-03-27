@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Response, HTTPException, Request
+from fastapi import APIRouter, Response, HTTPException, Request, Depends
 from pydantic import BaseModel
 from filebrowser.auth import (
     authenticate_pam,
     create_session_token,
-    validate_session_token,
+    require_auth,
+    get_auth_source,
 )
 from filebrowser.config import settings
 
@@ -35,25 +36,11 @@ async def login(body: LoginRequest, response: Response):
 
 
 @router.post("/logout")
-async def logout(response: Response):
+async def logout(request: Request, response: Response):
     response.delete_cookie("session")
-    return {"ok": True}
+    return {"ok": True, "auth_source": get_auth_source(request)}
 
 
 @router.get("/me")
-async def me(request: Request):
-    token = request.cookies.get("session")
-    if not token:
-        raise HTTPException(
-            status_code=401,
-            detail={"error": "Not authenticated", "code": "UNAUTHORIZED"},
-        )
-    username = validate_session_token(
-        token, settings.secret_key, settings.session_timeout
-    )
-    if not username:
-        raise HTTPException(
-            status_code=401,
-            detail={"error": "Session expired or invalid", "code": "UNAUTHORIZED"},
-        )
-    return {"username": username}
+async def me(request: Request, username: str = Depends(require_auth)):
+    return {"username": username, "auth_source": get_auth_source(request)}

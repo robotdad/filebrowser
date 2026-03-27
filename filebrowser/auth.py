@@ -23,18 +23,28 @@ def validate_session_token(token: str, secret_key: str, max_age: int) -> str | N
 
 
 async def require_auth(request: Request) -> str:
+    # Trust Remote-User header set by Caddy forward_auth (frontdoor integration)
+    remote_user = request.headers.get("Remote-User")
+    if remote_user:
+        return remote_user
+
+    # Fallback: own session cookie (standalone mode — works without frontdoor)
     token = request.cookies.get("session")
     if not token:
         raise HTTPException(
             status_code=401,
             detail={"error": "Not authenticated", "code": "UNAUTHORIZED"},
         )
-    username = validate_session_token(
-        token, settings.secret_key, settings.session_timeout
-    )
+    username = validate_session_token(token, settings.secret_key, settings.session_timeout)
     if not username:
         raise HTTPException(
             status_code=401,
             detail={"error": "Session expired or invalid", "code": "UNAUTHORIZED"},
         )
     return username
+
+
+def get_auth_source(request: Request) -> str:
+    """Returns 'frontdoor' when authenticated via Remote-User header, 'session' otherwise."""
+    remote_user = request.headers.get("Remote-User")
+    return "frontdoor" if remote_user else "session"

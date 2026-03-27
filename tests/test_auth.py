@@ -103,6 +103,7 @@ class TestRequireAuth:
         from filebrowser.auth import require_auth
 
         request = MagicMock()
+        request.headers = {}
         request.cookies = {}
         with pytest.raises(HTTPException) as exc_info:
             asyncio.get_event_loop().run_until_complete(require_auth(request))
@@ -112,10 +113,83 @@ class TestRequireAuth:
         from filebrowser.auth import require_auth
 
         request = MagicMock()
+        request.headers = {}
         request.cookies = {"session": "garbage-token"}
         with pytest.raises(HTTPException) as exc_info:
             asyncio.get_event_loop().run_until_complete(require_auth(request))
         assert exc_info.value.status_code == 401
+
+    def test_valid_cookie_still_works_without_remote_user(self):
+        from filebrowser.auth import require_auth, create_session_token
+        token = create_session_token("alice", SECRET)
+        request = MagicMock()
+        request.headers = {}
+        request.cookies = {"session": token}
+        with patch("filebrowser.auth.settings") as mock_settings:
+            mock_settings.secret_key = SECRET
+            mock_settings.session_timeout = 3600
+            result = asyncio.get_event_loop().run_until_complete(require_auth(request))
+        assert result == "alice"
+
+
+class TestRequireAuthWithRemoteUser:
+    def test_remote_user_header_bypasses_cookie(self):
+        from filebrowser.auth import require_auth
+        request = MagicMock()
+        request.headers = {"Remote-User": "alice"}
+        request.cookies = {}
+        result = asyncio.get_event_loop().run_until_complete(require_auth(request))
+        assert result == "alice"
+
+    def test_remote_user_takes_precedence_over_session_cookie(self):
+        from filebrowser.auth import require_auth, create_session_token
+        token = create_session_token("bob", SECRET)
+        request = MagicMock()
+        request.headers = {"Remote-User": "alice"}
+        request.cookies = {"session": token}
+        result = asyncio.get_event_loop().run_until_complete(require_auth(request))
+        assert result == "alice"
+
+    def test_empty_remote_user_header_falls_back_to_session_cookie(self):
+        from filebrowser.auth import require_auth, create_session_token
+        token = create_session_token("bob", SECRET)
+        request = MagicMock()
+        request.headers = {"Remote-User": ""}
+        request.cookies = {"session": token}
+        with patch("filebrowser.auth.settings") as mock_settings:
+            mock_settings.secret_key = SECRET
+            mock_settings.session_timeout = 3600
+            result = asyncio.get_event_loop().run_until_complete(require_auth(request))
+        assert result == "bob"
+
+    def test_no_remote_user_no_cookie_raises_401(self):
+        from filebrowser.auth import require_auth
+        request = MagicMock()
+        request.headers = {}
+        request.cookies = {}
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.get_event_loop().run_until_complete(require_auth(request))
+        assert exc_info.value.status_code == 401
+
+
+class TestGetAuthSource:
+    def test_returns_frontdoor_when_remote_user_present(self):
+        from filebrowser.auth import get_auth_source
+        request = MagicMock()
+        request.headers = {"Remote-User": "alice"}
+        assert get_auth_source(request) == "frontdoor"
+
+    def test_returns_session_when_no_remote_user(self):
+        from filebrowser.auth import get_auth_source
+        request = MagicMock()
+        request.headers = {}
+        assert get_auth_source(request) == "session"
+
+    def test_returns_session_when_remote_user_is_empty_string(self):
+        from filebrowser.auth import get_auth_source
+        request = MagicMock()
+        request.headers = {"Remote-User": ""}
+        assert get_auth_source(request) == "session"
 
 
 # --- Route Tests ---
@@ -158,7 +232,22 @@ class TestLogoutRoute:
     def test_logout_clears_cookie(self, auth_client):
         response = auth_client.post("/api/auth/logout")
         assert response.status_code == 200
-        assert response.json() == {"ok": True}
+        assert response.json()["ok"] is True
+        assert response.json()["auth_source"] == "session"
+
+
+class TestLogoutRouteAuthSource:
+    def test_logout_returns_frontdoor_auth_source_when_remote_user_present(self, auth_client):
+        response = auth_client.post("/api/auth/logout", headers={"Remote-User": "alice"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["ok"] is True
+        assert data["auth_source"] == "frontdoor"
+
+    def test_logout_returns_session_auth_source_in_standalone_mode(self, auth_client):
+        response = auth_client.post("/api/auth/logout")
+        assert response.status_code == 200
+        assert response.json()["auth_source"] == "session"
 
 
 class TestMeRoute:
@@ -170,7 +259,9 @@ class TestMeRoute:
             )
         response = auth_client.get("/api/auth/me")
         assert response.status_code == 200
-        assert response.json() == {"username": "testuser"}
+        data = response.json()
+        assert data["username"] == "testuser"
+        assert data["auth_source"] == "session"
 
     def test_me_without_session(self, auth_client):
         response = auth_client.get("/api/auth/me")
@@ -180,3 +271,10 @@ class TestMeRoute:
         auth_client.cookies.set("session", "invalid-token")
         response = auth_client.get("/api/auth/me")
         assert response.status_code == 401
+
+    def test_me_with_remote_user_header_returns_frontdoor_source(self, auth_client):
+        response = auth_client.get("/api/auth/me", headers={"Remote-User": "alice"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["username"] == "alice"
+        assert data["auth_source"] == "frontdoor"

@@ -8,7 +8,7 @@ import { ActionBar } from './actions.js';
 import { CommandPalette } from './command-palette.js';
 import { ContextMenu } from './context-menu.js';
 
-export function Layout({ username, onLogout }) {
+export function Layout({ username, authSource, onLogout }) {
     // ── Core state ──────────────────────────────────────────────
     const [currentPath, setCurrentPath] = useState('');
     const [selectedFile, setSelectedFile] = useState(null);
@@ -98,7 +98,18 @@ export function Layout({ username, onLogout }) {
     // ── Auth ─────────────────────────────────────────────────────
     const handleLogout = async () => {
         await api.post('/api/auth/logout');
-        onLogout();
+        if (authSource === 'frontdoor') {
+            // Form POST to frontdoor's logout to clear the shared session cookie.
+            // Use form.submit() so the browser sends a POST with cookies to the
+            // frontdoor origin (same hostname, port 443).
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = `https://${window.location.hostname}/api/auth/logout`;
+            document.body.appendChild(form);
+            form.submit();
+        } else {
+            onLogout();
+        }
     };
 
     // ── Navigation ───────────────────────────────────────────────
