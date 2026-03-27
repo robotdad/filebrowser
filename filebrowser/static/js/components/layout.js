@@ -208,6 +208,9 @@ export function Layout({ username, authSource, onLogout }) {
                         Show hidden
                     </label>
                     <span class="username">${username}</span>
+                    <button class="refresh-btn" onClick=${refresh} title="Refresh">
+                        <i class="ph ph-arrow-clockwise"></i>
+                    </button>
                     <button class="logout-btn" onClick=${handleLogout} title="Sign out">
                     <i class="ph ph-sign-out"></i>
                 </button>
