@@ -6,3 +6,4 @@ Type=oneshot
 ExecStart=/usr/bin/tailscale cert --cert-file CERT_PATH --key-file KEY_PATH FILEBROWSER_FQDN
 ExecStartPost=/usr/bin/chown root:caddy KEY_PATH
 ExecStartPost=/usr/bin/chmod 640 KEY_PATH
+ExecStartPost=/usr/bin/systemctl reload caddy

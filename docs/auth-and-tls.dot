@@ -135,7 +135,7 @@ digraph auth_and_tls {
         cert_files [label="/etc/ssl/tailscale/\nFQDN.crt + FQDN.key", shape=folder, fillcolor="#b2dfdb"]
         cert_perms [label="chown root:caddy KEY\nchmod 640 KEY", shape=box, fillcolor="#b2dfdb"]
         renew_timer [label="tailscale-cert-renew.timer\nOnCalendar=weekly\nPersistent=true", shape=box, fillcolor="#80cbc4"]
-        renew_service [label="tailscale-cert-renew.service\n(oneshot)\nExecStartPost: fix perms", shape=box, fillcolor="#80cbc4"]
+        renew_service [label="tailscale-cert-renew.service\n(oneshot)\nExecStartPost: fix perms\nExecStartPost: reload caddy", shape=box, fillcolor="#80cbc4"]
     }
 
     // =====================================================================
@@ -225,6 +225,7 @@ digraph auth_and_tls {
     cert_perms -> caddy_https [label="caddy reads certs", style=dotted, color="#00695c"]
     renew_timer -> renew_service [label="weekly trigger"]
     renew_service -> ts_cert_cmd [label="re-run\ntailscale cert"]
+    renew_service -> caddy_https [label="systemctl reload\ncaddy\n(after cert renewal)", style=dashed, color="#00695c"]
 
     // =====================================================================
     //  EDGES: Secret key lifecycle
@@ -282,14 +283,18 @@ digraph auth_and_tls {
         lg_e2b [label="", shape=point, width=0.01]
         lg_e3a [label="", shape=point, width=0.01]
         lg_e3b [label="", shape=point, width=0.01]
+        lg_e4a [label="", shape=point, width=0.01]
+        lg_e4b [label="", shape=point, width=0.01]
 
         lg_e1a -> lg_e1b [label="primary flow", color="#555555"]
         lg_e2a -> lg_e2b [label="response / fallback", style=dashed, color="#c62828"]
         lg_e3a -> lg_e3b [label="config reference", style=dotted, color="#00695c"]
+        lg_e4a -> lg_e4b [label="runtime action", style=dashed, color="#00695c"]
 
         lg_note -> lg_e1a [style=invis]
         lg_e1b -> lg_e2a [style=invis]
         lg_e2b -> lg_e3a [style=invis]
+        lg_e3b -> lg_e4a [style=invis]
 
         // Cluster colors
         lg_c1 [label="  Green cluster = Browser/Frontend  ", shape=box, style="filled,rounded", fillcolor="#e8f5e9", color="#388e3c", fontsize=8]

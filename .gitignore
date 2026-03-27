@@ -12,3 +12,6 @@ dist/
 
 # Testing
 .pytest_cache/
+
+# Amplifier
+.discovery/
