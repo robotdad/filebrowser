@@ -23,8 +23,8 @@ def validate_session_token(token: str, secret_key: str, max_age: int) -> str | N
 
 
 async def require_auth(request: Request) -> str:
-    # Trust Remote-User header set by Caddy forward_auth (frontdoor integration)
-    remote_user = request.headers.get("Remote-User")
+    # Trust X-Authenticated-User header set by Caddy forward_auth (frontdoor integration)
+    remote_user = request.headers.get("X-Authenticated-User")
     if remote_user:
         return remote_user
 
@@ -45,6 +45,6 @@ async def require_auth(request: Request) -> str:
 
 
 def get_auth_source(request: Request) -> str:
-    """Returns 'frontdoor' when authenticated via Remote-User header, 'session' otherwise."""
-    remote_user = request.headers.get("Remote-User")
+    """Returns 'frontdoor' when authenticated via X-Authenticated-User header, 'session' otherwise."""
+    remote_user = request.headers.get("X-Authenticated-User")
     return "frontdoor" if remote_user else "session"
