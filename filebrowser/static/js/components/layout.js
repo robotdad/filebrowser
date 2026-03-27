@@ -208,7 +208,9 @@ export function Layout({ username, authSource, onLogout }) {
                         Show hidden
                     </label>
                     <span class="username">${username}</span>
-                    <button class="logout-btn" onClick=${handleLogout}>Logout</button>
+                    <button class="logout-btn" onClick=${handleLogout} title="Sign out">
+                    <i class="ph ph-sign-out"></i>
+                </button>
                 </div>
             </header>
 

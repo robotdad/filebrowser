@@ -26,23 +26,33 @@ export function LoginForm({ onLogin }) {
         <div class="login-container">
             <form class="login-form" onSubmit=${handleSubmit}>
                 <h1>File Browser</h1>
-                ${error && html`<div class="error">${error}</div>`}
-                <input
-                    type="text"
-                    placeholder="Username"
-                    value=${username}
-                    onInput=${(e) => setUsername(e.target.value)}
-                    required
-                    autocomplete="username"
-                />
-                <input
-                    type="password"
-                    placeholder="Password"
-                    value=${password}
-                    onInput=${(e) => setPassword(e.target.value)}
-                    required
-                    autocomplete="current-password"
-                />
+                ${error && html`<div class="login-error">${error}</div>`}
+                <div class="login-field">
+                    <label class="login-label" for="fb-username">Username</label>
+                    <input
+                        id="fb-username"
+                        type="text"
+                        placeholder="username"
+                        value=${username}
+                        onInput=${(e) => setUsername(e.target.value)}
+                        required
+                        autocomplete="username"
+                        autocapitalize="none"
+                        autocorrect="off"
+                    />
+                </div>
+                <div class="login-field">
+                    <label class="login-label" for="fb-password">Password</label>
+                    <input
+                        id="fb-password"
+                        type="password"
+                        placeholder="••••••••"
+                        value=${password}
+                        onInput=${(e) => setPassword(e.target.value)}
+                        required
+                        autocomplete="current-password"
+                    />
+                </div>
                 <button type="submit" disabled=${loading}>
                     ${loading ? 'Signing in...' : 'Sign In'}
                 </button>
