@@ -327,7 +327,6 @@ function GraphvizViewer({ text, path, onSave }) {
     const containerRef = useRef(null);
     const codeRef = useRef(null);
     const editorRef = useRef(null);
-    const highlightRef = useRef(null);
     const cursorRef = useRef(null);
     const editInitRef = useRef(false);
     const graphvizSvgRef = useRef(new GraphvizSvg());
@@ -408,15 +407,6 @@ function GraphvizViewer({ text, path, onSave }) {
             hljs.highlightElement(codeRef.current);
         }
     }, [activeTab, text]);
-
-    // Sync editor syntax highlight overlay
-    useEffect(() => {
-        if (activeTab === 'edit' && highlightRef.current) {
-            // Set text + trailing newline so the overlay height matches the textarea
-            highlightRef.current.textContent = editText + '\n';
-            hljs.highlightElement(highlightRef.current);
-        }
-    }, [activeTab, editText]);
 
     // Live preview for Edit tab (immediate on tab switch, debounced on edits)
     useEffect(() => {
@@ -679,22 +669,13 @@ function GraphvizViewer({ text, path, onSave }) {
             </div>
             ${activeTab === 'edit' && html`
                 <div class="graphviz-edit-pane">
-                    <div class="graphviz-editor-wrap">
-                        <pre class="graphviz-editor-highlight" aria-hidden="true"><code ref=${highlightRef} class="language-dot">${editText + '\n'}</code></pre>
-                        <textarea class="graphviz-editor"
-                                  ref=${editorRef}
-                                  value=${editText}
-                                  onInput=${handleEditorInput}
-                                  onKeyDown=${handleEditorKeyDown}
-                                  onScroll=${(e) => {
-                                      if (highlightRef.current?.parentElement) {
-                                          highlightRef.current.parentElement.scrollTop = e.target.scrollTop;
-                                          highlightRef.current.parentElement.scrollLeft = e.target.scrollLeft;
-                                      }
-                                  }}
-                                  spellcheck="false"
-                                  placeholder="Enter DOT source…"></textarea>
-                    </div>
+                    <textarea class="graphviz-editor"
+                              ref=${editorRef}
+                              value=${editText}
+                              onInput=${handleEditorInput}
+                              onKeyDown=${handleEditorKeyDown}
+                              spellcheck="false"
+                              placeholder="Enter DOT source…"></textarea>
                     <div class="graphviz-preview">
                         ${previewError
                             ? html`<div class="graphviz-preview-error">
