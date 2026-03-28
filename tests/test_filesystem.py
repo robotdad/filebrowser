@@ -113,6 +113,8 @@ class TestDetectFileType:
             ("clip.mp4", "video"),
             ("movie.mkv", "video"),
             ("document.pdf", "pdf"),
+            ("diagram.dot", "graphviz"),
+            ("graph.gv", "graphviz"),
             ("archive.zip", "other"),
             ("noext", "other"),
         ],

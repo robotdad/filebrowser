@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef, useMemo } from 'preact/hooks';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'preact/hooks';
 import { html } from '../html.js';
 import { api } from '../api.js';
 import hljs from 'highlight.js';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import { Graphviz } from '@hpcc-js/wasm';
 
 const FILE_TYPES = {
     text:     ['.txt', '.log', '.csv', '.json', '.xml', '.yaml', '.yml', '.toml', '.env', '.conf'],
@@ -14,6 +15,7 @@ const FILE_TYPES = {
     audio:    ['.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a'],
     video:    ['.mp4', '.webm', '.mkv', '.mov', '.avi'],
     pdf:      ['.pdf'],
+    graphviz: ['.dot', '.gv'],
 };
 
 function getFileType(path) {
@@ -232,6 +234,111 @@ function HtmlViewer({ text, path, contentUrl }) {
     `;
 }
 
+const GRAPHVIZ_ENGINES = ['dot', 'circo', 'fdp', 'neato', 'osage', 'patchwork', 'twopi'];
+
+function GraphvizViewer({ text, path }) {
+    const [showSource, setShowSource] = useState(false);
+    const [engine, setEngine] = useState('dot');
+    const [error, setError] = useState(null);
+    const [rendering, setRendering] = useState(false);
+    const containerRef = useRef(null);
+    const codeRef = useRef(null);
+    const graphvizRef = useRef(null);
+
+    // Load the WASM module once
+    useEffect(() => {
+        Graphviz.load().then(gv => { graphvizRef.current = gv; });
+    }, []);
+
+    // Render DOT → SVG whenever text, engine, or showSource changes
+    useEffect(() => {
+        if (showSource || !containerRef.current || !text) return;
+        const gv = graphvizRef.current;
+        if (!gv) {
+            // WASM not loaded yet — retry shortly
+            const timer = setTimeout(() => {
+                if (graphvizRef.current && containerRef.current && !showSource) {
+                    try {
+                        setError(null);
+                        containerRef.current.innerHTML = graphvizRef.current.layout(text, 'svg', engine);
+                    } catch (e) {
+                        setError(e.message || String(e));
+                        containerRef.current.innerHTML = '';
+                    }
+                }
+            }, 500);
+            return () => clearTimeout(timer);
+        }
+        try {
+            setError(null);
+            setRendering(true);
+            containerRef.current.innerHTML = gv.layout(text, 'svg', engine);
+        } catch (e) {
+            setError(e.message || String(e));
+            containerRef.current.innerHTML = '';
+        } finally {
+            setRendering(false);
+        }
+    }, [text, engine, showSource]);
+
+    // Highlight source when switching to source tab
+    useEffect(() => {
+        if (showSource && codeRef.current) {
+            codeRef.current.textContent = text;
+            hljs.highlightElement(codeRef.current);
+        }
+    }, [showSource, text]);
+
+    const handleExportSvg = useCallback(() => {
+        if (!containerRef.current) return;
+        const svg = containerRef.current.querySelector('svg');
+        if (!svg) return;
+        const serializer = new XMLSerializer();
+        const svgStr = '<?xml version="1.0" encoding="UTF-8"?>\n' + serializer.serializeToString(svg);
+        const blob = new Blob([svgStr], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = (path.split('/').pop() || 'graph').replace(/\.(dot|gv)$/i, '') + '.svg';
+        a.click();
+        URL.revokeObjectURL(url);
+    }, [path]);
+
+    return html`
+        <div class="graphviz-viewer">
+            <div class="graphviz-toolbar">
+                <div class="graphviz-tabs">
+                    <button class=${!showSource ? 'active' : ''} onClick=${() => setShowSource(false)}>Graph</button>
+                    <button class=${showSource ? 'active' : ''} onClick=${() => setShowSource(true)}>Source</button>
+                </div>
+                ${!showSource && html`
+                    <select class="graphviz-engine-select"
+                            value=${engine}
+                            onChange=${(e) => setEngine(e.target.value)}
+                            title="Layout engine">
+                        ${GRAPHVIZ_ENGINES.map(eng => html`<option value=${eng}>${eng}</option>`)}
+                    </select>
+                    <button class="graphviz-export-btn" onClick=${handleExportSvg} title="Export SVG">
+                        <i class="ph ph-download-simple"></i> SVG
+                    </button>
+                `}
+            </div>
+            ${error && html`
+                <div class="graphviz-error">
+                    <i class="ph ph-warning-circle"></i>
+                    <span>${error}</span>
+                </div>
+            `}
+            ${showSource
+                ? html`<div class="code-viewer"><pre><code ref=${codeRef} class="language-dot">${text}</code></pre></div>`
+                : html`<div class="graphviz-canvas" ref=${containerRef}>
+                    ${rendering && html`<div class="graphviz-loading">Rendering…</div>`}
+                  </div>`
+            }
+        </div>
+    `;
+}
+
 // Animated wrapper — remounts (via key) on each new filePath to retrigger animation
 function AnimatedContent({ filePath, children }) {
     return html`
@@ -260,7 +367,7 @@ export function PreviewPane({ filePath }) {
         setLoading(true);
         setContent(null);
 
-        if (['text', 'code', 'markdown', 'html'].includes(type)) {
+        if (['text', 'code', 'markdown', 'html', 'graphviz'].includes(type)) {
             api.get(`/api/files/content?path=${encodeURIComponent(filePath)}`)
                 .then((text) => { if (prevPath.current === filePath) setContent({ type, text }); })
                 .catch(() => { if (prevPath.current === filePath) setContent(null); })
@@ -297,6 +404,9 @@ export function PreviewPane({ filePath }) {
             break;
         case 'html':
             inner = html`<${HtmlViewer} text=${content.text} path=${filePath} contentUrl=${contentUrl} />`;
+            break;
+        case 'graphviz':
+            inner = html`<${GraphvizViewer} text=${content.text} path=${filePath} />`;
             break;
         case 'image':
             inner = html`<${ImageViewer} contentUrl=${contentUrl} filePath=${filePath} />`;

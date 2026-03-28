@@ -19,6 +19,7 @@ export const FILE_CATEGORIES = {
     audio:    ['.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a'],
     video:    ['.mp4', '.webm', '.mkv', '.mov', '.avi'],
     pdf:      ['.pdf'],
+    graphviz: ['.dot', '.gv'],
 };
 
 // Map category → icon descriptor (icon class, CSS class)
@@ -31,6 +32,7 @@ const CATEGORY_ICONS = {
     audio:    { icon: 'ph-music-note', cls: 'file-icon-audio'     },
     video:    { icon: 'ph-film-strip', cls: 'file-icon-video'     },
     pdf:      { icon: 'ph-file-pdf',   cls: 'file-icon-pdf'       },
+    graphviz: { icon: 'ph-graph',      cls: 'file-icon-graphviz'  },
 };
 
 // ---------------------------------------------------------------------------

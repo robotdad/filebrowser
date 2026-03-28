@@ -34,6 +34,7 @@ FILE_CATEGORIES = {
     "audio": {".mp3", ".wav", ".ogg", ".flac", ".aac", ".m4a"},
     "video": {".mp4", ".webm", ".mkv", ".mov", ".avi"},
     "pdf": {".pdf"},
+    "graphviz": {".dot", ".gv"},
 }
 
 
