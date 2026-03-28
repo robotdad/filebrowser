@@ -6,11 +6,11 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { wasmFolder } from '@hpcc-js/wasm';
 import * as d3 from 'd3';
-import 'd3-graphviz';
+import { graphviz as d3Graphviz } from 'd3-graphviz';
 import GraphvizSvg from '../graphviz-svg.js';
 
-// Set WASM path ONCE before d3-graphviz tries to load it
-wasmFolder('https://cdn.jsdelivr.net/npm/@hpcc-js/wasm@1.18.0/dist');
+// Set WASM path before d3-graphviz tries to load it
+wasmFolder('https://cdn.jsdelivr.net/npm/@hpcc-js/wasm@1.16.6/dist');
 
 const FILE_TYPES = {
     text:     ['.txt', '.log', '.csv', '.json', '.xml', '.yaml', '.yml', '.toml', '.env', '.conf'],
@@ -297,8 +297,7 @@ function GraphvizViewer({ text, path }) {
                 container.innerHTML = '';
             }
 
-            const renderer = d3.select(container)
-                .graphviz()
+            const renderer = d3Graphviz(container)
                 .engine(engine)
                 .fade(true)
                 .zoom(true)
