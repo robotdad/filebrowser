@@ -165,6 +165,7 @@ echo "Installing systemd unit..."
     -e "s|FILEBROWSER_PORT|$PORT|g" \
     "$INSTALL_DIR/deploy/filebrowser.service" \
     > /etc/systemd/system/filebrowser.service)
+chmod 600 /etc/systemd/system/filebrowser.service
 
 # --- Enable and start services ---
 echo "Starting services..."
