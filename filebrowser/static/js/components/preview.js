@@ -12,6 +12,50 @@ import GraphvizSvg from '../graphviz-svg.js';
 // Set WASM path before d3-graphviz tries to load it
 wasmFolder('https://cdn.jsdelivr.net/npm/@hpcc-js/wasm@1.16.6/dist');
 
+// Register DOT/Graphviz language for highlight.js
+hljs.registerLanguage('dot', function() {
+    return {
+        name: 'DOT',
+        aliases: ['gv', 'graphviz'],
+        case_insensitive: true,
+        keywords: {
+            keyword: 'strict digraph graph subgraph node edge',
+        },
+        contains: [
+            hljs.C_LINE_COMMENT_MODE,          // // comment
+            hljs.C_BLOCK_COMMENT_MODE,          // /* comment */
+            hljs.HASH_COMMENT_MODE,             // # comment
+            hljs.QUOTE_STRING_MODE,             // "string"
+            {
+                // HTML-like labels: < ... >
+                className: 'string',
+                begin: /</, end: />/,
+                contains: [{ begin: /[^<>]+/ }],
+            },
+            {
+                // Attribute names (before =)
+                className: 'attr',
+                begin: /\b[a-zA-Z_]\w*(?=\s*=)/,
+            },
+            {
+                // Edge operators
+                className: 'operator',
+                begin: /->|--/,
+            },
+            {
+                // Numbers
+                className: 'number',
+                begin: /\b\d+(\.\d+)?\b/,
+            },
+            {
+                // Hex colors
+                className: 'number',
+                begin: /"#[0-9a-fA-F]{3,8}"/,
+            },
+        ],
+    };
+});
+
 const FILE_TYPES = {
     text:     ['.txt', '.log', '.csv', '.json', '.xml', '.yaml', '.yml', '.toml', '.env', '.conf'],
     code:     ['.py', '.js', '.ts', '.go', '.rs', '.c', '.cpp', '.java', '.sh', '.sql', '.css'],
