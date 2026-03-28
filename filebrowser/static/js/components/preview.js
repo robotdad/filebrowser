@@ -235,6 +235,7 @@ function HtmlViewer({ text, path, contentUrl }) {
 }
 
 const GRAPHVIZ_ENGINES = ['dot', 'circo', 'fdp', 'neato', 'osage', 'patchwork', 'twopi'];
+const GRAPHVIZ_WASM_OPTS = { wasmFolder: 'https://cdn.jsdelivr.net/npm/@hpcc-js/wasm@1.18.0/dist' };
 
 function GraphvizViewer({ text, path }) {
     const [showSource, setShowSource] = useState(false);
@@ -250,7 +251,7 @@ function GraphvizViewer({ text, path }) {
         let cancelled = false;
         setError(null);
         setRendering(true);
-        hpccGraphviz.layout(text, 'svg', engine)
+        hpccGraphviz.layout(text, 'svg', engine, GRAPHVIZ_WASM_OPTS)
             .then(svg => {
                 if (!cancelled && containerRef.current) {
                     containerRef.current.innerHTML = svg;
