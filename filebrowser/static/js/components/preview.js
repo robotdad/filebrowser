@@ -240,7 +240,9 @@ const GRAPHVIZ_WASM_OPTS = { wasmFolder: 'https://cdn.jsdelivr.net/npm/@hpcc-js/
 function GraphvizViewer({ text, path }) {
     const [showSource, setShowSource] = useState(false);
     const [engine, setEngine] = useState('dot');
-    const [darkCanvas, setDarkCanvas] = useState(false);
+    const [darkCanvas, setDarkCanvas] = useState(
+        () => window.matchMedia('(prefers-color-scheme: dark)').matches
+    );
     const [error, setError] = useState(null);
     const [rendering, setRendering] = useState(false);
     const containerRef = useRef(null);
