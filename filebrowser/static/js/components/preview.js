@@ -3,6 +3,7 @@ import { html } from '../html.js';
 import { api } from '../api.js';
 import hljs from 'highlight.js';
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
 const FILE_TYPES = {
     text:     ['.txt', '.log', '.csv', '.json', '.xml', '.yaml', '.yml', '.toml', '.env', '.conf'],
@@ -108,7 +109,7 @@ function CodeViewer({ text, path }) {
 }
 
 function MarkdownViewer({ text }) {
-    const htmlContent = useMemo(() => marked.parse(text), [text]);
+    const htmlContent = useMemo(() => DOMPurify.sanitize(marked.parse(text)), [text]);
     return html`<div class="markdown-viewer" dangerouslySetInnerHTML=${{ __html: htmlContent }}></div>`;
 }
 
@@ -118,8 +119,28 @@ function ImageViewer({ contentUrl, filePath }) {
     const isDragging = useRef(false);
     const dragStart = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
     const canvasRef = useRef(null);
+    const imgRef = useRef(null);
+    const fitScale = useRef(1);
 
     const clampZoom = (z) => Math.min(Math.max(z, 0.1), 20);
+
+    const computeFitScale = () => {
+        const canvas = canvasRef.current;
+        const img = imgRef.current;
+        if (!canvas || !img || !img.naturalWidth) return 1;
+        const scale = Math.min(
+            canvas.clientWidth / img.naturalWidth,
+            canvas.clientHeight / img.naturalHeight,
+            1  // never upscale small images
+        );
+        return clampZoom(scale);
+    };
+
+    const handleImageLoad = () => {
+        fitScale.current = computeFitScale();
+        setZoom(fitScale.current);
+        setOffset({ x: 0, y: 0 });
+    };
 
     const handleWheel = (e) => {
         e.preventDefault();
@@ -147,7 +168,7 @@ function ImageViewer({ contentUrl, filePath }) {
         canvasRef.current?.classList.remove('dragging');
     };
 
-    const reset = () => { setZoom(1); setOffset({ x: 0, y: 0 }); };
+    const reset = () => { setZoom(fitScale.current); setOffset({ x: 0, y: 0 }); };
 
     return html`
         <div class="image-viewer">
@@ -159,8 +180,8 @@ function ImageViewer({ contentUrl, filePath }) {
                     <i class="ph ph-magnifying-glass-minus"></i>
                 </button>
                 <span class="zoom-level">${Math.round(zoom * 100)}%</span>
-                <button onClick=${reset} title="Reset zoom">
-                    <i class="ph ph-arrows-in"></i> Reset
+                <button onClick=${reset} title="Fit to window">
+                    <i class="ph ph-arrows-in"></i> Fit
                 </button>
             </div>
             <div class="image-viewer-canvas"
@@ -171,8 +192,10 @@ function ImageViewer({ contentUrl, filePath }) {
                  onMouseUp=${handleMouseUp}
                  onMouseLeave=${handleMouseUp}>
                 <img
+                    ref=${imgRef}
                     src=${contentUrl}
                     alt=${filePath}
+                    onLoad=${handleImageLoad}
                     style=${{
                         transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
                         transformOrigin: 'center center',
@@ -203,7 +226,7 @@ function HtmlViewer({ text, path, contentUrl }) {
             </div>
             ${showSource
                 ? html`<div class="code-viewer"><pre><code ref=${codeRef} class="language-html">${text}</code></pre></div>`
-                : html`<iframe class="html-preview-frame" src=${contentUrl}></iframe>`
+                : html`<iframe class="html-preview-frame" src=${contentUrl} sandbox=""></iframe>`
             }
         </div>
     `;
