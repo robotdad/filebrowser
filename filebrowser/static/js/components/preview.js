@@ -4,7 +4,13 @@ import { api } from '../api.js';
 import hljs from 'highlight.js';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { graphviz as hpccGraphviz } from '@hpcc-js/wasm';
+import { wasmFolder } from '@hpcc-js/wasm';
+import * as d3 from 'd3';
+import 'd3-graphviz';
+import GraphvizSvg from '../graphviz-svg.js';
+
+// Set WASM path ONCE before d3-graphviz tries to load it
+wasmFolder('https://cdn.jsdelivr.net/npm/@hpcc-js/wasm@1.18.0/dist');
 
 const FILE_TYPES = {
     text:     ['.txt', '.log', '.csv', '.json', '.xml', '.yaml', '.yml', '.toml', '.env', '.conf'],
@@ -235,7 +241,24 @@ function HtmlViewer({ text, path, contentUrl }) {
 }
 
 const GRAPHVIZ_ENGINES = ['dot', 'circo', 'fdp', 'neato', 'osage', 'patchwork', 'twopi'];
-const GRAPHVIZ_WASM_OPTS = { wasmFolder: 'https://cdn.jsdelivr.net/npm/@hpcc-js/wasm@1.18.0/dist' };
+const DIRECTIONS = ['bidirectional', 'downstream', 'upstream', 'single'];
+const DIRECTION_LABELS = { bidirectional: 'Bidirectional', downstream: 'Downstream', upstream: 'Upstream', single: 'Single' };
+
+function getAffectedElements(graphvizSvg, selectedElements, direction) {
+    const result = new Set(selectedElements);
+    for (const el of selectedElements) {
+        // Only traverse from nodes
+        if (!el.classList.contains('node')) continue;
+        if (direction === 'single') continue;
+        if (direction === 'downstream' || direction === 'bidirectional') {
+            for (const r of graphvizSvg.linkedFrom(el, true)) result.add(r);
+        }
+        if (direction === 'upstream' || direction === 'bidirectional') {
+            for (const r of graphvizSvg.linkedTo(el, true)) result.add(r);
+        }
+    }
+    return result;
+}
 
 function GraphvizViewer({ text, path }) {
     const [showSource, setShowSource] = useState(false);
@@ -245,31 +268,68 @@ function GraphvizViewer({ text, path }) {
     );
     const [error, setError] = useState(null);
     const [rendering, setRendering] = useState(false);
+    const [direction, setDirection] = useState('bidirectional');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchCount, setSearchCount] = useState(null);
     const containerRef = useRef(null);
     const codeRef = useRef(null);
+    const graphvizSvgRef = useRef(new GraphvizSvg());
+    const rendererRef = useRef(null);
+    const selectionRef = useRef(new Set());
 
-    // Render DOT → SVG whenever text, engine, or showSource changes
+    // Render DOT → SVG via d3-graphviz whenever text, engine, or showSource changes
     useEffect(() => {
         if (showSource || !containerRef.current || !text) return;
         let cancelled = false;
         setError(null);
         setRendering(true);
-        hpccGraphviz.layout(text, 'svg', engine, GRAPHVIZ_WASM_OPTS)
-            .then(svg => {
-                if (!cancelled && containerRef.current) {
-                    containerRef.current.innerHTML = svg;
-                }
-            })
-            .catch(e => {
-                if (!cancelled) {
-                    setError(e.message || String(e));
-                    if (containerRef.current) containerRef.current.innerHTML = '';
-                }
-            })
-            .finally(() => {
-                if (!cancelled) setRendering(false);
-            });
-        return () => { cancelled = true; };
+
+        // Clear previous selection state
+        selectionRef.current = new Set();
+        setSearchQuery('');
+        setSearchCount(null);
+
+        try {
+            // Create or reuse d3-graphviz renderer
+            const container = containerRef.current;
+            // d3-graphviz needs an empty container on first use
+            if (!rendererRef.current) {
+                container.innerHTML = '';
+            }
+
+            const renderer = d3.select(container)
+                .graphviz()
+                .engine(engine)
+                .fade(true)
+                .zoom(true)
+                .zoomScaleExtent([0.1, Infinity])
+                .tweenShapes(false)
+                .convertEqualSidedPolygons(false)
+                .transition(() => d3.transition().duration(500))
+                .on('end', () => {
+                    if (cancelled) return;
+                    setRendering(false);
+                    graphvizSvgRef.current.setup(container);
+                })
+                .onerror((err) => {
+                    if (cancelled) return;
+                    setError(typeof err === 'string' ? err : (err.message || String(err)));
+                    setRendering(false);
+                });
+
+            rendererRef.current = renderer;
+            renderer.renderDot(text);
+        } catch (e) {
+            if (!cancelled) {
+                setError(e.message || String(e));
+                setRendering(false);
+            }
+        }
+
+        return () => {
+            cancelled = true;
+            rendererRef.current = null;
+        };
     }, [text, engine, showSource]);
 
     // Highlight source when switching to source tab
@@ -279,6 +339,108 @@ function GraphvizViewer({ text, path }) {
             hljs.highlightElement(codeRef.current);
         }
     }, [showSource, text]);
+
+    // Click interaction: event delegation on container
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container || showSource) return;
+
+        const handleClick = (e) => {
+            const gsvg = graphvizSvgRef.current;
+            const node = e.target.closest('.node');
+            const edge = e.target.closest('.edge');
+            const cluster = e.target.closest('.cluster');
+            const clickedEl = node || edge || cluster;
+
+            if (!clickedEl) {
+                // Clicked on background — clear selection
+                selectionRef.current = new Set();
+                gsvg.highlight(null);
+                return;
+            }
+
+            const isMulti = e.ctrlKey || e.metaKey || e.shiftKey;
+            const sel = selectionRef.current;
+
+            if (isMulti) {
+                // Toggle element in selection
+                if (sel.has(clickedEl)) {
+                    sel.delete(clickedEl);
+                } else {
+                    sel.add(clickedEl);
+                }
+            } else {
+                sel.clear();
+                sel.add(clickedEl);
+            }
+
+            if (sel.size === 0) {
+                gsvg.highlight(null);
+            } else {
+                // For clusters, always use 'single' direction (no traversal)
+                const dir = cluster && !node ? 'single' : direction;
+                const affected = getAffectedElements(gsvg, sel, dir);
+                // Also include the originally-selected elements themselves
+                for (const s of sel) affected.add(s);
+                gsvg.highlight(affected);
+            }
+        };
+
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                selectionRef.current = new Set();
+                graphvizSvgRef.current.highlight(null);
+            }
+        };
+
+        container.addEventListener('click', handleClick);
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            container.removeEventListener('click', handleClick);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [showSource, direction]);
+
+    // Search: update match count as user types
+    const handleSearchInput = useCallback((e) => {
+        const q = e.target.value;
+        setSearchQuery(q);
+        if (!q) {
+            setSearchCount(null);
+            return;
+        }
+        const gsvg = graphvizSvgRef.current;
+        const nodes = gsvg.findNodes(q);
+        const edges = gsvg.findEdges(q);
+        const clusters = gsvg.findClusters(q);
+        setSearchCount(nodes.length + edges.length + clusters.length);
+    }, []);
+
+    // Search: commit on Enter
+    const handleSearchKeyDown = useCallback((e) => {
+        if (e.key !== 'Enter') return;
+        const q = searchQuery;
+        if (!q) {
+            graphvizSvgRef.current.highlight(null);
+            selectionRef.current = new Set();
+            return;
+        }
+        const gsvg = graphvizSvgRef.current;
+        const found = [
+            ...gsvg.findNodes(q),
+            ...gsvg.findEdges(q),
+            ...gsvg.findClusters(q),
+        ];
+        if (found.length > 0) {
+            const affected = getAffectedElements(gsvg, found, direction);
+            for (const f of found) affected.add(f);
+            gsvg.highlight(affected);
+            selectionRef.current = new Set(found);
+        } else {
+            gsvg.highlight(null);
+            selectionRef.current = new Set();
+        }
+    }, [searchQuery, direction]);
 
     const handleExportSvg = useCallback(() => {
         if (!containerRef.current) return;
@@ -309,6 +471,23 @@ function GraphvizViewer({ text, path }) {
                             title="Layout engine">
                         ${GRAPHVIZ_ENGINES.map(eng => html`<option value=${eng}>${eng}</option>`)}
                     </select>
+                    <select class="graphviz-direction-select"
+                            value=${direction}
+                            onChange=${(e) => setDirection(e.target.value)}
+                            title="Traversal direction">
+                        ${DIRECTIONS.map(d => html`<option value=${d}>${DIRECTION_LABELS[d]}</option>`)}
+                    </select>
+                    <div class="graphviz-search-wrap">
+                        <input class="graphviz-search-input"
+                               type="text"
+                               placeholder="Search nodes…"
+                               value=${searchQuery}
+                               onInput=${handleSearchInput}
+                               onKeyDown=${handleSearchKeyDown} />
+                        ${searchCount !== null && html`
+                            <span class="graphviz-search-count">${searchCount}</span>
+                        `}
+                    </div>
                     <button class="graphviz-export-btn" onClick=${handleExportSvg} title="Export SVG">
                         <i class="ph ph-download-simple"></i> SVG
                     </button>
