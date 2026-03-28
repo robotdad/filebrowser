@@ -671,6 +671,35 @@ body {
     color: var(--text-muted);
     font-size: 14px;
 }
+.graphviz-theme-btn {
+    width: 32px;
+    height: 32px;
+    border: 0.5px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    font-size: 15px;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s var(--ease-out);
+    margin-left: auto;
+}
+.graphviz-theme-btn:hover {
+    background: var(--fill);
+    color: var(--text-primary);
+}
+.graphviz-theme-btn.active {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+.graphviz-dark {
+    background: #1e1e1e;
+}
+.graphviz-dark svg {
+    filter: invert(1) hue-rotate(180deg);
+}
 
 /* Graphviz file icon gradient */
 .file-icon-graphviz { background: linear-gradient(145deg, #06b6d4, #0891b2); }

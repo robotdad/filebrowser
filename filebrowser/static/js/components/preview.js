@@ -240,6 +240,7 @@ const GRAPHVIZ_WASM_OPTS = { wasmFolder: 'https://cdn.jsdelivr.net/npm/@hpcc-js/
 function GraphvizViewer({ text, path }) {
     const [showSource, setShowSource] = useState(false);
     const [engine, setEngine] = useState('dot');
+    const [darkCanvas, setDarkCanvas] = useState(false);
     const [error, setError] = useState(null);
     const [rendering, setRendering] = useState(false);
     const containerRef = useRef(null);
@@ -309,6 +310,11 @@ function GraphvizViewer({ text, path }) {
                     <button class="graphviz-export-btn" onClick=${handleExportSvg} title="Export SVG">
                         <i class="ph ph-download-simple"></i> SVG
                     </button>
+                    <button class=${'graphviz-theme-btn' + (darkCanvas ? ' active' : '')}
+                            onClick=${() => setDarkCanvas(d => !d)}
+                            title=${darkCanvas ? 'Light background' : 'Dark background'}>
+                        <i class=${'ph ' + (darkCanvas ? 'ph-sun' : 'ph-moon')}></i>
+                    </button>
                 `}
             </div>
             ${error && html`
@@ -319,7 +325,7 @@ function GraphvizViewer({ text, path }) {
             `}
             ${showSource
                 ? html`<div class="code-viewer"><pre><code ref=${codeRef} class="language-dot">${text}</code></pre></div>`
-                : html`<div class="graphviz-canvas" ref=${containerRef}>
+                : html`<div class=${'graphviz-canvas' + (darkCanvas ? ' graphviz-dark' : '')} ref=${containerRef}>
                     ${rendering && html`<div class="graphviz-loading">Rendering…</div>`}
                   </div>`
             }
