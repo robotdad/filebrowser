@@ -1,0 +1,400 @@
+digraph preview_system {
+    rankdir=LR
+    fontname="Helvetica,Arial,sans-serif"
+    fontsize=11
+    compound=true
+    splines=curved
+    nodesep=0.4
+    ranksep=0.8
+
+    graph [
+        label="Preview Subsystem\npreview.js  +  tree.js  +  layout.js  +  services/filesystem.py"
+        labelloc=t
+        fontsize=14
+        fontname="Helvetica Bold,Arial Bold,sans-serif"
+    ]
+
+    node [
+        fontname="Helvetica,Arial,sans-serif"
+        fontsize=10
+        shape=box
+        style="filled,rounded"
+        fillcolor="#f8f9fa"
+        color="#adb5bd"
+    ]
+    edge [
+        fontname="Helvetica,Arial,sans-serif"
+        fontsize=9
+        color="#6c757d"
+        arrowsize=0.8
+    ]
+
+    // ═══════════════════════════════════════════════════════════════
+    // SECTION A: THREE FILE-TYPE MAPPING SYSTEMS (top row)
+    // ═══════════════════════════════════════════════════════════════
+
+    // ── Backend FILE_CATEGORIES (filesystem.py) ───────────────────
+    subgraph cluster_backend {
+        label="① Backend  FILE_CATEGORIES\nservices/filesystem.py\n7 categories  ·  returned as 'category' in GET /info"
+        style=filled
+        fillcolor="#e8f5e9"
+        color="#2e7d32"
+        fontname="Helvetica,Arial,sans-serif"
+        fontsize=10
+
+        { rank=same
+            be_text  [label="text\n.txt .log .csv .json .xml\n.yaml .yml .toml .env .conf" fillcolor="#c8e6c9" color="#2e7d32" fontsize=9]
+            be_code  [label="code  ◄ includes .html!\n.py .js .ts .go .rs .c .cpp\n.java .sh .sql .html .css" fillcolor="#c8e6c9" color="#2e7d32" fontsize=9]
+            be_md    [label="markdown\n.md" fillcolor="#c8e6c9" color="#2e7d32" fontsize=9]
+            be_image [label="image\n.png .jpg .jpeg .gif\n.webp .svg .bmp" fillcolor="#c8e6c9" color="#2e7d32" fontsize=9]
+            be_audio [label="audio\n.mp3 .wav .ogg\n.flac .aac .m4a" fillcolor="#c8e6c9" color="#2e7d32" fontsize=9]
+            be_video [label="video\n.mp4 .webm .mkv .mov .avi" fillcolor="#c8e6c9" color="#2e7d32" fontsize=9]
+            be_pdf   [label="pdf\n.pdf" fillcolor="#c8e6c9" color="#2e7d32" fontsize=9]
+        }
+        be_other [label="[no match]\n→ 'other'" fillcolor="#e8f5e9" color="#2e7d32" fontsize=9 style="filled,rounded,dashed"]
+    }
+
+    // ── Preview FILE_TYPES (preview.js) ───────────────────────────
+    subgraph cluster_preview_types {
+        label="② Frontend  FILE_TYPES\npreview.js  getFileType()\n8 types  ·  drives viewer selection"
+        style=filled
+        fillcolor="#e3f2fd"
+        color="#1565c0"
+        fontname="Helvetica,Arial,sans-serif"
+        fontsize=10
+
+        { rank=same
+            pv_text  [label="text\n.txt .log .csv .json .xml\n.yaml .yml .toml .env .conf" fillcolor="#bbdefb" color="#1565c0" fontsize=9]
+            pv_code  [label="code  ◄ no .html here\n.py .js .ts .go .rs .c .cpp\n.java .sh .sql .css" fillcolor="#bbdefb" color="#1565c0" fontsize=9]
+            pv_html  [label="html  ◄ DIVERGES from backend\n.html .htm\nSEPARATE from code!" fillcolor="#ef9a9a" color="#b71c1c" fontsize=9 fontcolor="#b71c1c"]
+            pv_md    [label="markdown\n.md" fillcolor="#bbdefb" color="#1565c0" fontsize=9]
+            pv_image [label="image\n.png .jpg .jpeg .gif\n.webp .svg .bmp" fillcolor="#bbdefb" color="#1565c0" fontsize=9]
+            pv_audio [label="audio\n.mp3 .wav .ogg\n.flac .aac .m4a" fillcolor="#bbdefb" color="#1565c0" fontsize=9]
+            pv_video [label="video\n.mp4 .webm .mkv .mov .avi" fillcolor="#bbdefb" color="#1565c0" fontsize=9]
+            pv_pdf   [label="pdf\n.pdf" fillcolor="#bbdefb" color="#1565c0" fontsize=9]
+        }
+        pv_other [label="[no match]\n→ 'other'" fillcolor="#e3f2fd" color="#1565c0" fontsize=9 style="filled,rounded,dashed"]
+    }
+
+    // ── Tree FILE_ICON_TYPES (tree.js) ────────────────────────────
+    subgraph cluster_tree_icons {
+        label="③ Frontend  FILE_ICON_TYPES\ntree.js  getFileIcon()\n7 icon groups + default  ·  drives sidebar icons only"
+        style=filled
+        fillcolor="#fff9c4"
+        color="#f57f17"
+        fontname="Helvetica,Arial,sans-serif"
+        fontsize=10
+
+        { rank=same
+            ti_image [label="ph-image  (image)\n.png .jpg .jpeg .gif .webp .svg .bmp" fillcolor="#fff9c4" color="#f57f17" fontsize=9]
+            ti_code  [label="ph-code  (code)  ◄ includes .html!\n.py .js .ts .go .rs .c .cpp\n.java .sh .sql .html .css" fillcolor="#fff9c4" color="#f57f17" fontsize=9]
+            ti_md    [label="ph-article  (markdown)\n.md" fillcolor="#fff9c4" color="#f57f17" fontsize=9]
+            ti_text  [label="ph-file-text  (text)\n.txt .log .csv .json .xml\n.yaml .yml .toml .env .conf" fillcolor="#fff9c4" color="#f57f17" fontsize=9]
+            ti_audio [label="ph-music-note  (audio)\n.mp3 .wav .ogg .flac .aac .m4a" fillcolor="#fff9c4" color="#f57f17" fontsize=9]
+            ti_video [label="ph-film-strip  (video)\n.mp4 .webm .mkv .mov .avi" fillcolor="#fff9c4" color="#f57f17" fontsize=9]
+            ti_pdf   [label="ph-file-pdf  (pdf)\n.pdf" fillcolor="#fff9c4" color="#f57f17" fontsize=9]
+        }
+        ti_default [label="ph-file  (default)\nno extension match" fillcolor="#fff9c4" color="#f57f17" fontsize=9 style="filled,rounded,dashed"]
+    }
+
+    // Divergence annotations
+    diverge_html [
+        label="⚠  .html DIVERGENCE\n• Backend: category='code'\n• preview.js: type='html' → HtmlViewer\n• tree.js: icon=ph-code (same as backend)"
+        shape=note
+        fillcolor="#fff3cd"
+        color="#856404"
+        fontcolor="#533f03"
+        fontsize=9
+    ]
+
+    diverge_count [
+        label="⚠  COUNT DIVERGENCE\n• Backend: 7 categories  (no 'html' type)\n• preview.js: 8 types  (adds 'html')\n• tree.js: 7 icons + 1 default = 8 states\nFrontend ignores backend 'category' for\nviewer selection — uses its own getFileType()"
+        shape=note
+        fillcolor="#fff3cd"
+        color="#856404"
+        fontcolor="#533f03"
+        fontsize=9
+    ]
+
+    be_code    -> diverge_html  [style=dashed color="#856404" arrowhead=none]
+    pv_html    -> diverge_html  [style=dashed color="#856404" arrowhead=none]
+    ti_code    -> diverge_html  [style=dashed color="#856404" arrowhead=none]
+    be_other   -> diverge_count [style=dashed color="#856404" arrowhead=none]
+
+    // ═══════════════════════════════════════════════════════════════
+    // SECTION B: DATA FLOW PIPELINE (center)
+    // ═══════════════════════════════════════════════════════════════
+
+    subgraph cluster_dataflow {
+        label="Data Flow   file selected → preview rendered"
+        style=filled
+        fillcolor="#f3e5f5"
+        color="#6a1b9a"
+        fontname="Helvetica,Arial,sans-serif"
+        fontsize=10
+
+        // Input: file click in tree
+        tree_click [
+            label="FileTree\nhandleFileClick(e, itemPath)\nnormal click (no Ctrl/⌘)"
+            shape=ellipse
+            fillcolor="#e1bee7"
+            color="#6a1b9a"
+        ]
+
+        // Layout state management
+        layout_state [
+            label="Layout.handleSelectFile(path)\nsetSelectedFile(path)\nsetSelectedFiles(new Set([path]))"
+            fillcolor="#e1bee7"
+            color="#6a1b9a"
+        ]
+
+        // PreviewPane receives prop
+        preview_mount [
+            label="PreviewPane\nfilePath prop changes\nuseEffect([filePath]) fires"
+            fillcolor="#e1bee7"
+            color="#6a1b9a"
+        ]
+
+        // Type detection
+        get_type [
+            label="getFileType(filePath)\nFILE_TYPES lookup by suffix\n→ type string"
+            fillcolor="#ce93d8"
+            color="#6a1b9a"
+        ]
+
+        // Fetch decision
+        fetch_branch [
+            label="type in\n['text','code','markdown','html']?"
+            shape=diamond
+            fillcolor="#ce93d8"
+            color="#6a1b9a"
+            width=3.0
+        ]
+
+        // Text content fetch path
+        fetch_content [
+            label="GET /api/files/content\n?path=encodeURIComponent(filePath)\n→ raw text string\nsetContent({type, text})"
+            fillcolor="#e1bee7"
+            color="#6a1b9a"
+        ]
+
+        // Binary/media info fetch path
+        fetch_info [
+            label="GET /api/files/info\n?path=encodeURIComponent(filePath)\n→ {name,size,modified,category}\nsetContent({type, info})"
+            fillcolor="#e1bee7"
+            color="#6a1b9a"
+        ]
+
+        // Content URL (used by media + html viewers)
+        content_url [
+            label="contentUrl  (constructed in render)\n/api/files/content?path=encodeURIComponent(filePath)\ndirectly referenced as src= attribute"
+            fillcolor="#e1bee7"
+            color="#6a1b9a"
+            style="filled,rounded,dashed"
+        ]
+
+        // Renderer switch
+        renderer_switch [
+            label="switch(content.type)\nselect viewer component"
+            shape=diamond
+            fillcolor="#ce93d8"
+            color="#6a1b9a"
+            width=2.6
+        ]
+
+        tree_click    -> layout_state  [label="onSelectFile(itemPath)"]
+        layout_state  -> preview_mount [label="<PreviewPane filePath={selectedFile} />\nvia layout.js render"]
+        preview_mount -> get_type
+        get_type      -> fetch_branch
+        fetch_branch  -> fetch_content [label="yes → fetch text" color="#2e7d32" fontcolor="#2e7d32"]
+        fetch_branch  -> fetch_info    [label="no → fetch metadata" color="#1565c0" fontcolor="#1565c0"]
+        fetch_content -> renderer_switch [label="setContent({type, text})"]
+        fetch_info    -> renderer_switch [label="setContent({type, info})"]
+        preview_mount -> content_url   [style=dashed label="constructed\nat render time"]
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // SECTION C: RENDERER COMPONENTS (right)
+    // ═══════════════════════════════════════════════════════════════
+
+    subgraph cluster_renderers {
+        label="Renderer Components   (preview.js)   AnimatedContent wrapper: re-mounts on each filePath change"
+        style=filled
+        fillcolor="#e8eaf6"
+        color="#283593"
+        fontname="Helvetica,Arial,sans-serif"
+        fontsize=10
+
+        // Text viewers (fetch content)
+        subgraph cluster_text_renderers {
+            label="Fetches text content  (GET /content → text string)"
+            style=filled
+            fillcolor="#c5cae9"
+            color="#283593"
+            fontsize=9
+
+            r_text [
+                label="TextViewer\n<div class=text-viewer>\n<pre><code> line-numbered\nNo external library"
+                fillcolor="#e8eaf6"
+                color="#283593"
+            ]
+            r_code [
+                label="CodeViewer\n<pre><code class=language-{lang}>\nhljs.highlightElement(codeRef)\nlangMap: py→python js→javascript\nrs→rust sh→bash yml→yaml"
+                fillcolor="#e8eaf6"
+                color="#283593"
+            ]
+            r_md [
+                label="MarkdownViewer\ndangerouslySetInnerHTML\n{ __html: marked.parse(text) }"
+                fillcolor="#e8eaf6"
+                color="#283593"
+            ]
+            r_html [
+                label="HtmlViewer  ◄ .html only (not backend 'code')\nPreview tab: <iframe src={contentUrl}>\nSource tab: <code class=language-html>\n             hljs.highlightElement()"
+                fillcolor="#ef9a9a"
+                color="#b71c1c"
+                fontcolor="#b71c1c"
+            ]
+        }
+
+        // URL / native element viewers
+        subgraph cluster_url_renderers {
+            label="Uses direct content URL  (src=contentUrl  — no text fetch)"
+            style=filled
+            fillcolor="#bbdefb"
+            color="#1565c0"
+            fontsize=9
+
+            r_image [
+                label="ImageViewer\n<img src={contentUrl} alt={filePath}>\nNative <img> element"
+                fillcolor="#e3f2fd"
+                color="#1565c0"
+            ]
+            r_audio [
+                label="AudioViewer\n<audio controls src={contentUrl}>\nNative HTML5 audio"
+                fillcolor="#e3f2fd"
+                color="#1565c0"
+            ]
+            r_video [
+                label="VideoViewer\n<video controls src={contentUrl}>\nNative HTML5 video"
+                fillcolor="#e3f2fd"
+                color="#1565c0"
+            ]
+            r_pdf [
+                label="PdfViewer\n<iframe src={contentUrl}>\nBrowser built-in PDF renderer"
+                fillcolor="#e3f2fd"
+                color="#1565c0"
+            ]
+        }
+
+        // Other (fallback)
+        r_other [
+            label="OtherViewer  (fallback)\nfilename  +  size from info.size\nmodified from info.modified\n<a href=/api/files/download?path=…>Download</a>"
+            fillcolor="#ffe0b2"
+            color="#e65100"
+        ]
+    }
+
+    // ── CDN Libraries ─────────────────────────────────────────────
+    subgraph cluster_libs {
+        label="Frontend Libraries  (imported in preview.js)"
+        style=filled
+        fillcolor="#f1f8e9"
+        color="#558b2f"
+        fontname="Helvetica,Arial,sans-serif"
+        fontsize=10
+
+        lib_hljs [
+            label="highlight.js\nimport hljs from 'highlight.js'\nused by: CodeViewer, HtmlViewer (source tab)"
+            fillcolor="#dcedc8"
+            color="#558b2f"
+        ]
+        lib_marked [
+            label="marked\nimport { marked } from 'marked'\nused by: MarkdownViewer"
+            fillcolor="#dcedc8"
+            color="#558b2f"
+        ]
+        lib_native [
+            label="Native HTML5\n<img>  <audio>  <video>  <iframe>\nNo external dependency"
+            fillcolor="#dcedc8"
+            color="#558b2f"
+        ]
+        lib_none [
+            label="No Library\nTextViewer: plain DOM\nOtherViewer: plain DOM + anchor"
+            fillcolor="#dcedc8"
+            color="#558b2f"
+            style="filled,rounded,dashed"
+        ]
+    }
+
+    // ── Legend ────────────────────────────────────────────────────
+    subgraph cluster_legend {
+        label="Legend"
+        style=filled
+        fillcolor="#fafafa"
+        color="#adb5bd"
+        fontname="Helvetica,Arial,sans-serif"
+        fontsize=10
+
+        lg_be   [label="Backend category\n(FILE_CATEGORIES)"  fillcolor="#c8e6c9" color="#2e7d32"  width=2.0 height=0.5]
+        lg_pv   [label="Preview type\n(FILE_TYPES)"           fillcolor="#bbdefb" color="#1565c0"  width=2.0 height=0.5]
+        lg_ti   [label="Tree icon group\n(FILE_ICON_TYPES)"   fillcolor="#fff9c4" color="#f57f17"  width=2.0 height=0.5]
+        lg_div  [label="⚠  Divergence\nacross type systems"   fillcolor="#ef9a9a" color="#b71c1c"  width=2.0 height=0.5]
+        lg_flow [label="Data Flow node"                        fillcolor="#e1bee7" color="#6a1b9a"  width=2.0 height=0.5]
+        lg_txt  [label="Text renderer\n(fetches content)"     fillcolor="#e8eaf6" color="#283593"  width=2.0 height=0.5]
+        lg_url  [label="URL renderer\n(uses src= direct)"     fillcolor="#e3f2fd" color="#1565c0"  width=2.0 height=0.5]
+        lg_other [label="Fallback renderer"                   fillcolor="#ffe0b2" color="#e65100"  width=2.0 height=0.5]
+        lg_lib  [label="Frontend Library"                     fillcolor="#dcedc8" color="#558b2f"  width=2.0 height=0.5]
+        lg_dec  [label="Decision" shape=diamond               fillcolor="#ce93d8" color="#6a1b9a"  style=filled width=2.0 height=0.6]
+
+        lg_be -> lg_pv   [style=invis]
+        lg_pv -> lg_ti   [style=invis]
+        lg_ti -> lg_div  [style=invis]
+        lg_div -> lg_flow [style=invis]
+        lg_flow -> lg_txt [style=invis]
+        lg_txt -> lg_url  [style=invis]
+        lg_url -> lg_other [style=invis]
+        lg_other -> lg_lib [style=invis]
+        lg_lib -> lg_dec   [style=invis]
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // CROSS-SECTION EDGES
+    // ═══════════════════════════════════════════════════════════════
+
+    // Type maps wire into the data flow (type detection uses preview.js FILE_TYPES)
+    pv_text  -> get_type [lhead=cluster_dataflow style=dashed color="#1565c0"
+                          label="getFileType() uses\nFILE_TYPES (preview.js only)\nbackend 'category' ignored for viewer selection"]
+
+    // Renderer switch → each renderer
+    renderer_switch -> r_text  [label="'text'"]
+    renderer_switch -> r_code  [label="'code'"]
+    renderer_switch -> r_md    [label="'markdown'"]
+    renderer_switch -> r_html  [label="'html'" color="#b71c1c" fontcolor="#b71c1c"]
+    renderer_switch -> r_image [label="'image'"]
+    renderer_switch -> r_audio [label="'audio'"]
+    renderer_switch -> r_video [label="'video'"]
+    renderer_switch -> r_pdf   [label="'pdf'"]
+    renderer_switch -> r_other [label="default\n'other'"]
+
+    // contentUrl used by these renderers
+    content_url -> r_html  [style=dashed label="iframe src\n(Preview tab)"]
+    content_url -> r_image [style=dashed label="img src"]
+    content_url -> r_audio [style=dashed label="audio src"]
+    content_url -> r_video [style=dashed label="video src"]
+    content_url -> r_pdf   [style=dashed label="iframe src"]
+
+    // Library → renderer connections
+    lib_hljs   -> r_code  [style=dashed color="#558b2f" label="hljs.highlightElement()"]
+    lib_hljs   -> r_html  [style=dashed color="#558b2f" label="source tab highlight"]
+    lib_marked -> r_md    [style=dashed color="#558b2f" label="marked.parse(text)"]
+    lib_native -> r_image [style=dashed color="#558b2f"]
+    lib_native -> r_audio [style=dashed color="#558b2f"]
+    lib_native -> r_video [style=dashed color="#558b2f"]
+    lib_native -> r_pdf   [style=dashed color="#558b2f" label="browser PDF\nrenderer"]
+    lib_none   -> r_text  [style=dashed color="#558b2f"]
+    lib_none   -> r_other [style=dashed color="#558b2f"]
+
+    // tree.js click is the entry point
+    ti_default -> tree_click [lhead=cluster_dataflow style=dashed color="#f57f17"
+                              label="user clicks file\nin FileTree sidebar"]
+}

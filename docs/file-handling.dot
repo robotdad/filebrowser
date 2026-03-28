@@ -1,0 +1,539 @@
+digraph file_handling {
+    rankdir=TB
+    fontname="Helvetica,Arial,sans-serif"
+    fontsize=11
+    compound=true
+    splines=ortho
+    nodesep=0.45
+    ranksep=0.7
+
+    graph [
+        label="File Handling Subsystem\nfilebrowser/routes/files.py  +  services/filesystem.py"
+        labelloc=t
+        fontsize=14
+        fontname="Helvetica Bold,Arial Bold,sans-serif"
+    ]
+
+    node [
+        fontname="Helvetica,Arial,sans-serif"
+        fontsize=10
+        shape=box
+        style="filled,rounded"
+        fillcolor="#f8f9fa"
+        color="#adb5bd"
+    ]
+    edge [
+        fontname="Helvetica,Arial,sans-serif"
+        fontsize=9
+        color="#6c757d"
+        arrowsize=0.8
+    ]
+
+    // ── Client ────────────────────────────────────────────────────
+    client [
+        label="Browser / API Client"
+        shape=ellipse
+        fillcolor="#bbdefb"
+        color="#1565c0"
+        fontcolor="#0d47a1"
+    ]
+
+    // ── FastAPI Dependencies ──────────────────────────────────────
+    subgraph cluster_auth {
+        label="FastAPI Dependencies  (Depends — injected into every endpoint)"
+        style=filled
+        fillcolor="#fffde7"
+        color="#f9a825"
+        fontname="Helvetica,Arial,sans-serif"
+        fontsize=10
+
+        dep_auth [
+            label="require_auth()\nreads JWT session cookie\n→ yields username str"
+            fillcolor="#fff9c4"
+            color="#f9a825"
+        ]
+        dep_fs [
+            label="get_fs()\nFilesystemService(settings.home_dir)\n→ yields fs instance"
+            fillcolor="#fff9c4"
+            color="#f9a825"
+        ]
+    }
+
+    // ── Endpoints ─────────────────────────────────────────────────
+    subgraph cluster_endpoints {
+        label="FastAPI Router  prefix=/api/files   (routes/files.py)"
+        style=filled
+        fillcolor="#e8f5e9"
+        color="#2e7d32"
+        fontname="Helvetica,Arial,sans-serif"
+        fontsize=10
+
+        { rank=same
+            ep_list [
+                label="GET /\nlist_directory()\n?path=  ?show_hidden=false"
+                fillcolor="#c8e6c9"
+                color="#2e7d32"
+            ]
+            ep_info [
+                label="GET /info\nfile_info()\n?path="
+                fillcolor="#c8e6c9"
+                color="#2e7d32"
+            ]
+            ep_content [
+                label="GET /content\nget_content()\n?path="
+                fillcolor="#c8e6c9"
+                color="#2e7d32"
+            ]
+            ep_download [
+                label="GET /download\ndownload_file()\n?path="
+                fillcolor="#c8e6c9"
+                color="#2e7d32"
+            ]
+        }
+
+        { rank=same
+            ep_upload [
+                label="POST /upload\nupload_file()\n?path= + UploadFile (multipart/form-data)"
+                fillcolor="#a5d6a7"
+                color="#1b5e20"
+            ]
+            ep_mkdir [
+                label="POST /mkdir\nmake_directory()\n?path="
+                fillcolor="#c8e6c9"
+                color="#2e7d32"
+            ]
+            ep_rename [
+                label="PUT /rename\nrename_file()\nbody: RenameRequest {old_path, new_path}"
+                fillcolor="#c8e6c9"
+                color="#2e7d32"
+            ]
+            ep_delete [
+                label="DELETE /\ndelete_file()\n?path="
+                fillcolor="#c8e6c9"
+                color="#2e7d32"
+            ]
+        }
+    }
+
+    // ── FilesystemService Methods ─────────────────────────────────
+    subgraph cluster_service {
+        label="FilesystemService  (services/filesystem.py)"
+        style=filled
+        fillcolor="#e8eaf6"
+        color="#283593"
+        fontname="Helvetica,Arial,sans-serif"
+        fontsize=10
+
+        { rank=same
+            svc_list [
+                label="list_directory(path, show_hidden)\n→ list[dict]  dirs-first, alpha sort"
+                fillcolor="#c5cae9"
+                color="#283593"
+            ]
+            svc_info [
+                label="get_info(path)\n→ {name, path, type, size, modified, category}"
+                fillcolor="#c5cae9"
+                color="#283593"
+            ]
+            svc_getfp [
+                label="get_file_path(path)\n→ validated Path object\ncalled by /content and /download"
+                fillcolor="#c5cae9"
+                color="#283593"
+            ]
+        }
+        { rank=same
+            svc_mkdir [
+                label="mkdir(path)\n→ Path  (parents=True, exist_ok=True)"
+                fillcolor="#c5cae9"
+                color="#283593"
+            ]
+            svc_rename [
+                label="rename(old_path, new_path)\ncalls validate_path twice"
+                fillcolor="#c5cae9"
+                color="#283593"
+            ]
+            svc_delete [
+                label="delete(path)\nfile → unlink  /  dir → shutil.rmtree\nguard: cannot delete home_dir itself"
+                fillcolor="#c5cae9"
+                color="#283593"
+            ]
+        }
+
+        svc_detect [
+            label="detect_file_type(filename)\nPath(filename).suffix.lower()\nFILE_CATEGORIES lookup → str or 'other'"
+            fillcolor="#9fa8da"
+            color="#283593"
+            style="filled,rounded,dashed"
+        ]
+    }
+
+    // ── validate_path Chain ───────────────────────────────────────
+    subgraph cluster_validation {
+        label="validate_path(path: str) → Path   shared by ALL service methods"
+        style=filled
+        fillcolor="#fce4ec"
+        color="#b71c1c"
+        fontname="Helvetica,Arial,sans-serif"
+        fontsize=10
+
+        { rank=same
+            vp1 [
+                label="① path.lstrip('/')\nstrip leading slash from raw input"
+                shape=parallelogram
+                fillcolor="#ffcdd2"
+                color="#b71c1c"
+            ]
+            vp2 [
+                label="② (home_dir / cleaned).resolve()\ncanonical absolute path — resolves symlinks"
+                shape=parallelogram
+                fillcolor="#ffcdd2"
+                color="#b71c1c"
+            ]
+            vp3 [
+                label="③ resolved.relative_to(home_dir)\nboundary enforcement"
+                shape=diamond
+                fillcolor="#ef9a9a"
+                color="#b71c1c"
+                width=2.6
+            ]
+            vp4 [
+                label="④ return resolved\nvalidated Path object"
+                shape=parallelogram
+                fillcolor="#ffcdd2"
+                color="#b71c1c"
+            ]
+        }
+
+        vp1 -> vp2 -> vp3
+        vp3 -> vp4     [label="within home_dir" color="#2e7d32" fontcolor="#2e7d32"]
+        vp3 -> err_perm [label="ValueError\n→ PermissionError" color="#b71c1c" fontcolor="#b71c1c" style=dashed]
+    }
+
+    // ── Upload Special Flow ───────────────────────────────────────
+    subgraph cluster_upload {
+        label="POST /upload  Special Flow   (handled at route level — bypasses FilesystemService methods)"
+        style=filled
+        fillcolor="#f5f5f5"
+        color="#455a64"
+        fontname="Helvetica,Arial,sans-serif"
+        fontsize=10
+
+        up1 [
+            label="① fs.validate_path(path)\nget directory Path for upload destination"
+            fillcolor="#eceff1"
+            color="#455a64"
+        ]
+        up2 [
+            label="② dir_path.is_dir()?"
+            shape=diamond
+            fillcolor="#cfd8dc"
+            color="#455a64"
+            width=2.2
+        ]
+        up3 [
+            label="③ safe_name = Path(file.filename).name\nstrips all path components\nprevents traversal via filename"
+            fillcolor="#eceff1"
+            color="#455a64"
+        ]
+        up4 [
+            label="④ safe_name == '' ?"
+            shape=diamond
+            fillcolor="#cfd8dc"
+            color="#455a64"
+            width=2.2
+        ]
+        up5 [
+            label="⑤ dest = dir_path / safe_name\ndest.resolve().relative_to(fs.home_dir)\nsecond boundary check on full destination"
+            shape=diamond
+            fillcolor="#cfd8dc"
+            color="#455a64"
+            width=3.0
+        ]
+        up6 [
+            label="⑥ open(dest, 'wb')\nasync chunk loop: await file.read(8192)\naccumulate size counter"
+            fillcolor="#eceff1"
+            color="#455a64"
+        ]
+        up7 [
+            label="⑦ size > settings.upload_max_size?\n1 GB = 1 073 741 824 bytes\ndest.unlink(missing_ok=True) on exceed"
+            shape=diamond
+            fillcolor="#cfd8dc"
+            color="#455a64"
+            width=3.0
+        ]
+        up_ok [
+            label="{name: safe_name, size: int}\n200 OK"
+            shape=parallelogram
+            fillcolor="#c8e6c9"
+            color="#2e7d32"
+            fontcolor="#1b5e20"
+        ]
+
+        up1 -> up2
+        up2 -> up3     [label="is dir" color="#2e7d32" fontcolor="#2e7d32"]
+        up2 -> err_notdir_up [label="not dir\n400" color="#b71c1c" fontcolor="#b71c1c" style=dashed]
+        up3 -> up4
+        up4 -> up5     [label="non-empty" color="#2e7d32" fontcolor="#2e7d32"]
+        up4 -> err_badname [label="empty → 400" color="#b71c1c" fontcolor="#b71c1c" style=dashed]
+        up5 -> up6     [label="within home_dir" color="#2e7d32" fontcolor="#2e7d32"]
+        up5 -> err_perm [label="outside → 403" color="#b71c1c" fontcolor="#b71c1c" style=dashed]
+        up6 -> up7
+        up7 -> up_ok   [label="within limit" color="#2e7d32" fontcolor="#2e7d32"]
+        up7 -> err_toolarge [label="> 1 GB → 413" color="#b71c1c" fontcolor="#b71c1c" style=dashed]
+        up6 -> err_nospace  [label="OSError: no space\n→ 507" color="#b71c1c" fontcolor="#b71c1c" style=dashed]
+    }
+
+    // ── OS / stdlib Operations ────────────────────────────────────
+    subgraph cluster_os {
+        label="Python stdlib   pathlib.Path  +  shutil"
+        style=filled
+        fillcolor="#fff3e0"
+        color="#e65100"
+        fontname="Helvetica,Arial,sans-serif"
+        fontsize=10
+
+        { rank=same
+            os_iter [
+                label="Path.iterdir()\nsorted: dirs-first\nthen alpha by entry.name.lower()"
+                fillcolor="#ffe0b2"
+                color="#e65100"
+            ]
+            os_stat [
+                label="Path.stat()\nst_size  st_mtime → isoformat()"
+                fillcolor="#ffe0b2"
+                color="#e65100"
+            ]
+            os_fresp [
+                label="FileResponse(file_path)\nstreamfile  auto Content-Type\n→ GET /content"
+                fillcolor="#ffe0b2"
+                color="#e65100"
+            ]
+            os_fdl [
+                label="FileResponse(file_path, filename=name)\nContent-Disposition: attachment\n→ GET /download"
+                fillcolor="#ffe0b2"
+                color="#e65100"
+            ]
+        }
+        { rank=same
+            os_write [
+                label="open(dest, 'wb')\nf.write(chunk)  per 8 192-byte read"
+                fillcolor="#ffe0b2"
+                color="#e65100"
+            ]
+            os_mkdir [
+                label="Path.mkdir(parents=True, exist_ok=True)"
+                fillcolor="#ffe0b2"
+                color="#e65100"
+            ]
+            os_rename [
+                label="old_resolved.rename(new_resolved)"
+                fillcolor="#ffe0b2"
+                color="#e65100"
+            ]
+            os_rm [
+                label="shutil.rmtree(resolved)  [directory]\nresolved.unlink()  [file]"
+                fillcolor="#ffe0b2"
+                color="#e65100"
+            ]
+        }
+    }
+
+    // ── Error → HTTP Status Nodes ─────────────────────────────────
+    subgraph cluster_errors {
+        label="Exception  →  HTTP Status Code   (caught in route handlers)"
+        style=filled
+        fillcolor="#f3e5f5"
+        color="#6a1b9a"
+        fontname="Helvetica,Arial,sans-serif"
+        fontsize=10
+
+        { rank=same
+            err_perm [
+                label="PermissionError\n→ 403 Forbidden\ncode: PATH_FORBIDDEN\nraised by: validate_path (all ops)"
+                fillcolor="#e1bee7"
+                color="#6a1b9a"
+            ]
+            err_notfound [
+                label="FileNotFoundError\n→ 404 Not Found\ncode: NOT_FOUND\nraised by: list, info, getfp, rename, delete"
+                fillcolor="#e1bee7"
+                color="#6a1b9a"
+            ]
+            err_notdir [
+                label="NotADirectoryError\n→ 400 Bad Request\ncode: NOT_DIRECTORY\nraised by: list_directory"
+                fillcolor="#e1bee7"
+                color="#6a1b9a"
+            ]
+            err_isadir [
+                label="IsADirectoryError\n→ 400 Bad Request\ncode: IS_DIRECTORY\nraised by: get_file_path"
+                fillcolor="#e1bee7"
+                color="#6a1b9a"
+            ]
+        }
+        { rank=same
+            err_notdir_up [
+                label="!dir_path.is_dir()  (upload only)\n→ 400 Bad Request\ncode: NOT_DIRECTORY"
+                fillcolor="#e1bee7"
+                color="#6a1b9a"
+            ]
+            err_badname [
+                label="empty safe_name  (upload only)\n→ 400 Bad Request\ncode: INVALID_FILENAME"
+                fillcolor="#e1bee7"
+                color="#6a1b9a"
+            ]
+            err_toolarge [
+                label="size > upload_max_size  (upload only)\n→ 413 Request Entity Too Large\ncode: FILE_TOO_LARGE"
+                fillcolor="#e1bee7"
+                color="#6a1b9a"
+            ]
+            err_nospace [
+                label="OSError: No space left on device  (upload only)\n→ 507 Insufficient Storage\ncode: INSUFFICIENT_STORAGE"
+                fillcolor="#e1bee7"
+                color="#6a1b9a"
+            ]
+        }
+    }
+
+    // ── FILE_CATEGORIES ───────────────────────────────────────────
+    subgraph cluster_categories {
+        label="FILE_CATEGORIES  (7 backend categories)   used by detect_file_type() → returned as 'category' in GET /info"
+        style=filled
+        fillcolor="#e0f7fa"
+        color="#006064"
+        fontname="Helvetica,Arial,sans-serif"
+        fontsize=10
+
+        { rank=same
+            cat_text [
+                label="text\n.txt .log .csv .json .xml\n.yaml .yml .toml .env .conf"
+                fillcolor="#b2ebf2"
+                color="#006064"
+                fontsize=9
+            ]
+            cat_code [
+                label="code\n.py .js .ts .go .rs .c .cpp\n.java .sh .sql .html .css"
+                fillcolor="#b2ebf2"
+                color="#006064"
+                fontsize=9
+            ]
+            cat_md [
+                label="markdown\n.md"
+                fillcolor="#b2ebf2"
+                color="#006064"
+                fontsize=9
+            ]
+            cat_image [
+                label="image\n.png .jpg .jpeg .gif\n.webp .svg .bmp"
+                fillcolor="#b2ebf2"
+                color="#006064"
+                fontsize=9
+            ]
+            cat_audio [
+                label="audio\n.mp3 .wav .ogg\n.flac .aac .m4a"
+                fillcolor="#b2ebf2"
+                color="#006064"
+                fontsize=9
+            ]
+            cat_video [
+                label="video\n.mp4 .webm .mkv .mov .avi"
+                fillcolor="#b2ebf2"
+                color="#006064"
+                fontsize=9
+            ]
+            cat_pdf [
+                label="pdf\n.pdf"
+                fillcolor="#b2ebf2"
+                color="#006064"
+                fontsize=9
+            ]
+        }
+    }
+
+    // ── Legend ────────────────────────────────────────────────────
+    subgraph cluster_legend {
+        label="Legend"
+        style=filled
+        fillcolor="#fafafa"
+        color="#adb5bd"
+        fontname="Helvetica,Arial,sans-serif"
+        fontsize=10
+
+        lg_ep  [label="HTTP Endpoint"    fillcolor="#c8e6c9" color="#2e7d32"  width=1.8 height=0.4]
+        lg_dep [label="Auth Dependency"  fillcolor="#fff9c4" color="#f9a825"  width=1.8 height=0.4]
+        lg_svc [label="Service Method"   fillcolor="#c5cae9" color="#283593"  width=1.8 height=0.4]
+        lg_vp  [label="Path Validation"  fillcolor="#ffcdd2" color="#b71c1c"  width=1.8 height=0.4]
+        lg_os  [label="OS / stdlib Op"   fillcolor="#ffe0b2" color="#e65100"  width=1.8 height=0.4]
+        lg_err [label="Error → HTTP"     fillcolor="#e1bee7" color="#6a1b9a"  width=1.8 height=0.4]
+        lg_cat [label="File Category"    fillcolor="#b2ebf2" color="#006064"  width=1.8 height=0.4]
+        lg_dec [label="Decision" shape=diamond fillcolor="#cfd8dc" color="#455a64" style=filled width=1.8 height=0.5]
+        lg_dash [label="─ ─ ─→  error path / internal call" shape=plaintext fontsize=9]
+
+        lg_ep  -> lg_dep  [style=invis]
+        lg_dep -> lg_svc  [style=invis]
+        lg_svc -> lg_vp   [style=invis]
+        lg_vp  -> lg_os   [style=invis]
+        lg_os  -> lg_err  [style=invis]
+        lg_err -> lg_cat  [style=invis]
+        lg_cat -> lg_dec  [style=invis]
+        lg_dec -> lg_dash [style=invis]
+    }
+
+    // ── Primary Flow Edges ────────────────────────────────────────
+
+    // Client → endpoint cluster
+    client -> ep_list [lhead=cluster_endpoints label="HTTP request\n+ session cookie"]
+
+    // Auth injected into every endpoint (representative arrow)
+    dep_auth -> ep_list [
+        dir=back style=dashed color="#f9a825" fontcolor="#f9a825"
+        label="Depends(require_auth, get_fs)\nall 8 endpoints"
+        ltail=cluster_auth lhead=cluster_endpoints
+    ]
+
+    // Endpoints → service methods
+    ep_list     -> svc_list   [label="fs.list_directory(path, show_hidden)"]
+    ep_info     -> svc_info   [label="fs.get_info(path)"]
+    ep_content  -> svc_getfp  [label="fs.get_file_path(path)"]
+    ep_download -> svc_getfp
+    ep_mkdir    -> svc_mkdir  [label="fs.mkdir(path)"]
+    ep_rename   -> svc_rename [label="fs.rename(old, new)"]
+    ep_delete   -> svc_delete [label="fs.delete(path)"]
+    ep_upload   -> up1        [label="direct route-level flow\n(no service method wrapper)"]
+
+    // Service methods → validate_path entry
+    svc_list   -> vp1
+    svc_info   -> vp1
+    svc_getfp  -> vp1 [label="validate_path(path)\ncalled internally"]
+    svc_mkdir  -> vp1
+    svc_rename -> vp1 [label="validate_path(old)\nthen validate_path(new)"]
+    svc_delete -> vp1
+
+    // Upload also calls validate_path directly via fs
+    up1 -> vp1 [style=dashed label="fs.validate_path(path)"]
+
+    // validate_path → OS operations
+    vp4 -> os_iter   [label="list_directory"]
+    vp4 -> os_stat   [label="get_info"]
+    vp4 -> os_mkdir  [label="mkdir"]
+    vp4 -> os_rename [label="rename"]
+    vp4 -> os_rm     [label="delete"]
+
+    // get_file_path → FileResponse (bypasses OS cluster, returns response directly)
+    svc_getfp -> os_fresp [label="/content\nFileResponse(path)"]
+    svc_getfp -> os_fdl   [label="/download\nfilename= header"]
+
+    // upload chunk write
+    up6 -> os_write [style=dashed]
+
+    // detect_file_type used by get_info
+    svc_info   -> svc_detect [style=dashed label="detect_file_type(resolved.name)\nonly for file entries"]
+    svc_detect -> cat_text   [lhead=cluster_categories style=dashed label="suffix → category\nor 'other'"]
+
+    // Service-level errors (dashed, purple)
+    svc_list   -> err_notfound [style=dashed color="#9c27b0"]
+    svc_list   -> err_notdir   [style=dashed color="#9c27b0"]
+    svc_info   -> err_notfound [style=dashed color="#9c27b0"]
+    svc_getfp  -> err_notfound [style=dashed color="#9c27b0"]
+    svc_getfp  -> err_isadir   [style=dashed color="#9c27b0"]
+    svc_rename -> err_notfound [style=dashed color="#9c27b0"]
+    svc_delete -> err_notfound [style=dashed color="#9c27b0"]
+}
