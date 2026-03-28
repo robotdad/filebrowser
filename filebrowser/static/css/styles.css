@@ -655,7 +655,8 @@ body {
     flex: 1;
     min-height: 0;
     overflow: auto;
-    background: var(--bg-secondary);
+    background: #ffffff;
+    border: 0.5px solid var(--border-color);
     border-radius: var(--radius-md);
     display: flex;
     align-items: center;
@@ -669,21 +670,6 @@ body {
 .graphviz-loading {
     color: var(--text-muted);
     font-size: 14px;
-}
-/* Dark mode: invert Graphviz default black strokes/text for readability */
-@media (prefers-color-scheme: dark) {
-    .graphviz-canvas svg text {
-        fill: var(--text-primary);
-    }
-    .graphviz-canvas svg polygon[stroke="black"],
-    .graphviz-canvas svg ellipse[stroke="black"],
-    .graphviz-canvas svg path[stroke="black"] {
-        stroke: var(--text-secondary);
-    }
-    .graphviz-canvas svg polygon[fill="none"],
-    .graphviz-canvas svg ellipse[fill="none"] {
-        fill: none;
-    }
 }
 
 /* Graphviz file icon gradient */
