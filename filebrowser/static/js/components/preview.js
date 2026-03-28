@@ -4,7 +4,7 @@ import { api } from '../api.js';
 import hljs from 'highlight.js';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { Graphviz } from '@hpcc-js/wasm';
+import { graphviz as hpccGraphviz } from '@hpcc-js/wasm';
 
 const FILE_TYPES = {
     text:     ['.txt', '.log', '.csv', '.json', '.xml', '.yaml', '.yml', '.toml', '.env', '.conf'],
@@ -243,42 +243,29 @@ function GraphvizViewer({ text, path }) {
     const [rendering, setRendering] = useState(false);
     const containerRef = useRef(null);
     const codeRef = useRef(null);
-    const graphvizRef = useRef(null);
-
-    // Load the WASM module once
-    useEffect(() => {
-        Graphviz.load().then(gv => { graphvizRef.current = gv; });
-    }, []);
 
     // Render DOT → SVG whenever text, engine, or showSource changes
     useEffect(() => {
         if (showSource || !containerRef.current || !text) return;
-        const gv = graphvizRef.current;
-        if (!gv) {
-            // WASM not loaded yet — retry shortly
-            const timer = setTimeout(() => {
-                if (graphvizRef.current && containerRef.current && !showSource) {
-                    try {
-                        setError(null);
-                        containerRef.current.innerHTML = graphvizRef.current.layout(text, 'svg', engine);
-                    } catch (e) {
-                        setError(e.message || String(e));
-                        containerRef.current.innerHTML = '';
-                    }
+        let cancelled = false;
+        setError(null);
+        setRendering(true);
+        hpccGraphviz.layout(text, 'svg', engine)
+            .then(svg => {
+                if (!cancelled && containerRef.current) {
+                    containerRef.current.innerHTML = svg;
                 }
-            }, 500);
-            return () => clearTimeout(timer);
-        }
-        try {
-            setError(null);
-            setRendering(true);
-            containerRef.current.innerHTML = gv.layout(text, 'svg', engine);
-        } catch (e) {
-            setError(e.message || String(e));
-            containerRef.current.innerHTML = '';
-        } finally {
-            setRendering(false);
-        }
+            })
+            .catch(e => {
+                if (!cancelled) {
+                    setError(e.message || String(e));
+                    if (containerRef.current) containerRef.current.innerHTML = '';
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setRendering(false);
+            });
+        return () => { cancelled = true; };
     }, [text, engine, showSource]);
 
     // Highlight source when switching to source tab
