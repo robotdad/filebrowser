@@ -277,9 +277,9 @@ function GraphvizViewer({ text, path }) {
     const rendererRef = useRef(null);
     const selectionRef = useRef(new Set());
 
-    // Render DOT → SVG via d3-graphviz whenever text, engine, or showSource changes
+    // Render DOT → SVG via d3-graphviz whenever text or engine changes
     useEffect(() => {
-        if (showSource || !containerRef.current || !text) return;
+        if (!containerRef.current || !text) return;
         let cancelled = false;
         setError(null);
         setRendering(true);
@@ -329,7 +329,7 @@ function GraphvizViewer({ text, path }) {
             cancelled = true;
             rendererRef.current = null;
         };
-    }, [text, engine, showSource]);
+    }, [text, engine]);
 
     // Highlight source when switching to source tab
     useEffect(() => {
@@ -398,7 +398,7 @@ function GraphvizViewer({ text, path }) {
             container.removeEventListener('click', handleClick);
             document.removeEventListener('keydown', handleKeyDown);
         };
-    }, [showSource, direction]);
+    }, [direction]);
 
     // Search: update match count as user types
     const handleSearchInput = useCallback((e) => {
@@ -503,12 +503,14 @@ function GraphvizViewer({ text, path }) {
                     <span>${error}</span>
                 </div>
             `}
-            ${showSource
-                ? html`<div class="code-viewer"><pre><code ref=${codeRef} class="language-dot">${text}</code></pre></div>`
-                : html`<div class=${'graphviz-canvas' + (darkCanvas ? ' graphviz-dark' : '')} ref=${containerRef}>
-                    ${rendering && html`<div class="graphviz-loading">Rendering…</div>`}
-                  </div>`
-            }
+            <div class=${'graphviz-canvas' + (darkCanvas ? ' graphviz-dark' : '')}
+                 ref=${containerRef}
+                 style=${{ display: showSource ? 'none' : '' }}>
+                ${rendering && html`<div class="graphviz-loading">Rendering…</div>`}
+            </div>
+            ${showSource && html`
+                <div class="code-viewer"><pre><code ref=${codeRef} class="language-dot">${text}</code></pre></div>
+            `}
         </div>
     `;
 }
