@@ -783,29 +783,61 @@ body {
         grid-template-rows: 1fr 1fr;
     }
 }
-.graphviz-editor {
-    width: 100%;
-    height: 100%;
-    resize: none;
+/* Editor overlay: highlighted <pre> behind transparent <textarea> */
+.graphviz-editor-wrap {
+    position: relative;
+    min-height: 0;
+    overflow: hidden;
     border: 0.5px solid var(--border-color);
     border-radius: var(--radius-md);
-    padding: var(--space-md);
-    font-family: 'JetBrains Mono', "SF Mono", "Fira Code", "Consolas", monospace;
-    font-size: 13px;
-    line-height: 1.6;
-    background: var(--bg-secondary);
-    color: var(--text-primary);
-    outline: none;
-    tab-size: 4;
-    white-space: pre;
-    overflow: auto;
 }
-.graphviz-editor:focus {
+.graphviz-editor-wrap:focus-within {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
 }
+.graphviz-editor-highlight,
+.graphviz-editor {
+    font-family: 'JetBrains Mono', "SF Mono", "Fira Code", "Consolas", monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    tab-size: 4;
+    white-space: pre;
+    padding: var(--space-md);
+    margin: 0;
+    border: none;
+    overflow: auto;
+}
+.graphviz-editor-highlight {
+    position: absolute;
+    inset: 0;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    pointer-events: none;
+    border-radius: var(--radius-md);
+}
+.graphviz-editor-highlight code {
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    background: none;
+    padding: 0;
+}
+.graphviz-editor {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    resize: none;
+    background: transparent;
+    color: transparent;
+    caret-color: var(--text-primary);
+    outline: none;
+    z-index: 1;
+}
 .graphviz-editor::placeholder {
     color: var(--text-muted);
+}
+.graphviz-editor::selection {
+    background: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 .graphviz-preview {
     border: 0.5px solid var(--border-color);

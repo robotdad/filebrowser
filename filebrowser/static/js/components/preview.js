@@ -285,6 +285,7 @@ function HtmlViewer({ text, path, contentUrl }) {
 }
 
 const GRAPHVIZ_ENGINES = ['dot', 'circo', 'fdp', 'neato', 'osage', 'patchwork', 'twopi'];
+const GRAPHVIZ_WASM_OPTS = { wasmFolder: 'https://cdn.jsdelivr.net/npm/@hpcc-js/wasm@1.16.6/dist' };
 const DIRECTIONS = ['bidirectional', 'downstream', 'upstream', 'single'];
 const DIRECTION_LABELS = { bidirectional: 'Bidirectional', downstream: 'Downstream', upstream: 'Upstream', single: 'Single' };
 
@@ -326,6 +327,7 @@ function GraphvizViewer({ text, path, onSave }) {
     const containerRef = useRef(null);
     const codeRef = useRef(null);
     const editorRef = useRef(null);
+    const highlightRef = useRef(null);
     const cursorRef = useRef(null);
     const editInitRef = useRef(false);
     const graphvizSvgRef = useRef(new GraphvizSvg());
@@ -407,6 +409,15 @@ function GraphvizViewer({ text, path, onSave }) {
         }
     }, [activeTab, text]);
 
+    // Sync editor syntax highlight overlay
+    useEffect(() => {
+        if (activeTab === 'edit' && highlightRef.current) {
+            // Set text + trailing newline so the overlay height matches the textarea
+            highlightRef.current.textContent = editText + '\n';
+            hljs.highlightElement(highlightRef.current);
+        }
+    }, [activeTab, editText]);
+
     // Live preview for Edit tab (immediate on tab switch, debounced on edits)
     useEffect(() => {
         if (activeTab !== 'edit') {
@@ -422,12 +433,13 @@ function GraphvizViewer({ text, path, onSave }) {
         let cancelled = false;
         const doRender = () => {
             if (cancelled) return;
-            try {
-                const svg = hpccGraphviz.layout(editText, "svg", engine);
-                if (!cancelled) { setPreviewSvg(svg); setPreviewError(null); }
-            } catch (e) {
-                if (!cancelled) { setPreviewError(e.message || String(e)); setPreviewSvg(''); }
-            }
+            hpccGraphviz.layout(editText, 'svg', engine, GRAPHVIZ_WASM_OPTS)
+                .then(svg => {
+                    if (!cancelled) { setPreviewSvg(svg); setPreviewError(null); }
+                })
+                .catch(e => {
+                    if (!cancelled) { setPreviewError(e.message || String(e)); setPreviewSvg(''); }
+                });
         };
 
         // Render immediately on first open / tab switch; debounce subsequent edits
@@ -600,10 +612,10 @@ function GraphvizViewer({ text, path, onSave }) {
             <div class="graphviz-toolbar">
                 <div class="graphviz-tabs">
                     <button class=${activeTab === 'graph' ? 'active' : ''} onClick=${() => setActiveTab('graph')}>Graph</button>
+                    <button class=${activeTab === 'source' ? 'active' : ''} onClick=${() => setActiveTab('source')}>Source</button>
                     <button class=${activeTab === 'edit' ? 'active' : ''} onClick=${() => setActiveTab('edit')}>
                         Edit${dirty ? html` <span class="graphviz-dirty-indicator"></span>` : ''}
                     </button>
-                    <button class=${activeTab === 'source' ? 'active' : ''} onClick=${() => setActiveTab('source')}>Source</button>
                 </div>
                 ${activeTab === 'graph' && html`
                     <select class="graphviz-engine-select"
@@ -667,13 +679,22 @@ function GraphvizViewer({ text, path, onSave }) {
             </div>
             ${activeTab === 'edit' && html`
                 <div class="graphviz-edit-pane">
-                    <textarea class="graphviz-editor"
-                              ref=${editorRef}
-                              value=${editText}
-                              onInput=${handleEditorInput}
-                              onKeyDown=${handleEditorKeyDown}
-                              spellcheck="false"
-                              placeholder="Enter DOT source…"></textarea>
+                    <div class="graphviz-editor-wrap">
+                        <pre class="graphviz-editor-highlight" aria-hidden="true"><code ref=${highlightRef} class="language-dot">${editText + '\n'}</code></pre>
+                        <textarea class="graphviz-editor"
+                                  ref=${editorRef}
+                                  value=${editText}
+                                  onInput=${handleEditorInput}
+                                  onKeyDown=${handleEditorKeyDown}
+                                  onScroll=${(e) => {
+                                      if (highlightRef.current?.parentElement) {
+                                          highlightRef.current.parentElement.scrollTop = e.target.scrollTop;
+                                          highlightRef.current.parentElement.scrollLeft = e.target.scrollLeft;
+                                      }
+                                  }}
+                                  spellcheck="false"
+                                  placeholder="Enter DOT source…"></textarea>
+                    </div>
                     <div class="graphviz-preview">
                         ${previewError
                             ? html`<div class="graphviz-preview-error">
