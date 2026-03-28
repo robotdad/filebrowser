@@ -180,6 +180,37 @@ async def make_directory(
     return {"path": str(result.relative_to(fs.home_dir))}
 
 
+class WriteContentRequest(BaseModel):
+    path: str
+    content: str
+
+
+@router.put("/content")
+async def write_content(
+    body: WriteContentRequest,
+    username: str = Depends(require_auth),
+    fs: FilesystemService = Depends(get_fs),
+):
+    try:
+        file_path = fs.validate_path(body.path)
+    except PermissionError:
+        raise HTTPException(
+            status_code=403, detail={"error": "Access denied", "code": "PATH_FORBIDDEN"}
+        )
+    if not file_path.parent.exists():
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "Parent directory not found", "code": "NOT_FOUND"},
+        )
+    if file_path.is_dir():
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "Is a directory", "code": "IS_DIRECTORY"},
+        )
+    file_path.write_text(body.content, encoding="utf-8")
+    return {"ok": True, "size": file_path.stat().st_size}
+
+
 class RenameRequest(BaseModel):
     old_path: str
     new_path: str

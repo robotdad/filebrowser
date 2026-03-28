@@ -580,9 +580,11 @@ body {
 .graphviz-tabs button:first-child {
     border-radius: var(--radius-sm) 0 0 var(--radius-sm);
 }
+.graphviz-tabs button:not(:first-child) {
+    border-left: none;
+}
 .graphviz-tabs button:last-child {
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-    border-left: none;
 }
 .graphviz-tabs button.active {
     background: var(--accent);
@@ -765,6 +767,129 @@ body {
 }
 .graphviz-dark svg {
     filter: invert(1) hue-rotate(180deg);
+}
+
+/* === Graphviz Edit Tab === */
+.graphviz-edit-pane {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-sm);
+    flex: 1;
+    min-height: 0;
+}
+@media (max-width: 768px) {
+    .graphviz-edit-pane {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr 1fr;
+    }
+}
+.graphviz-editor {
+    width: 100%;
+    height: 100%;
+    resize: none;
+    border: 0.5px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    font-family: 'JetBrains Mono', "SF Mono", "Fira Code", "Consolas", monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    outline: none;
+    tab-size: 4;
+    white-space: pre;
+    overflow: auto;
+}
+.graphviz-editor:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+}
+.graphviz-editor::placeholder {
+    color: var(--text-muted);
+}
+.graphviz-preview {
+    border: 0.5px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: #ffffff;
+    overflow: auto;
+    min-height: 0;
+}
+.graphviz-preview svg {
+    width: 100%;
+    height: 100%;
+}
+.graphviz-preview-error {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+    padding: var(--space-md);
+    color: var(--danger);
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.graphviz-preview-error i {
+    flex-shrink: 0;
+    font-size: 15px;
+    margin-top: 1px;
+}
+.graphviz-save-btn {
+    padding: 6px 14px;
+    border: 0.5px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    transition: all 0.15s var(--ease-out);
+}
+.graphviz-save-btn:hover:not(:disabled) {
+    background: var(--fill);
+    color: var(--text-primary);
+}
+.graphviz-save-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+.graphviz-save-btn.dirty {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    opacity: 1;
+}
+.graphviz-save-btn.dirty:hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+}
+.graphviz-dirty-indicator {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: var(--radius-full);
+    background: var(--yellow, #FF9500);
+    margin-left: 4px;
+    vertical-align: middle;
+}
+.graphviz-tabs button.active .graphviz-dirty-indicator {
+    background: rgba(255, 255, 255, 0.9);
+}
+.graphviz-save-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+.graphviz-save-hint kbd {
+    background: var(--fill);
+    border: 0.5px solid var(--border-color);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 11px;
+    font-family: inherit;
+    color: var(--text-secondary);
 }
 
 /* Graphviz file icon gradient */

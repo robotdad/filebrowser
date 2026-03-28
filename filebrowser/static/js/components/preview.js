@@ -4,7 +4,7 @@ import { api } from '../api.js';
 import hljs from 'highlight.js';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { wasmFolder } from '@hpcc-js/wasm';
+import { wasmFolder, graphviz as hpccGraphviz } from '@hpcc-js/wasm';
 import * as d3 from 'd3';
 import { graphviz as d3Graphviz } from 'd3-graphviz';
 import GraphvizSvg from '../graphviz-svg.js';
@@ -304,8 +304,8 @@ function getAffectedElements(graphvizSvg, selectedElements, direction) {
     return result;
 }
 
-function GraphvizViewer({ text, path }) {
-    const [showSource, setShowSource] = useState(false);
+function GraphvizViewer({ text, path, onSave }) {
+    const [activeTab, setActiveTab] = useState('graph');
     const [engine, setEngine] = useState('dot');
     const [darkCanvas, setDarkCanvas] = useState(
         () => window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -315,11 +315,37 @@ function GraphvizViewer({ text, path }) {
     const [direction, setDirection] = useState('bidirectional');
     const [searchQuery, setSearchQuery] = useState('');
     const [searchCount, setSearchCount] = useState(null);
+
+    // Edit tab state
+    const [editText, setEditText] = useState(text);
+    const [dirty, setDirty] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [previewSvg, setPreviewSvg] = useState('');
+    const [previewError, setPreviewError] = useState(null);
+
     const containerRef = useRef(null);
     const codeRef = useRef(null);
+    const editorRef = useRef(null);
+    const cursorRef = useRef(null);
+    const editInitRef = useRef(false);
     const graphvizSvgRef = useRef(new GraphvizSvg());
     const rendererRef = useRef(null);
     const selectionRef = useRef(new Set());
+
+    // Sync editText when text prop changes from outside (new file or post-save)
+    useEffect(() => {
+        setEditText(text);
+        setDirty(false);
+    }, [text]);
+
+    // Restore cursor position after Tab key insertion
+    useEffect(() => {
+        if (cursorRef.current !== null && editorRef.current) {
+            editorRef.current.selectionStart = cursorRef.current;
+            editorRef.current.selectionEnd = cursorRef.current;
+            cursorRef.current = null;
+        }
+    });
 
     // Render DOT → SVG via d3-graphviz whenever text or engine changes
     useEffect(() => {
@@ -334,9 +360,7 @@ function GraphvizViewer({ text, path }) {
         setSearchCount(null);
 
         try {
-            // Create or reuse d3-graphviz renderer
             const container = containerRef.current;
-            // d3-graphviz needs an empty container on first use
             if (!rendererRef.current) {
                 container.innerHTML = '';
             }
@@ -377,16 +401,50 @@ function GraphvizViewer({ text, path }) {
 
     // Highlight source when switching to source tab
     useEffect(() => {
-        if (showSource && codeRef.current) {
+        if (activeTab === 'source' && codeRef.current) {
             codeRef.current.textContent = text;
             hljs.highlightElement(codeRef.current);
         }
-    }, [showSource, text]);
+    }, [activeTab, text]);
+
+    // Live preview for Edit tab (immediate on tab switch, debounced on edits)
+    useEffect(() => {
+        if (activeTab !== 'edit') {
+            editInitRef.current = false;
+            return;
+        }
+        if (!editText?.trim()) {
+            setPreviewSvg('');
+            setPreviewError(null);
+            return;
+        }
+
+        let cancelled = false;
+        const doRender = () => {
+            if (cancelled) return;
+            try {
+                const svg = hpccGraphviz.layout(editText, "svg", engine);
+                if (!cancelled) { setPreviewSvg(svg); setPreviewError(null); }
+            } catch (e) {
+                if (!cancelled) { setPreviewError(e.message || String(e)); setPreviewSvg(''); }
+            }
+        };
+
+        // Render immediately on first open / tab switch; debounce subsequent edits
+        if (!editInitRef.current) {
+            editInitRef.current = true;
+            doRender();
+            return () => { cancelled = true; };
+        }
+
+        const timer = setTimeout(doRender, 800);
+        return () => { cancelled = true; clearTimeout(timer); };
+    }, [editText, engine, activeTab]);
 
     // Click interaction: event delegation on container
     useEffect(() => {
         const container = containerRef.current;
-        if (!container || showSource) return;
+        if (!container || activeTab !== 'graph') return;
 
         const handleClick = (e) => {
             const gsvg = graphvizSvgRef.current;
@@ -396,7 +454,6 @@ function GraphvizViewer({ text, path }) {
             const clickedEl = node || edge || cluster;
 
             if (!clickedEl) {
-                // Clicked on background — clear selection
                 selectionRef.current = new Set();
                 gsvg.highlight(null);
                 return;
@@ -406,7 +463,6 @@ function GraphvizViewer({ text, path }) {
             const sel = selectionRef.current;
 
             if (isMulti) {
-                // Toggle element in selection
                 if (sel.has(clickedEl)) {
                     sel.delete(clickedEl);
                 } else {
@@ -420,10 +476,8 @@ function GraphvizViewer({ text, path }) {
             if (sel.size === 0) {
                 gsvg.highlight(null);
             } else {
-                // For clusters, always use 'single' direction (no traversal)
                 const dir = cluster && !node ? 'single' : direction;
                 const affected = getAffectedElements(gsvg, sel, dir);
-                // Also include the originally-selected elements themselves
                 for (const s of sel) affected.add(s);
                 gsvg.highlight(affected);
             }
@@ -442,7 +496,7 @@ function GraphvizViewer({ text, path }) {
             container.removeEventListener('click', handleClick);
             document.removeEventListener('keydown', handleKeyDown);
         };
-    }, [direction]);
+    }, [activeTab, direction]);
 
     // Search: update match count as user types
     const handleSearchInput = useCallback((e) => {
@@ -500,14 +554,58 @@ function GraphvizViewer({ text, path }) {
         URL.revokeObjectURL(url);
     }, [path]);
 
+    // Save handler (stable reference via ref pattern to avoid circular deps)
+    const saveRef = useRef(null);
+    saveRef.current = async () => {
+        if (!dirty || saving) return;
+        setSaving(true);
+        try {
+            await api.put('/api/files/content', { path, content: editText });
+            setDirty(false);
+            if (onSave) onSave(editText);
+        } catch (e) {
+            // error toast handled by api client
+        } finally {
+            setSaving(false);
+        }
+    };
+    const handleSave = useCallback(() => saveRef.current?.(), []);
+
+    // Editor input handler
+    const handleEditorInput = useCallback((e) => {
+        const val = e.target.value;
+        setEditText(val);
+        setDirty(val !== text);
+    }, [text]);
+
+    // Editor keydown handler (Tab inserts spaces, Ctrl+S / Cmd+S saves)
+    const handleEditorKeyDown = useCallback((e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            e.preventDefault();
+            saveRef.current?.();
+            return;
+        }
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            const start = e.target.selectionStart;
+            const end = e.target.selectionEnd;
+            setEditText(prev => prev.substring(0, start) + '    ' + prev.substring(end));
+            setDirty(true);
+            cursorRef.current = start + 4;
+        }
+    }, []);
+
     return html`
         <div class="graphviz-viewer">
             <div class="graphviz-toolbar">
                 <div class="graphviz-tabs">
-                    <button class=${!showSource ? 'active' : ''} onClick=${() => setShowSource(false)}>Graph</button>
-                    <button class=${showSource ? 'active' : ''} onClick=${() => setShowSource(true)}>Source</button>
+                    <button class=${activeTab === 'graph' ? 'active' : ''} onClick=${() => setActiveTab('graph')}>Graph</button>
+                    <button class=${activeTab === 'edit' ? 'active' : ''} onClick=${() => setActiveTab('edit')}>
+                        Edit${dirty ? html` <span class="graphviz-dirty-indicator"></span>` : ''}
+                    </button>
+                    <button class=${activeTab === 'source' ? 'active' : ''} onClick=${() => setActiveTab('source')}>Source</button>
                 </div>
-                ${!showSource && html`
+                ${activeTab === 'graph' && html`
                     <select class="graphviz-engine-select"
                             value=${engine}
                             onChange=${(e) => setEngine(e.target.value)}
@@ -540,8 +638,23 @@ function GraphvizViewer({ text, path }) {
                         <i class=${'ph ' + (darkCanvas ? 'ph-sun' : 'ph-moon')}></i>
                     </button>
                 `}
+                ${activeTab === 'edit' && html`
+                    <select class="graphviz-engine-select"
+                            value=${engine}
+                            onChange=${(e) => setEngine(e.target.value)}
+                            title="Layout engine">
+                        ${GRAPHVIZ_ENGINES.map(eng => html`<option value=${eng}>${eng}</option>`)}
+                    </select>
+                    <button class=${'graphviz-save-btn' + (dirty ? ' dirty' : '')}
+                            onClick=${handleSave}
+                            disabled=${!dirty || saving}>
+                        <i class="ph ${saving ? 'ph-circle-notch' : dirty ? 'ph-floppy-disk' : 'ph-check'}"></i>
+                        ${' '}${saving ? 'Saving…' : dirty ? 'Save' : 'Saved'}
+                    </button>
+                    <span class="graphviz-save-hint"><kbd>${navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}</kbd>+<kbd>S</kbd></span>
+                `}
             </div>
-            ${error && html`
+            ${error && activeTab === 'graph' && html`
                 <div class="graphviz-error">
                     <i class="ph ph-warning-circle"></i>
                     <span>${error}</span>
@@ -549,10 +662,30 @@ function GraphvizViewer({ text, path }) {
             `}
             <div class=${'graphviz-canvas' + (darkCanvas ? ' graphviz-dark' : '')}
                  ref=${containerRef}
-                 style=${{ display: showSource ? 'none' : '' }}>
+                 style=${{ display: activeTab === 'graph' ? '' : 'none' }}>
                 ${rendering && html`<div class="graphviz-loading">Rendering…</div>`}
             </div>
-            ${showSource && html`
+            ${activeTab === 'edit' && html`
+                <div class="graphviz-edit-pane">
+                    <textarea class="graphviz-editor"
+                              ref=${editorRef}
+                              value=${editText}
+                              onInput=${handleEditorInput}
+                              onKeyDown=${handleEditorKeyDown}
+                              spellcheck="false"
+                              placeholder="Enter DOT source…"></textarea>
+                    <div class="graphviz-preview">
+                        ${previewError
+                            ? html`<div class="graphviz-preview-error">
+                                <i class="ph ph-warning-circle"></i>
+                                <span>${previewError}</span>
+                              </div>`
+                            : html`<div dangerouslySetInnerHTML=${{ __html: previewSvg }}></div>`
+                        }
+                    </div>
+                </div>
+            `}
+            ${activeTab === 'source' && html`
                 <div class="code-viewer"><pre><code ref=${codeRef} class="language-dot">${text}</code></pre></div>
             `}
         </div>
@@ -600,6 +733,11 @@ export function PreviewPane({ filePath }) {
         }
     }, [filePath]);
 
+    // Callback for GraphvizViewer to update content after saving edits
+    const handleGraphvizSave = useCallback((newText) => {
+        setContent(prev => prev ? { ...prev, text: newText } : prev);
+    }, []);
+
     if (!filePath) return html`<div class="preview-empty">Select a file to preview</div>`;
 
     if (loading) return html`
@@ -626,7 +764,7 @@ export function PreviewPane({ filePath }) {
             inner = html`<${HtmlViewer} text=${content.text} path=${filePath} contentUrl=${contentUrl} />`;
             break;
         case 'graphviz':
-            inner = html`<${GraphvizViewer} text=${content.text} path=${filePath} />`;
+            inner = html`<${GraphvizViewer} text=${content.text} path=${filePath} onSave=${handleGraphvizSave} />`;
             break;
         case 'image':
             inner = html`<${ImageViewer} contentUrl=${contentUrl} filePath=${filePath} />`;
