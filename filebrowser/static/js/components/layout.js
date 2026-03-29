@@ -7,8 +7,9 @@ import { PreviewPane } from './preview.js';
 import { ActionBar } from './actions.js';
 import { CommandPalette } from './command-palette.js';
 import { ContextMenu } from './context-menu.js';
+import { TerminalPanel } from './terminal.js';
 
-export function Layout({ username, authSource, onLogout }) {
+export function Layout({ username, authSource, terminalEnabled, onLogout }) {
     // ── Core state ──────────────────────────────────────────────
     const [currentPath, setCurrentPath] = useState('');
     const [selectedFile, setSelectedFile] = useState(null);
@@ -28,6 +29,19 @@ export function Layout({ username, authSource, onLogout }) {
     const [dragOver, setDragOver] = useState(false);         // drag-drop overlay
     const [showUpload, setShowUpload] = useState(false);     // upload modal
     const dragCounter = useRef(0);
+
+    // ── Terminal state ──────────────────────────────────────────────────────
+    const [terminalOpen, setTerminalOpen] = useState(false);
+    const [terminalCwd, setTerminalCwd] = useState('');
+    const [terminalDock, setTerminalDock] = useState(() => {
+        try { return localStorage.getItem('fb-terminal-dock') || 'side'; }
+        catch { return 'side'; }
+    });
+    const [terminalSize, setTerminalSize] = useState(() => {
+        try { return Number(localStorage.getItem('fb-terminal-size')) || 400; }
+        catch { return 400; }
+    });
+    const isTerminalResizing = useRef(false);
 
     // ── Pinned favorites ─────────────────────────────────────────
     const [favorites, setFavorites] = useState(() => {
@@ -57,6 +71,55 @@ export function Layout({ username, authSource, onLogout }) {
 
     const refresh = () => setRefreshKey((k) => k + 1);
 
+    // ── Terminal helpers ────────────────────────────────────────────────────
+    const openTerminal = (path) => {
+        setTerminalCwd(path || currentPath);
+        setTerminalOpen(true);
+    };
+
+    const closeTerminal = () => {
+        setTerminalOpen(false);
+    };
+
+    const toggleTerminalDock = () => {
+        const next = terminalDock === 'side' ? 'bottom' : 'side';
+        setTerminalDock(next);
+        try { localStorage.setItem('fb-terminal-dock', next); } catch { /* ignore */ }
+    };
+
+    // ── Terminal resize ─────────────────────────────────────────────────────
+    const startTerminalResize = (e) => {
+        e.preventDefault();
+        isTerminalResizing.current = true;
+        const cursor = terminalDock === 'side' ? 'ew-resize' : 'ns-resize';
+        document.body.style.cursor = cursor;
+        document.body.style.userSelect = 'none';
+        const rect = e.currentTarget.closest('.main-content')?.getBoundingClientRect();
+        const onMove = (ev) => {
+            if (!isTerminalResizing.current) return;
+            let newSize;
+            if (terminalDock === 'side') {
+                newSize = Math.min(Math.max(window.innerWidth - ev.clientX, 200), 800);
+            } else {
+                newSize = Math.min(Math.max((rect ? rect.bottom : window.innerHeight) - ev.clientY, 150), 600);
+            }
+            setTerminalSize(newSize);
+        };
+        const onUp = () => {
+            isTerminalResizing.current = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            setTerminalSize((size) => {
+                try { localStorage.setItem('fb-terminal-size', String(size)); } catch { /* ignore */ }
+                return size;
+            });
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    };
+
     // ── Keyboard shortcuts ───────────────────────────────────────
     useEffect(() => {
         const handler = (e) => {
@@ -64,6 +127,15 @@ export function Layout({ username, authSource, onLogout }) {
             if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
                 e.preventDefault();
                 setCommandOpen(true);
+            }
+            // Ctrl+` / ⌘` → toggle terminal
+            if ((e.metaKey || e.ctrlKey) && e.key === '`') {
+                e.preventDefault();
+                if (terminalOpen) {
+                    closeTerminal();
+                } else {
+                    openTerminal(currentPath);
+                }
             }
             // Escape → close overlays
             if (e.key === 'Escape') {
@@ -73,7 +145,7 @@ export function Layout({ username, authSource, onLogout }) {
         };
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
-    }, []);
+    }, [terminalOpen, currentPath]);
 
     // ── Resize handle ────────────────────────────────────────────
     const startResize = (e) => {
@@ -245,7 +317,7 @@ export function Layout({ username, authSource, onLogout }) {
             </header>
 
             <!-- Main -->
-            <div class="main-content" style=${{ '--sidebar-width': `${sidebarWidth}px` }}>
+            <div class="main-content ${terminalOpen ? `terminal-${terminalDock}` : ''}" style=${{ '--sidebar-width': `${sidebarWidth}px`, '--terminal-width': `${terminalSize}px`, '--terminal-height': `${terminalSize}px` }}>
                 <aside class="sidebar ${sidebarOpen ? 'open' : ''}">
                     <!-- Sidebar header with view toggle -->
                     <div class="sidebar-header">
@@ -319,6 +391,19 @@ export function Layout({ username, authSource, onLogout }) {
                 <main class="preview">
                     <${PreviewPane} filePath=${selectedFile} />
                 </main>
+
+                ${terminalOpen && html`
+                    <div
+                        class=${terminalDock === 'side' ? 'terminal-resize-handle' : 'terminal-resize-handle-vertical'}
+                        onMouseDown=${startTerminalResize}
+                    ></div>
+                    <${TerminalPanel}
+                        cwd=${terminalCwd}
+                        onClose=${closeTerminal}
+                        dockPosition=${terminalDock}
+                        onToggleDock=${toggleTerminalDock}
+                    />
+                `}
             </div>
 
             <!-- Action bar -->
@@ -331,6 +416,8 @@ export function Layout({ username, authSource, onLogout }) {
                 showUpload=${showUpload}
                 onShowUpload=${() => setShowUpload(true)}
                 onHideUpload=${() => setShowUpload(false)}
+                terminalOpen=${terminalOpen}
+                onToggleTerminal=${() => terminalOpen ? closeTerminal() : openTerminal(currentPath)}
             />
 
             <!-- Command palette (Feature 2) -->
@@ -352,6 +439,7 @@ export function Layout({ username, authSource, onLogout }) {
                 onCopyPath=${handleCtxCopyPath}
                 onTogglePin=${toggleFavorite}
                 isPinned=${contextMenu && favorites.includes(contextMenu.path)}
+                onOpenTerminal=${terminalEnabled ? openTerminal : null}
             />
 
             <!-- Full-page drag-drop overlay (Feature 6) -->

@@ -50,6 +50,13 @@
     --spring-subtle: cubic-bezier(0.34, 1.56, 0.64, 1);
     --yellow: #FF9500;
 
+    /* Terminal */
+    --terminal-bg: #1c1c1e;
+    --terminal-header-bg: #2c2c2e;
+    --terminal-text-muted: #98989d;
+    --terminal-hover-bg: rgba(120, 120, 128, 0.36);
+    --terminal-danger: #ff3b30;
+
     /* Glass */
     --glass-bg:        rgba(255, 255, 255, 0.72);
     --glass-border:    rgba(255, 255, 255, 0.5);
@@ -365,7 +372,8 @@ body {
     cursor: col-resize;
     z-index: 10;
 }
-.resize-handle::after {
+.resize-handle::after,
+.terminal-resize-handle::after {
     content: '';
     position: absolute;
     top: 0;
@@ -376,7 +384,8 @@ body {
     background: transparent;
     transition: background 0.15s;
 }
-.resize-handle:hover::after {
+.resize-handle:hover::after,
+.terminal-resize-handle:hover::after {
     background: var(--accent);
 }
 
@@ -1704,4 +1713,156 @@ body {
     font-size: 13px;
     color: var(--text-secondary);
     font-weight: 400;
+}
+
+/* ============================================================
+   TERMINAL PANEL
+   ============================================================ */
+
+/* === (1) Layout: Side Dock === */
+.main-content.terminal-side {
+    grid-template-columns: var(--sidebar-width) 1fr var(--terminal-width, 400px);
+}
+
+/* === (2) Layout: Bottom Dock === */
+.main-content.terminal-bottom {
+    grid-template-columns: var(--sidebar-width) 1fr;
+    grid-template-rows: 1fr var(--terminal-height, 300px);
+}
+
+.main-content.terminal-bottom .sidebar {
+    grid-row: 1 / -1;
+}
+
+.main-content.terminal-bottom .terminal-panel {
+    grid-column: 2;
+    grid-row: 2;
+    border-left: none;
+    border-top: 0.5px solid var(--border-color);
+}
+
+/* === (3) Terminal Panel Container === */
+.terminal-panel {
+    display: flex;
+    flex-direction: column;
+    background: var(--terminal-bg);
+    border-left: 0.5px solid var(--border-color);
+    overflow: hidden;
+    position: relative;
+}
+
+/* === (4) Header Bar === */
+.terminal-header {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: 6px 12px;
+    background: var(--terminal-header-bg);
+    min-height: 36px;
+    flex-shrink: 0;
+}
+
+.terminal-header-title {
+    flex: 1;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--terminal-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* === (5) Action Buttons === */
+.terminal-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--terminal-text-muted);
+    font-size: 14px;
+    flex-shrink: 0;
+    transition: background 0.12s, color 0.12s;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.terminal-action-btn:hover {
+    background: var(--terminal-hover-bg);
+}
+
+.terminal-action-btn.terminal-close:hover {
+    background: var(--terminal-hover-bg);
+    color: var(--terminal-danger);
+}
+
+/* === (6) Terminal Container === */
+.terminal-container {
+    flex: 1;
+    min-height: 0;
+    padding: 4px;
+    overflow: hidden;
+}
+
+.terminal-container .xterm {
+    height: 100%;
+}
+
+.terminal-container .xterm-viewport {
+    overflow-y: auto;
+}
+
+/* === (7) Horizontal Resize Handle (side dock — col-resize) === */
+.terminal-resize-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 8px;
+    cursor: col-resize;
+    z-index: 10;
+}
+
+/* === (8) Vertical Resize Handle (bottom dock — row-resize) === */
+.terminal-resize-handle-vertical {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 8px;
+    cursor: row-resize;
+    z-index: 10;
+}
+
+.terminal-resize-handle-vertical::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 2px;
+    transform: translateY(-50%);
+    background: transparent;
+    transition: background 0.15s;
+}
+
+.terminal-resize-handle-vertical:hover::after {
+    background: var(--accent);
+}
+
+/* === (9) Mobile: hide terminal panel === */
+@media (max-width: 768px) {
+    .terminal-panel {
+        display: none;
+    }
+
+    .main-content.terminal-side,
+    .main-content.terminal-bottom {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr;
+    }
 }

@@ -15,7 +15,7 @@ import { html } from '../html.js';
  *   onTogglePin(path) — pin/unpin directories
  *   isPinned          — whether the current item is pinned
  */
-export function ContextMenu({ menu, onClose, onOpen, onDownload, onRename, onDelete, onCopyPath, onTogglePin, isPinned }) {
+export function ContextMenu({ menu, onClose, onOpen, onDownload, onRename, onDelete, onCopyPath, onTogglePin, isPinned, onOpenTerminal }) {
     const ref = useRef(null);
 
     // Close on outside click or Escape
@@ -43,7 +43,7 @@ export function ContextMenu({ menu, onClose, onOpen, onDownload, onRename, onDel
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const menuW = 192;
-    const menuH = menu.type === 'file' ? 200 : 160;
+    const menuH = menu.type === 'file' ? 200 : 220;
     const x = menu.x + menuW > vw ? vw - menuW - 8 : menu.x;
     const y = menu.y + menuH > vh ? vh - menuH - 8 : menu.y;
 
@@ -66,6 +66,12 @@ export function ContextMenu({ menu, onClose, onOpen, onDownload, onRename, onDel
                 </button>
                 <button class="context-menu-item" onClick=${act(onDownload)}>
                     <i class="ph ph-download-simple"></i> Download
+                </button>
+                <div class="context-menu-divider"></div>
+            `}
+            ${menu.type === 'directory' && onOpenTerminal && html`
+                <button class="context-menu-item" onClick=${act(onOpenTerminal)}>
+                    <i class="ph ph-terminal-window"></i> Open Terminal Here
                 </button>
                 <div class="context-menu-divider"></div>
             `}

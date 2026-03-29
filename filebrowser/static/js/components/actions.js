@@ -12,6 +12,8 @@ export function ActionBar({
     showUpload,
     onShowUpload,
     onHideUpload,
+    terminalOpen,
+    onToggleTerminal,
 }) {
     const [renaming, setRenaming] = useState(false);
     const [newName, setNewName] = useState('');
@@ -109,6 +111,8 @@ export function ActionBar({
     // ── Normal toolbar ───────────────────────────────────────────
     return html`
         <div class="action-bar">
+            <button onClick=${onToggleTerminal} title="Toggle terminal (Ctrl+\`)">
+                <i class="ph ${terminalOpen ? 'ph-terminal-window-fill' : 'ph-terminal-window'}"></i> Terminal</button>
             <button onClick=${() => onShowUpload()}>
                 <i class="ph ph-upload-simple"></i> Upload
             </button>

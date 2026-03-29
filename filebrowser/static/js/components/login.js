@@ -14,7 +14,7 @@ export function LoginForm({ onLogin }) {
         setLoading(true);
         try {
             const data = await api.post('/api/auth/login', { username, password });
-            onLogin(data.username);
+            onLogin(data);
         } catch {
             setError('Invalid username or password');
         } finally {

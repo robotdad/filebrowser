@@ -32,7 +32,10 @@ async def login(body: LoginRequest, response: Response):
         samesite="strict",
         max_age=settings.session_timeout,
     )
-    return {"username": body.username}
+    return {
+        "username": body.username,
+        "terminal_enabled": settings.terminal_enabled,
+    }
 
 
 @router.post("/logout")
@@ -43,4 +46,8 @@ async def logout(request: Request, response: Response):
 
 @router.get("/me")
 async def me(request: Request, username: str = Depends(require_auth)):
-    return {"username": username, "auth_source": get_auth_source(request)}
+    return {
+        "username": username,
+        "auth_source": get_auth_source(request),
+        "terminal_enabled": settings.terminal_enabled,
+    }

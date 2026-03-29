@@ -19,6 +19,11 @@ class Settings:
             os.environ.get("FILEBROWSER_SECURE_COOKIES", "false").lower() == "true"
         )
     )
+    terminal_enabled: bool = field(
+        default_factory=lambda: (
+            os.environ.get("FILEBROWSER_TERMINAL_ENABLED", "true").lower() == "true"
+        )
+    )
 
 
 settings = Settings()

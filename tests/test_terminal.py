@@ -81,15 +81,13 @@ def _make_terminal_client(home_dir, monkeypatch) -> TestClient:
 
 @pytest.fixture()
 def terminal_client(tmp_path, monkeypatch):
-    """TestClient without pre-supplied auth credentials (trusted_proxy_auth=False)."""
-    monkeypatch.setattr(settings, "trusted_proxy_auth", False)
+    """TestClient without pre-supplied auth credentials."""
     return _make_terminal_client(tmp_path, monkeypatch)
 
 
 @pytest.fixture()
 def authed_terminal_client(tmp_path, monkeypatch):
-    """TestClient with trusted_proxy_auth=True; caller provides auth header."""
-    monkeypatch.setattr(settings, "trusted_proxy_auth", True)
+    """TestClient — caller provides X-Authenticated-User header or session cookie."""
     return _make_terminal_client(tmp_path, monkeypatch)
 
 
@@ -107,29 +105,26 @@ class TestTerminalAuth:
         assert exc_info.value.code == 4001
 
     def test_accepts_authenticated_websocket(self, authed_terminal_client):
-        """Connections with Remote-User header are accepted (proxy mode).
+        """Connections with X-Authenticated-User header are accepted (proxy mode).
 
-        Requires trusted_proxy_auth=True; if the guard were absent any client
-        could forge the header and gain shell access.
+        The header is set by Caddy's forward_auth after frontdoor validates
+        the session.
         """
         with _mock_terminal_session():
             # A WebSocketDisconnect here would mean authentication failed (4001).
             # A clean context-manager exit means the connection was accepted.
             with authed_terminal_client.websocket_connect(
                 "/api/terminal",
-                headers={"Remote-User": "testuser"},
+                headers={"X-Authenticated-User": "testuser"},
             ) as ws:
                 ws.close()
 
     def test_accepts_session_cookie_auth(self, tmp_path, monkeypatch):
         """Connections authenticated via a valid signed session cookie are accepted.
 
-        This covers the standalone-mode fallback path (trusted_proxy_auth=False)
-        where no proxy header is present but a valid ``session`` cookie is.
-        The connection must be accepted even when ``trusted_proxy_auth`` is off.
+        This covers the standalone-mode fallback path where no proxy header is
+        present but a valid ``session`` cookie is.
         """
-        # Use trusted_proxy_auth=False to prove the cookie path works without proxy.
-        monkeypatch.setattr(settings, "trusted_proxy_auth", False)
         client = _make_terminal_client(tmp_path, monkeypatch)
 
         token = create_session_token("testuser", settings.secret_key)
@@ -149,31 +144,26 @@ class TestTerminalAuth:
                 pass  # pragma: no cover
         assert exc_info.value.code == 4001
 
-    def test_header_ignored_when_trusted_proxy_auth_disabled(self, terminal_client):
-        """Remote-User is ignored when trusted_proxy_auth=False.
+    def test_rejects_connection_without_any_credentials(self, terminal_client):
+        """Connections with neither header nor cookie are rejected (close 4001).
 
-        Even with the header present, the endpoint must reject the connection
-        unless a valid session cookie is also supplied.  This prevents clients
-        from forging the header when not behind a trusted proxy.
+        Validates the baseline authentication gate — the terminal endpoint
+        must reject unauthenticated connections.
         """
         with pytest.raises(WebSocketDisconnect) as exc_info:
-            with terminal_client.websocket_connect(
-                "/api/terminal",
-                headers={"Remote-User": "attacker"},
-            ):
+            with terminal_client.websocket_connect("/api/terminal"):
                 pass  # pragma: no cover
         assert exc_info.value.code == 4001
 
     def test_proxy_header_wins_over_invalid_session_cookie(
         self, authed_terminal_client
     ):
-        """Remote-User header takes precedence over an invalid session cookie.
+        """X-Authenticated-User header takes precedence over an invalid session cookie.
 
-        When trusted_proxy_auth=True, a valid Remote-User header must
-        authenticate the connection even when the session cookie is present but
-        invalid (signed with the wrong key).  The proxy header is the
-        authoritative identity source in this mode; the cookie must not cause
-        a rejection.
+        A valid proxy header must authenticate the connection even when the
+        session cookie is present but invalid (signed with the wrong key).
+        The proxy header is the authoritative identity source; the cookie
+        must not cause a rejection.
         """
         bad_token = create_session_token("attacker", "wrong-secret-key")
         authed_terminal_client.cookies.set("session", bad_token)
@@ -181,7 +171,7 @@ class TestTerminalAuth:
         with _mock_terminal_session():
             with authed_terminal_client.websocket_connect(
                 "/api/terminal",
-                headers={"Remote-User": "testuser"},
+                headers={"X-Authenticated-User": "testuser"},
             ) as ws:
                 ws.close()
 
@@ -297,7 +287,7 @@ class TestForkFailure:
         ):
             with authed_terminal_client.websocket_connect(
                 "/api/terminal",
-                headers={"Remote-User": "testuser"},
+                headers={"X-Authenticated-User": "testuser"},
             ) as ws:
                 msg = ws.receive()
 
@@ -349,7 +339,7 @@ class TestTerminalPTY:
 
         with authed_terminal_client.websocket_connect(
             "/api/terminal",
-            headers={"Remote-User": "testuser"},
+            headers={"X-Authenticated-User": "testuser"},
         ) as ws:
             collector = threading.Thread(target=_collect_smart, daemon=True)
             collector.start()
@@ -376,7 +366,7 @@ class TestTerminalPTY:
         """
         with authed_terminal_client.websocket_connect(
             "/api/terminal",
-            headers={"Remote-User": "testuser"},
+            headers={"X-Authenticated-User": "testuser"},
         ) as ws:
             # Let the shell start up before sending the resize.
             time.sleep(0.3)
@@ -408,7 +398,7 @@ class TestTerminalPathValidation:
         with pytest.raises(WebSocketDisconnect):
             with authed_terminal_client.websocket_connect(
                 "/api/terminal?path=../../etc",
-                headers={"Remote-User": "testuser"},
+                headers={"X-Authenticated-User": "testuser"},
             ):
                 pass  # pragma: no cover
 
@@ -422,7 +412,7 @@ class TestTerminalPathValidation:
         with _mock_terminal_session():
             with authed_terminal_client.websocket_connect(
                 "/api/terminal?path=",
-                headers={"Remote-User": "testuser"},
+                headers={"X-Authenticated-User": "testuser"},
             ) as ws:
                 ws.close()
             # Reaching here without WebSocketDisconnect confirms the connection
@@ -437,7 +427,7 @@ class TestTerminalPathValidation:
         with _mock_terminal_session():
             with authed_terminal_client.websocket_connect(
                 "/api/terminal?path=/nested",
-                headers={"Remote-User": "testuser"},
+                headers={"X-Authenticated-User": "testuser"},
             ) as ws:
                 ws.close()
 

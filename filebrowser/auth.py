@@ -1,7 +1,16 @@
+from dataclasses import dataclass
+
 import pam
 from itsdangerous import TimestampSigner, BadSignature, SignatureExpired
 from fastapi import Request, HTTPException
 from filebrowser.config import settings
+
+
+@dataclass
+class AuthenticatedUser:
+    """Result of authentication resolution — username is None when unauthenticated."""
+
+    username: str | None
 
 
 def authenticate_pam(username: str, password: str) -> bool:
@@ -35,7 +44,9 @@ async def require_auth(request: Request) -> str:
             status_code=401,
             detail={"error": "Not authenticated", "code": "UNAUTHORIZED"},
         )
-    username = validate_session_token(token, settings.secret_key, settings.session_timeout)
+    username = validate_session_token(
+        token, settings.secret_key, settings.session_timeout
+    )
     if not username:
         raise HTTPException(
             status_code=401,
@@ -48,3 +59,25 @@ def get_auth_source(request: Request) -> str:
     """Returns 'frontdoor' when authenticated via X-Authenticated-User header, 'session' otherwise."""
     remote_user = request.headers.get("X-Authenticated-User")
     return "frontdoor" if remote_user else "session"
+
+
+def resolve_authenticated_user(headers, cookies) -> AuthenticatedUser:
+    """Resolve authenticated user from headers (frontdoor) or cookies (session).
+
+    Unlike require_auth, this does NOT raise HTTPException — returns
+    AuthenticatedUser(username=None) when unauthenticated.  Designed for
+    WebSocket endpoints where HTTP exceptions are not the right pattern.
+    """
+    # Trust X-Authenticated-User header set by Caddy forward_auth
+    remote_user = headers.get("X-Authenticated-User")
+    if remote_user:
+        return AuthenticatedUser(username=remote_user)
+
+    # Fallback: session cookie
+    token = cookies.get("session")
+    if not token:
+        return AuthenticatedUser(username=None)
+    username = validate_session_token(
+        token, settings.secret_key, settings.session_timeout
+    )
+    return AuthenticatedUser(username=username)

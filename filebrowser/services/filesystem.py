@@ -2,6 +2,21 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
+
+def validate_path_within(relative_path: str, base: Path) -> Path:
+    """Validate that *relative_path* resolves to a location inside *base*.
+
+    Returns the resolved Path on success.
+    Raises PermissionError when the resolved path escapes *base*.
+    """
+    resolved = (base / relative_path).resolve()
+    try:
+        resolved.relative_to(base)
+    except ValueError:
+        raise PermissionError(f"Path outside base directory: {relative_path}")
+    return resolved
+
+
 FILE_CATEGORIES = {
     "text": {
         ".txt",

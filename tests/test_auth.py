@@ -121,6 +121,7 @@ class TestRequireAuth:
 
     def test_valid_cookie_still_works_without_remote_user(self):
         from filebrowser.auth import require_auth, create_session_token
+
         token = create_session_token("alice", SECRET)
         request = MagicMock()
         request.headers = {}
@@ -135,6 +136,7 @@ class TestRequireAuth:
 class TestRequireAuthWithRemoteUser:
     def test_remote_user_header_bypasses_cookie(self):
         from filebrowser.auth import require_auth
+
         request = MagicMock()
         request.headers = {"Remote-User": "alice"}
         request.cookies = {}
@@ -143,6 +145,7 @@ class TestRequireAuthWithRemoteUser:
 
     def test_remote_user_takes_precedence_over_session_cookie(self):
         from filebrowser.auth import require_auth, create_session_token
+
         token = create_session_token("bob", SECRET)
         request = MagicMock()
         request.headers = {"Remote-User": "alice"}
@@ -152,6 +155,7 @@ class TestRequireAuthWithRemoteUser:
 
     def test_empty_remote_user_header_falls_back_to_session_cookie(self):
         from filebrowser.auth import require_auth, create_session_token
+
         token = create_session_token("bob", SECRET)
         request = MagicMock()
         request.headers = {"Remote-User": ""}
@@ -164,6 +168,7 @@ class TestRequireAuthWithRemoteUser:
 
     def test_no_remote_user_no_cookie_raises_401(self):
         from filebrowser.auth import require_auth
+
         request = MagicMock()
         request.headers = {}
         request.cookies = {}
@@ -175,18 +180,21 @@ class TestRequireAuthWithRemoteUser:
 class TestGetAuthSource:
     def test_returns_frontdoor_when_remote_user_present(self):
         from filebrowser.auth import get_auth_source
+
         request = MagicMock()
         request.headers = {"Remote-User": "alice"}
         assert get_auth_source(request) == "frontdoor"
 
     def test_returns_session_when_no_remote_user(self):
         from filebrowser.auth import get_auth_source
+
         request = MagicMock()
         request.headers = {}
         assert get_auth_source(request) == "session"
 
     def test_returns_session_when_remote_user_is_empty_string(self):
         from filebrowser.auth import get_auth_source
+
         request = MagicMock()
         request.headers = {"Remote-User": ""}
         assert get_auth_source(request) == "session"
@@ -211,7 +219,9 @@ class TestLoginRoute:
                 json={"username": "testuser", "password": "testpass"},
             )
         assert response.status_code == 200
-        assert response.json() == {"username": "testuser"}
+        data = response.json()
+        assert data["username"] == "testuser"
+        assert data["terminal_enabled"] is True
         assert "session" in response.cookies
 
     def test_login_failure(self, auth_client):
@@ -237,8 +247,12 @@ class TestLogoutRoute:
 
 
 class TestLogoutRouteAuthSource:
-    def test_logout_returns_frontdoor_auth_source_when_remote_user_present(self, auth_client):
-        response = auth_client.post("/api/auth/logout", headers={"Remote-User": "alice"})
+    def test_logout_returns_frontdoor_auth_source_when_remote_user_present(
+        self, auth_client
+    ):
+        response = auth_client.post(
+            "/api/auth/logout", headers={"Remote-User": "alice"}
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["ok"] is True

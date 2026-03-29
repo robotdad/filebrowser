@@ -3,6 +3,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from filebrowser.routes import auth, files
+from filebrowser.config import settings
 
 app = FastAPI(title="File Browser", docs_url=None, redoc_url=None)
 
@@ -17,6 +18,11 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 app.include_router(auth.router)
 app.include_router(files.router)
+
+if settings.terminal_enabled:
+    from filebrowser.routes import terminal
+
+    app.include_router(terminal.router)
 
 static_dir = Path(__file__).parent / "static"
 if static_dir.is_dir():
