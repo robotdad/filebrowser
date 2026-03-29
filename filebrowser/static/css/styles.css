@@ -702,6 +702,134 @@ body {
     border-radius: 0 0 var(--radius-md) var(--radius-md);
 }
 
+/* ── WYSIWYG Editor (Tiptap) ─────────────────────────────────────────── */
+.wysiwyg-pane {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+.wysiwyg-editor {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    border: 0.5px solid var(--border-color);
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+    background: var(--bg-primary);
+}
+.wysiwyg-editor .ProseMirror {
+    outline: none;
+    padding: var(--space-lg);
+    min-height: 100%;
+    max-width: 800px;
+    line-height: 1.7;
+    caret-color: var(--text-primary);
+}
+/* Placeholder text for empty editor */
+.wysiwyg-editor .ProseMirror p.is-editor-empty:first-child::before {
+    content: 'Start writing\2026';
+    color: var(--text-muted);
+    float: left;
+    height: 0;
+    pointer-events: none;
+}
+/* Prose styles (mirror .markdown-viewer) */
+.wysiwyg-editor .ProseMirror h1 { font-size: 1.8em; margin: 1em 0 0.4em; letter-spacing: -0.02em; font-weight: 700; border-bottom: 0.5px solid var(--border-color); padding-bottom: 0.3em; }
+.wysiwyg-editor .ProseMirror h2 { font-size: 1.4em; margin: 1em 0 0.4em; letter-spacing: -0.02em; font-weight: 700; border-bottom: 0.5px solid var(--border-color); padding-bottom: 0.3em; }
+.wysiwyg-editor .ProseMirror h3 { font-size: 1.15em; margin: 1em 0 0.3em; letter-spacing: -0.01em; font-weight: 600; }
+.wysiwyg-editor .ProseMirror h4,
+.wysiwyg-editor .ProseMirror h5,
+.wysiwyg-editor .ProseMirror h6 { font-size: 1em; margin: 0.8em 0 0.3em; font-weight: 600; }
+.wysiwyg-editor .ProseMirror p { margin: 0.6em 0; }
+.wysiwyg-editor .ProseMirror a { color: var(--accent); text-decoration: underline; cursor: pointer; }
+.wysiwyg-editor .ProseMirror blockquote {
+    border-left: 3px solid var(--accent);
+    padding: 0.5em 1em;
+    margin: 0.8em 0;
+    color: var(--text-secondary);
+    background: var(--fill-tertiary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.wysiwyg-editor .ProseMirror blockquote p { margin: 0.3em 0; }
+.wysiwyg-editor .ProseMirror ul,
+.wysiwyg-editor .ProseMirror ol { padding-left: 1.8em; margin: 0.5em 0; }
+.wysiwyg-editor .ProseMirror li { margin: 0.25em 0; }
+.wysiwyg-editor .ProseMirror li > ul,
+.wysiwyg-editor .ProseMirror li > ol { margin: 0.15em 0; }
+.wysiwyg-editor .ProseMirror hr {
+    border: none;
+    border-top: 0.5px solid var(--border-color);
+    margin: 1.5em 0;
+}
+.wysiwyg-editor .ProseMirror code {
+    background: var(--fill);
+    padding: 2px 6px;
+    border-radius: var(--radius-xs);
+    font-size: 0.9em;
+    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Consolas', monospace;
+}
+.wysiwyg-editor .ProseMirror img { max-width: 100%; border-radius: var(--radius-md); margin: 0.5em 0; }
+.wysiwyg-editor .ProseMirror table { border-collapse: collapse; width: 100%; margin: 0.8em 0; }
+.wysiwyg-editor .ProseMirror th,
+.wysiwyg-editor .ProseMirror td { border: 0.5px solid var(--border-color); padding: 8px 12px; text-align: left; }
+.wysiwyg-editor .ProseMirror th { background: var(--bg-secondary); font-weight: 600; }
+
+/* WysiwygBar toolbar */
+.wysiwyg-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+    border: 0.5px solid var(--border-color);
+    border-bottom: none;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+.wysiwyg-bar-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+.wysiwyg-bar-formatting {
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    flex: 1;
+    flex-wrap: wrap;
+}
+.wysiwyg-bar-right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    margin-left: auto;
+}
+.wysiwyg-bar-btn {
+    padding: 4px 8px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: var(--radius-xs);
+    font-size: 14px;
+    transition: background 0.1s, color 0.1s;
+}
+.wysiwyg-bar-btn:hover { background: var(--fill); color: var(--text-primary); }
+.wysiwyg-bar-btn.active { background: var(--accent); color: #fff; }
+.wysiwyg-bar-divider {
+    width: 1px;
+    height: 18px;
+    background: var(--border-color);
+    margin: 0 var(--space-xs);
+    flex-shrink: 0;
+}
+/* Dark mode adjustments */
+@media (prefers-color-scheme: dark) {
+    .wysiwyg-editor .ProseMirror { caret-color: #fff; }
+}
+/* ── end WYSIWYG ──────────────────────────────────────────────────────── */
+
 /* Dirty indicator dot (matches graphviz pattern) */
 .markdown-dirty-indicator {
     display: inline-block;
