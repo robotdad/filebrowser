@@ -21,7 +21,7 @@ import { Markdown } from 'tiptap-markdown';
 
 const LOG_PREFIX = '[WysiwygEditor]';
 
-export function WysiwygEditor({ doc, onDocChange, onSave, editorRef }) {
+export function WysiwygEditor({ doc, onDocChange, onSave, editorRef, onEditorReady }) {
     const containerRef = useRef(null);
 
     useEffect(() => {
@@ -71,6 +71,7 @@ export function WysiwygEditor({ doc, onDocChange, onSave, editorRef }) {
         });
 
         if (editorRef) editorRef.current = editor;
+        if (onEditorReady) onEditorReady(editor);
 
         console.debug(LOG_PREFIX, 'mount: editor created');
 

@@ -119,30 +119,26 @@ export function MarkdownEditor({ text, path, onSave }) {
 
     // Tab switching — flush WYSIWYG on exit, warn when discarding to View
     const handleTabSwitch = useCallback((newTab) => {
-        if (activeTab === 'wysiwyg') flushWysiwyg();
-
         if (newTab === 'view' && dirty) {
             if (!confirm('Discard unsaved changes?')) return;
             setEditText(text);
             setDirty(false);
+            setActiveTab(newTab);
+            return; // skip flush — we're discarding
         }
+        if (activeTab === 'wysiwyg') flushWysiwyg();
         setActiveTab(newTab);
     }, [activeTab, dirty, text, flushWysiwyg]);
 
     // Track Tiptap editor instance for the toolbar
-    // WysiwygEditor sets wysiwygEditorRef.current on mount, but
-    // that happens inside the Preact render cycle; poll briefly.
     const [tiptapEditor, setTiptapEditor] = useState(null);
+    // Clear tiptapEditor when leaving the wysiwyg tab (WysiwygEditor unmounts)
     useEffect(() => {
-        if (activeTab !== 'wysiwyg') { setTiptapEditor(null); return; }
-        const check = setInterval(() => {
-            if (wysiwygEditorRef.current) {
-                setTiptapEditor(wysiwygEditorRef.current);
-                clearInterval(check);
-            }
-        }, 50);
-        return () => clearInterval(check);
+        if (activeTab !== 'wysiwyg') setTiptapEditor(null);
     }, [activeTab]);
+    const handleEditorReady = useCallback((editor) => {
+        setTiptapEditor(editor);
+    }, []);
 
     return html`
         <div class="markdown-editor">
@@ -173,6 +169,7 @@ export function MarkdownEditor({ text, path, onSave }) {
                         onDocChange=${handleWysiwygChange}
                         onSave=${handleSave}
                         editorRef=${wysiwygEditorRef}
+                        onEditorReady=${handleEditorReady}
                         key=${path + ':wysiwyg'} />
                 </div>
             `}
