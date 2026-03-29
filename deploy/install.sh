@@ -149,9 +149,17 @@ fi
 
 # --- Write environment file ---
 echo "Writing environment file..."
+# Preserve LOG_LEVEL from existing env file if set, default to "info"
+LOG_LEVEL="info"
+if [ -f "$ENV_FILE" ]; then
+    EXISTING_LOG_LEVEL=$(grep '^FILEBROWSER_LOG_LEVEL=' "$ENV_FILE" | cut -d= -f2-)
+    [ -n "$EXISTING_LOG_LEVEL" ] && LOG_LEVEL="$EXISTING_LOG_LEVEL"
+fi
+
 (umask 177; cat > "$ENV_FILE" <<EOF
 FILEBROWSER_SECRET_KEY=$SECRET_KEY
 FILEBROWSER_SECURE_COOKIES=$HTTPS
+FILEBROWSER_LOG_LEVEL=$LOG_LEVEL
 EOF
 )
 

@@ -1,10 +1,15 @@
+import logging
 from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+
 from filebrowser.auth import require_auth
-from filebrowser.services.filesystem import FilesystemService
 from filebrowser.config import settings
+from filebrowser.services.filesystem import FilesystemService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/files", tags=["files"])
 
@@ -122,7 +127,7 @@ async def upload_file(
             detail={"error": "Not a directory", "code": "NOT_DIRECTORY"},
         )
 
-    safe_name = Path(file.filename).name
+    safe_name = Path(file.filename or "").name
     if not safe_name:
         raise HTTPException(
             status_code=400,
@@ -162,6 +167,7 @@ async def upload_file(
             )
         raise
 
+    logger.info("Upload: user=%s path=%s/%s size=%d", username, path, safe_name, size)
     return {"name": safe_name, "size": size}
 
 
@@ -177,6 +183,7 @@ async def make_directory(
         raise HTTPException(
             status_code=403, detail={"error": "Access denied", "code": "PATH_FORBIDDEN"}
         )
+    logger.info("Mkdir: user=%s path=%s", username, path)
     return {"path": str(result.relative_to(fs.home_dir))}
 
 
@@ -208,6 +215,9 @@ async def write_content(
             detail={"error": "Is a directory", "code": "IS_DIRECTORY"},
         )
     file_path.write_text(body.content, encoding="utf-8")
+    logger.info(
+        "Write: user=%s path=%s size=%d", username, body.path, file_path.stat().st_size
+    )
     return {"ok": True, "size": file_path.stat().st_size}
 
 
@@ -232,6 +242,7 @@ async def rename_file(
         raise HTTPException(
             status_code=404, detail={"error": "Not found", "code": "NOT_FOUND"}
         )
+    logger.info("Rename: user=%s old=%s new=%s", username, body.old_path, body.new_path)
     return {"path": str(result.relative_to(fs.home_dir))}
 
 
@@ -251,4 +262,5 @@ async def delete_file(
         raise HTTPException(
             status_code=404, detail={"error": "Not found", "code": "NOT_FOUND"}
         )
+    logger.info("Delete: user=%s path=%s", username, path)
     return {"ok": True}

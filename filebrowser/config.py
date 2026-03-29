@@ -24,6 +24,9 @@ class Settings:
             os.environ.get("FILEBROWSER_TERMINAL_ENABLED", "true").lower() == "true"
         )
     )
+    log_level: str = field(
+        default_factory=lambda: os.environ.get("FILEBROWSER_LOG_LEVEL", "info")
+    )
 
 
 settings = Settings()
