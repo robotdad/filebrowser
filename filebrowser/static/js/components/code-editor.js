@@ -20,6 +20,9 @@ import { syntaxHighlighting, defaultHighlightStyle,
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { oneDark } from '@codemirror/theme-one-dark';
+import { createLogger } from '../logger.js';
+
+const log = createLogger('CodeEditor');
 
 /** Load a CM6 LanguageSupport for the given file path. Returns null for unknown. */
 async function loadLanguage(path) {
@@ -27,9 +30,11 @@ async function loadLanguage(path) {
     const loader = LANGUAGE_MAP[ext];
     if (!loader) return null;
     try {
-        return await loader();
+        const lang = await loader();
+        log.debug('language loaded: ext=%s', ext);
+        return lang;
     } catch (e) {
-        console.warn(`Failed to load language for ${ext}:`, e);
+        log.warn(`Failed to load language for ${ext}:`, e);
         return null;
     }
 }
@@ -118,6 +123,7 @@ export function CodeEditor({ doc, path, readOnly = false, onDocChange,
     // Parent controls identity via key prop — doc/path changes remount.
     useEffect(() => {
         if (!containerRef.current) return;
+        log.debug('mount: path=%s', path);
         let destroyed = false;
 
         (async () => {

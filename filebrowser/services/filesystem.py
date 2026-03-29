@@ -1,6 +1,9 @@
+import logging
 import shutil
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def validate_path_within(relative_path: str, base: Path) -> Path:
@@ -13,6 +16,7 @@ def validate_path_within(relative_path: str, base: Path) -> Path:
     try:
         resolved.relative_to(base)
     except ValueError:
+        logger.warning("Path traversal blocked: path=%s base=%s", relative_path, base)
         raise PermissionError(f"Path outside base directory: {relative_path}")
     return resolved
 
@@ -63,6 +67,7 @@ class FilesystemService:
         try:
             resolved.relative_to(self.home_dir)
         except ValueError:
+            logger.warning("Path traversal blocked: path=%s", path)
             raise PermissionError(f"Path outside home directory: {path}")
         return resolved
 
@@ -87,6 +92,7 @@ class FilesystemService:
                     "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
                 }
             )
+        logger.debug("List: path=%s entries=%d", path, len(entries))
         return entries
 
     def detect_file_type(self, filename: str) -> str:
@@ -122,6 +128,7 @@ class FilesystemService:
 
     def read_file(self, path: str) -> str:
         file_path = self.get_file_path(path)
+        logger.debug("Read: path=%s", path)
         return file_path.read_text()
 
     def delete(self, path: str) -> None:
@@ -129,6 +136,7 @@ class FilesystemService:
         if not resolved.exists():
             raise FileNotFoundError(f"Not found: {path}")
         if resolved == self.home_dir:
+            logger.warning("Delete blocked: attempt to delete home directory")
             raise PermissionError("Cannot delete home directory")
         if resolved.is_dir():
             shutil.rmtree(resolved)
@@ -138,6 +146,7 @@ class FilesystemService:
     def mkdir(self, path: str) -> Path:
         resolved = self.validate_path(path)
         resolved.mkdir(parents=True, exist_ok=True)
+        logger.debug("Mkdir: path=%s", path)
         return resolved
 
     def rename(self, old_path: str, new_path: str) -> Path:
@@ -146,4 +155,5 @@ class FilesystemService:
         if not old_resolved.exists():
             raise FileNotFoundError(f"Not found: {old_path}")
         old_resolved.rename(new_resolved)
+        logger.debug("Rename: old=%s new=%s", old_path, new_path)
         return new_resolved

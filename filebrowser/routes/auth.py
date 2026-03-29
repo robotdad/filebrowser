@@ -61,6 +61,7 @@ async def me(
     # don't get that header, so we issue a filebrowser session cookie here
     # that the WebSocket can use as a fallback.
     auth_source = get_auth_source(request)
+    logger.debug("Cookie bridge check: user=%s auth_source=%s", username, auth_source)
     if auth_source == "frontdoor" and "session" not in request.cookies:
         logger.info(
             "Cookie bridge: issuing session cookie for user=%s (auth_source=%s)",

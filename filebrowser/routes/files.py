@@ -26,8 +26,9 @@ async def list_directory(
     fs: FilesystemService = Depends(get_fs),
 ):
     try:
-        return fs.list_directory(path, show_hidden=show_hidden)
+        entries = fs.list_directory(path, show_hidden=show_hidden)
     except PermissionError:
+        logger.warning("Path forbidden: user=%s path=%s", username, path)
         raise HTTPException(
             status_code=403, detail={"error": "Access denied", "code": "PATH_FORBIDDEN"}
         )
@@ -41,6 +42,8 @@ async def list_directory(
             status_code=400,
             detail={"error": "Not a directory", "code": "NOT_DIRECTORY"},
         )
+    logger.debug("List: user=%s path=%s", username, path)
+    return entries
 
 
 @router.get("/info")
@@ -50,8 +53,9 @@ async def file_info(
     fs: FilesystemService = Depends(get_fs),
 ):
     try:
-        return fs.get_info(path)
+        info = fs.get_info(path)
     except PermissionError:
+        logger.warning("Path forbidden: user=%s path=%s", username, path)
         raise HTTPException(
             status_code=403, detail={"error": "Access denied", "code": "PATH_FORBIDDEN"}
         )
@@ -59,6 +63,8 @@ async def file_info(
         raise HTTPException(
             status_code=404, detail={"error": "Not found", "code": "NOT_FOUND"}
         )
+    logger.debug("Info: user=%s path=%s", username, path)
+    return info
 
 
 @router.get("/content")
@@ -70,6 +76,7 @@ async def get_content(
     try:
         file_path = fs.get_file_path(path)
     except PermissionError:
+        logger.warning("Path forbidden: user=%s path=%s", username, path)
         raise HTTPException(
             status_code=403, detail={"error": "Access denied", "code": "PATH_FORBIDDEN"}
         )
@@ -81,6 +88,7 @@ async def get_content(
         raise HTTPException(
             status_code=400, detail={"error": "Is a directory", "code": "IS_DIRECTORY"}
         )
+    logger.info("Read: user=%s path=%s", username, path)
     return FileResponse(file_path)
 
 
@@ -93,6 +101,7 @@ async def download_file(
     try:
         file_path = fs.get_file_path(path)
     except PermissionError:
+        logger.warning("Path forbidden: user=%s path=%s", username, path)
         raise HTTPException(
             status_code=403, detail={"error": "Access denied", "code": "PATH_FORBIDDEN"}
         )
@@ -104,6 +113,7 @@ async def download_file(
         raise HTTPException(
             status_code=400, detail={"error": "Is a directory", "code": "IS_DIRECTORY"}
         )
+    logger.info("Download: user=%s path=%s", username, path)
     return FileResponse(file_path, filename=file_path.name)
 
 
@@ -117,6 +127,7 @@ async def upload_file(
     try:
         dir_path = fs.validate_path(path)
     except PermissionError:
+        logger.warning("Path forbidden: user=%s path=%s", username, path)
         raise HTTPException(
             status_code=403, detail={"error": "Access denied", "code": "PATH_FORBIDDEN"}
         )
@@ -180,6 +191,7 @@ async def make_directory(
     try:
         result = fs.mkdir(path)
     except PermissionError:
+        logger.warning("Path forbidden: user=%s path=%s", username, path)
         raise HTTPException(
             status_code=403, detail={"error": "Access denied", "code": "PATH_FORBIDDEN"}
         )
@@ -201,6 +213,7 @@ async def write_content(
     try:
         file_path = fs.validate_path(body.path)
     except PermissionError:
+        logger.warning("Path forbidden: user=%s path=%s", username, body.path)
         raise HTTPException(
             status_code=403, detail={"error": "Access denied", "code": "PATH_FORBIDDEN"}
         )
@@ -235,6 +248,7 @@ async def rename_file(
     try:
         result = fs.rename(body.old_path, body.new_path)
     except PermissionError:
+        logger.warning("Path forbidden: user=%s path=%s", username, body.old_path)
         raise HTTPException(
             status_code=403, detail={"error": "Access denied", "code": "PATH_FORBIDDEN"}
         )
@@ -255,6 +269,7 @@ async def delete_file(
     try:
         fs.delete(path)
     except PermissionError:
+        logger.warning("Path forbidden: user=%s path=%s", username, path)
         raise HTTPException(
             status_code=403, detail={"error": "Access denied", "code": "PATH_FORBIDDEN"}
         )

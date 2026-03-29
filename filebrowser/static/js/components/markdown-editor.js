@@ -16,8 +16,9 @@ import { EditBar } from './edit-bar.js';
 import { WysiwygEditor } from './wysiwyg-editor.js';
 import { WysiwygBar } from './wysiwyg-bar.js';
 import { undo, redo } from '@codemirror/commands';
+import { createLogger } from '../logger.js';
 
-const LOG_PREFIX = '[MarkdownEditor]';
+const log = createLogger('MarkdownEditor');
 
 /** Render markdown text to sanitized HTML. */
 function renderMarkdown(text) {
@@ -42,6 +43,11 @@ export function MarkdownEditor({ text, path, onSave }) {
     const editorViewRef = useRef(null);       // CodeMirror EditorView (Source tab)
     const wysiwygEditorRef = useRef(null);    // Tiptap Editor (Edit tab)
     const sourceInitRef = useRef(false);      // tracks first open of Source tab
+
+    // Log component mount with initial tab
+    useEffect(() => {
+        log.debug('mount: mode=%s', activeTab);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Sync editText when text prop changes (new file or post-save)
     useEffect(() => {
@@ -80,11 +86,13 @@ export function MarkdownEditor({ text, path, onSave }) {
         if (!dirty || saving) return;
         setSaving(true);
         try {
+            log.debug('save: path=%s size=%d', path, editText.length);
             await api.put('/api/files/content', { path, content: editText });
             setDirty(false);
+            log.info('saved: path=%s', path);
             if (onSave) onSave(editText);
         } catch (e) {
-            console.error(LOG_PREFIX, 'save failed', e);
+            log.error('save failed', e);
         } finally {
             setSaving(false);
         }

@@ -11,6 +11,9 @@ import { wasmFolder, graphviz as hpccGraphviz } from '@hpcc-js/wasm';
 import * as d3 from 'd3';
 import { graphviz as d3Graphviz } from 'd3-graphviz';
 import GraphvizSvg from '../graphviz-svg.js';
+import { createLogger } from '../logger.js';
+
+const log = createLogger('Preview');
 
 // Set WASM path before d3-graphviz tries to load it
 wasmFolder('https://cdn.jsdelivr.net/npm/@hpcc-js/wasm@1.16.6/dist');
@@ -606,16 +609,37 @@ export function PreviewPane({ filePath }) {
         const type = getFileCategory(filePath);
         setLoading(true);
         setContent(null);
+        log.debug('render: path=%s type=%s', filePath, type);
 
         if (['text', 'code', 'markdown', 'html', 'graphviz'].includes(type)) {
             api.get(`/api/files/content?path=${encodeURIComponent(filePath)}`)
-                .then((text) => { if (prevPath.current === filePath) setContent({ type, text }); })
-                .catch(() => { if (prevPath.current === filePath) setContent(null); })
+                .then((text) => {
+                    if (prevPath.current === filePath) {
+                        setContent({ type, text });
+                        log.debug('render complete: path=%s', filePath);
+                    }
+                })
+                .catch(() => {
+                    if (prevPath.current === filePath) {
+                        log.warn('load failed: path=%s', filePath);
+                        setContent(null);
+                    }
+                })
                 .finally(() => { if (prevPath.current === filePath) setLoading(false); });
         } else {
             api.get(`/api/files/info?path=${encodeURIComponent(filePath)}`)
-                .then((info) => { if (prevPath.current === filePath) setContent({ type, info }); })
-                .catch(() => { if (prevPath.current === filePath) setContent(null); })
+                .then((info) => {
+                    if (prevPath.current === filePath) {
+                        setContent({ type, info });
+                        log.debug('render complete: path=%s', filePath);
+                    }
+                })
+                .catch(() => {
+                    if (prevPath.current === filePath) {
+                        log.warn('load failed: path=%s', filePath);
+                        setContent(null);
+                    }
+                })
                 .finally(() => { if (prevPath.current === filePath) setLoading(false); });
         }
     }, [filePath]);

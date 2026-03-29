@@ -19,8 +19,9 @@ import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import { Markdown } from 'tiptap-markdown';
 import Placeholder from '@tiptap/extension-placeholder';
+import { createLogger } from '../logger.js';
 
-const LOG_PREFIX = '[WysiwygEditor]';
+const log = createLogger('WysiwygEditor');
 
 export function WysiwygEditor({ doc, onDocChange, onSave, editorRef, onEditorReady }) {
     const containerRef = useRef(null);
@@ -28,7 +29,7 @@ export function WysiwygEditor({ doc, onDocChange, onSave, editorRef, onEditorRea
     useEffect(() => {
         if (!containerRef.current) return;
 
-        console.debug(LOG_PREFIX, `mount: creating editor, doc=${doc?.length ?? 0} chars`);
+        log.debug(`mount: creating editor, doc=${doc?.length ?? 0} chars`);
 
         const editor = new Editor({
             element: containerRef.current,
@@ -82,10 +83,10 @@ export function WysiwygEditor({ doc, onDocChange, onSave, editorRef, onEditorRea
             if (!editor.isDestroyed) editor.commands.focus('end');
         });
 
-        console.debug(LOG_PREFIX, 'mount: editor created');
+        log.debug('mount: editor created');
 
         return () => {
-            console.debug(LOG_PREFIX, 'unmount: destroying editor');
+            log.debug('unmount: destroying editor');
             editor.destroy();
             if (editorRef) editorRef.current = null;
         };

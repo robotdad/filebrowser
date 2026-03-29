@@ -4,13 +4,16 @@
  * Replaces CodeViewer + TextViewer with a unified component that
  * supports both read-only viewing and editing with syntax highlighting.
  */
-import { useState, useRef, useCallback } from 'preact/hooks';
+import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
 import { html } from '../html.js';
 import { api } from '../api.js';
 import { getFileExtension, LANG_NAMES } from '../file-utils.js';
 import { CodeEditor } from './code-editor.js';
 import { EditBar } from './edit-bar.js';
 import { undo, redo } from '@codemirror/commands';
+import { createLogger } from '../logger.js';
+
+const log = createLogger('EditableViewer');
 
 /**
  * EditableViewer — view/edit toggle for code and text files.
@@ -31,6 +34,11 @@ export function EditableViewer({ text, path, onSave: onSaveCallback }) {
     const ext = getFileExtension(path);
     const langName = LANG_NAMES[ext] || 'Plain Text';
 
+    // Log component mount
+    useEffect(() => {
+        log.debug('mount: path=%s editing=%s', path, editing);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
     const handleDocChange = useCallback((newDoc) => {
         setEditText(newDoc);
         setDirty(newDoc !== text);
@@ -40,11 +48,12 @@ export function EditableViewer({ text, path, onSave: onSaveCallback }) {
         if (!dirty || saving) return;
         setSaving(true);
         try {
+            log.info('save: path=%s', path);
             await api.put('/api/files/content', { path, content: editText });
             setDirty(false);
             if (onSaveCallback) onSaveCallback(editText);
         } catch (e) {
-            // error toast handled by api client
+            log.error('save failed', e);
         } finally {
             setSaving(false);
         }
