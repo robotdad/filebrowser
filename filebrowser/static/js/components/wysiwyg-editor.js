@@ -73,6 +73,11 @@ export function WysiwygEditor({ doc, onDocChange, onSave, editorRef, onEditorRea
         if (editorRef) editorRef.current = editor;
         if (onEditorReady) onEditorReady(editor);
 
+        // Auto-focus at end of content when the Edit tab opens
+        requestAnimationFrame(() => {
+            if (!editor.isDestroyed) editor.commands.focus('end');
+        });
+
         console.debug(LOG_PREFIX, 'mount: editor created');
 
         return () => {
