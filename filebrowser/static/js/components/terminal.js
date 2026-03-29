@@ -154,7 +154,9 @@ export function TerminalPanel({ cwd, onClose, dockPosition, onToggleDock }) {
                     <i class="ph ph-x"></i>
                 </button>
             </div>
-            <div class="terminal-container" ref=${containerRef}></div>
+            <div class="terminal-container">
+                <div class="terminal-xterm-wrapper" ref=${containerRef}></div>
+            </div>
         </div>
     `;
 }

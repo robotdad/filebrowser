@@ -120,6 +120,7 @@ body {
 .main-content {
     display: grid;
     grid-template-columns: var(--sidebar-width) 1fr;
+    grid-template-rows: 1fr;
     overflow: hidden;
     position: relative;
 }
@@ -1804,15 +1805,20 @@ body {
 .terminal-container {
     flex: 1;
     min-height: 0;
-    padding: 12px;
+    overflow: hidden;
+    position: relative;
+}
+
+.terminal-xterm-wrapper {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
     overflow: hidden;
 }
 
-.terminal-container .xterm {
-    height: 100%;
-}
-
-.terminal-container .xterm-viewport {
+.terminal-xterm-wrapper .xterm-viewport {
     overflow-y: auto;
 }
 
