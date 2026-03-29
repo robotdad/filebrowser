@@ -1,10 +1,9 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'preact/hooks';
+import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
 import { html } from '../html.js';
 import { api } from '../api.js';
 import { getFileCategory, formatSize, formatDate } from '../file-utils.js';
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
 import { EditableViewer } from './editable-viewer.js';
+import { MarkdownEditor } from './markdown-editor.js';
 import { CodeEditor } from './code-editor.js';
 import { EditBar } from './edit-bar.js';
 import { undo, redo } from '@codemirror/commands';
@@ -38,11 +37,6 @@ function FileInfoBar({ filePath }) {
             </span>
         </div>
     `;
-}
-
-function MarkdownViewer({ text }) {
-    const htmlContent = useMemo(() => DOMPurify.sanitize(marked.parse(text)), [text]);
-    return html`<div class="markdown-viewer" dangerouslySetInnerHTML=${{ __html: htmlContent }}></div>`;
 }
 
 function ImageViewer({ contentUrl, filePath }) {
@@ -650,7 +644,7 @@ export function PreviewPane({ filePath }) {
                                              onSave=${handleContentSave} />`;
             break;
         case 'markdown':
-            inner = html`<${MarkdownViewer} text=${content.text} />`;
+            inner = html`<${MarkdownEditor} text=${content.text} path=${filePath} onSave=${handleContentSave} />`;
             break;
         case 'html':
             inner = html`<${HtmlViewer} text=${content.text} path=${filePath} contentUrl=${contentUrl} onSave=${handleContentSave} />`;

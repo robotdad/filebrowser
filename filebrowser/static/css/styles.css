@@ -567,6 +567,155 @@ body {
     line-height: 1.5;
 }
 
+/* === Markdown Editor (tri-mode: View / Edit / Source) === */
+.markdown-editor {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+.markdown-editor-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-md);
+    flex-shrink: 0;
+}
+.markdown-editor-tabs {
+    display: flex;
+}
+.markdown-editor-tabs button {
+    padding: 6px 16px;
+    border: 0.5px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s var(--ease-out);
+}
+.markdown-editor-tabs button:first-child {
+    border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+.markdown-editor-tabs button:not(:first-child) {
+    border-left: none;
+}
+.markdown-editor-tabs button:last-child {
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.markdown-editor-tabs button.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+/* Edit tab — split pane: source editor + live preview */
+.markdown-edit-pane {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-sm);
+    flex: 1;
+    min-height: 0;
+}
+@media (max-width: 800px) {
+    .markdown-edit-pane {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr 1fr;
+    }
+}
+.markdown-edit-editor {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;  /* prevent CodeMirror intrinsic width from overriding grid 1fr */
+}
+.markdown-edit-editor .edit-bar {
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    border: 0.5px solid var(--border-color);
+    border-bottom: none;
+}
+.markdown-edit-editor .code-editor {
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+.markdown-edit-preview {
+    overflow-y: auto;
+    min-height: 0;
+    min-width: 0;  /* prevent content from overriding grid 1fr */
+    padding: var(--space-lg);
+    border: 0.5px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-primary);
+    /* Apply markdown rendering styles to preview content */
+    max-width: none;
+    line-height: 1.7;
+}
+.markdown-edit-preview h1 { font-size: 1.8em; margin: 1em 0 0.4em; letter-spacing: -0.02em; font-weight: 700; border-bottom: 0.5px solid var(--border-color); padding-bottom: 0.3em; }
+.markdown-edit-preview h2 { font-size: 1.4em; margin: 1em 0 0.4em; letter-spacing: -0.02em; font-weight: 700; border-bottom: 0.5px solid var(--border-color); padding-bottom: 0.3em; }
+.markdown-edit-preview h3 { font-size: 1.15em; margin: 1em 0 0.3em; letter-spacing: -0.01em; font-weight: 600; }
+.markdown-edit-preview p { margin: 0.6em 0; }
+.markdown-edit-preview a { color: var(--accent); text-decoration: none; }
+.markdown-edit-preview a:hover { text-decoration: underline; }
+.markdown-edit-preview img { max-width: 100%; border-radius: var(--radius-md); margin: 0.5em 0; }
+.markdown-edit-preview blockquote {
+    border-left: 3px solid var(--accent);
+    padding: 0.5em 1em;
+    margin: 0.8em 0;
+    color: var(--text-secondary);
+}
+.markdown-edit-preview ul, .markdown-edit-preview ol { padding-left: 1.8em; margin: 0.5em 0; }
+.markdown-edit-preview li { margin: 0.25em 0; }
+.markdown-edit-preview table { border-collapse: collapse; width: 100%; margin: 0.8em 0; }
+.markdown-edit-preview th, .markdown-edit-preview td {
+    border: 0.5px solid var(--border-color);
+    padding: 8px 12px;
+    text-align: left;
+}
+.markdown-edit-preview th { background: var(--bg-secondary); font-weight: 600; }
+.markdown-edit-preview code {
+    background: var(--fill);
+    padding: 2px 6px;
+    border-radius: var(--radius-xs);
+    font-size: 0.9em;
+}
+.markdown-edit-preview pre code {
+    display: block;
+    padding: var(--space-md);
+    overflow-x: auto;
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    line-height: 1.5;
+}
+
+/* Source tab — full-width raw editing */
+.markdown-source-pane {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+.markdown-source-pane .edit-bar {
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    border: 0.5px solid var(--border-color);
+    border-bottom: none;
+}
+.markdown-source-pane .code-editor {
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+/* Dirty indicator dot (matches graphviz pattern) */
+.markdown-dirty-indicator {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin-left: 4px;
+    vertical-align: middle;
+}
+.markdown-editor-tabs button.active .markdown-dirty-indicator {
+    background: rgba(255, 255, 255, 0.9);
+}
+
 /* === HTML Viewer === */
 .html-viewer {
     display: flex;
