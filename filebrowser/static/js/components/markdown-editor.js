@@ -1,5 +1,5 @@
 /**
- * markdown-editor.js — View/Edit/Source tri-mode editor for markdown files.
+ * markdown-editor.js — file-level editor for markdown files.
  *
  * Three tabs following the GraphvizViewer pattern:
  *   View   — Rendered markdown (marked + DOMPurify), read-only
@@ -43,50 +43,8 @@ export function MarkdownEditor({ text, path, onSave }) {
     // Initialize preview from text so Edit tab has content immediately
     const [previewHtml, setPreviewHtml] = useState(() => renderMarkdown(text));
     const editorViewRef = useRef(null);
-    const previewRef = useRef(null);
     // Track whether the edit tab has been opened (for immediate vs debounced render)
     const editInitRef = useRef(false);
-
-    console.debug(LOG_PREFIX, `render: activeTab=${activeTab}, dirty=${dirty}, ` +
-        `editText=${editText?.length ?? 0} chars, previewHtml=${previewHtml?.length ?? 0} chars`);
-
-    // Diagnostic: log preview pane DOM dimensions + ancestor scroll/visibility
-    useEffect(() => {
-        if (activeTab !== 'edit') return;
-
-        const diagnose = (label) => {
-            const el = previewRef.current;
-            if (!el) { console.warn(LOG_PREFIX, `${label}: previewRef is null`); return; }
-            const rect = el.getBoundingClientRect();
-            const style = getComputedStyle(el);
-            console.debug(LOG_PREFIX, `${label}: preview size=${el.clientWidth}x${el.clientHeight}, ` +
-                `rect=${Math.round(rect.width)}x${Math.round(rect.height)} @ (${Math.round(rect.top)},${Math.round(rect.left)}), ` +
-                `scrollH=${el.scrollHeight}, html=${el.innerHTML.length} chars, ` +
-                `opacity=${style.opacity}, visibility=${style.visibility}, display=${style.display}`);
-            // Walk ancestors: check scroll positions and dimensions
-            let anc = el.parentElement;
-            let depth = 0;
-            while (anc && depth < 8) {
-                const r = anc.getBoundingClientRect();
-                const overflow = getComputedStyle(anc).overflow;
-                const scrollInfo = (overflow !== 'visible')
-                    ? `, scroll=${anc.scrollTop}/${anc.scrollHeight - anc.clientHeight}`
-                    : '';
-                if (r.height === 0 || anc.scrollTop > 0 || overflow !== 'visible') {
-                    console.debug(LOG_PREFIX, `${label}: ancestor[${depth}] cls="${anc.className.slice(0, 50)}" ` +
-                        `size=${Math.round(r.width)}x${Math.round(r.height)}, overflow=${overflow}${scrollInfo}`);
-                }
-                anc = anc.parentElement;
-                depth++;
-            }
-        };
-
-        // Check immediately after paint
-        const raf = requestAnimationFrame(() => diagnose('paint'));
-        // Check again after 2s (post-CodeMirror init)
-        const timer = setTimeout(() => diagnose('2s-later'), 2000);
-        return () => { cancelAnimationFrame(raf); clearTimeout(timer); };
-    }, [activeTab, previewHtml]);
 
     // Sync editText when text prop changes (new file loaded or post-save)
     useEffect(() => {
@@ -104,7 +62,6 @@ export function MarkdownEditor({ text, path, onSave }) {
             return;
         }
         if (!editText) {
-            console.debug(LOG_PREFIX, 'edit preview: editText is empty, clearing preview');
             setPreviewHtml('');
             return;
         }
@@ -112,19 +69,14 @@ export function MarkdownEditor({ text, path, onSave }) {
         // Render immediately on first open / tab switch; debounce subsequent edits
         if (!editInitRef.current) {
             editInitRef.current = true;
-            console.debug(LOG_PREFIX, 'edit preview: initial render (immediate)');
             setPreviewHtml(renderMarkdown(editText));
             return;
         }
 
         let cancelled = false;
-        console.debug(LOG_PREFIX, 'edit preview: scheduling debounced render (300ms)');
         const timer = setTimeout(() => {
             if (!cancelled) {
-                console.debug(LOG_PREFIX, 'edit preview: debounced render firing');
                 setPreviewHtml(renderMarkdown(editText));
-            } else {
-                console.debug(LOG_PREFIX, 'edit preview: debounced render cancelled');
             }
         }, 300);
         return () => { cancelled = true; clearTimeout(timer); };
@@ -140,7 +92,7 @@ export function MarkdownEditor({ text, path, onSave }) {
     const saveRef = useRef(null);
     saveRef.current = async () => {
         if (!dirty || saving) return;
-        console.debug(LOG_PREFIX, `save: starting, path=${path}, content=${editText?.length ?? 0} chars`);
+        console.debug(LOG_PREFIX, `save: starting, path=${path}`);
         setSaving(true);
         try {
             await api.put('/api/files/content', { path, content: editText });
@@ -169,7 +121,6 @@ export function MarkdownEditor({ text, path, onSave }) {
         console.debug(LOG_PREFIX, `tab switch: ${activeTab} → ${newTab}, dirty=${dirty}`);
         if (newTab === 'view' && dirty) {
             if (!confirm('Discard unsaved changes?')) {
-                console.debug(LOG_PREFIX, 'tab switch: cancelled by user (dirty discard)');
                 return;
             }
             setEditText(text);
@@ -215,7 +166,6 @@ export function MarkdownEditor({ text, path, onSave }) {
                             key=${path + ':edit'} />
                     </div>
                     <div class="markdown-edit-preview"
-                         ref=${previewRef}
                          dangerouslySetInnerHTML=${{ __html: previewHtml }}></div>
                 </div>
             `}
