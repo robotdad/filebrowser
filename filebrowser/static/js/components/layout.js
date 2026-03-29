@@ -142,6 +142,29 @@ export function Layout({ username, authSource, terminalEnabled, onLogout }) {
                 setCommandOpen(false);
                 setContextMenu(null);
             }
+            // F2 → rename selected file
+            if (e.key === 'F2') {
+                e.preventDefault();
+                window.dispatchEvent(new CustomEvent('action-rename'));
+            }
+            // Shift+N → new folder (skip if typing in input)
+            if (e.key === 'N' && e.shiftKey && !e.ctrlKey && !e.metaKey) {
+                const tag = e.target.tagName;
+                if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+                e.preventDefault();
+                const name = prompt('Folder name:');
+                if (name) {
+                    const folderPath = currentPath ? `${currentPath}/${name}` : name;
+                    api.post(`/api/files/mkdir?path=${encodeURIComponent(folderPath)}`)
+                        .then(() => setRefreshKey(k => k + 1))
+                        .catch(() => {});
+                }
+            }
+            // Ctrl+U / ⌘U → upload
+            if ((e.metaKey || e.ctrlKey) && e.key === 'u') {
+                e.preventDefault();
+                setShowUpload(true);
+            }
         };
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
@@ -290,6 +313,7 @@ export function Layout({ username, authSource, terminalEnabled, onLogout }) {
             <!-- Header -->
             <header class="header">
                 <button class="hamburger" onClick=${() => setSidebarOpen(!sidebarOpen)}>&#9776;</button>
+                <span class="header-hostname"><span class="mono">${window.location.hostname.split('.')[0]}</span></span>
                 <${Breadcrumb} path=${currentPath} onNavigate=${setCurrentPath} />
                 <div class="header-right">
                     <!-- ⌘K hint -->
