@@ -53,6 +53,14 @@ export function WysiwygEditor({ doc, onDocChange, onSave, editorRef }) {
                 attributes: {
                     class: 'wysiwyg-content',
                 },
+                handleKeyDown: (_view, event) => {
+                    if (onSave && (event.metaKey || event.ctrlKey) && event.key === 's') {
+                        event.preventDefault();
+                        onSave();
+                        return true;
+                    }
+                    return false;
+                },
             },
             onUpdate: ({ editor: ed }) => {
                 if (onDocChange) {
@@ -62,27 +70,12 @@ export function WysiwygEditor({ doc, onDocChange, onSave, editorRef }) {
             },
         });
 
-        // Ctrl+S / Cmd+S save shortcut
-        if (onSave) {
-            const handleKeydown = (e) => {
-                if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-                    e.preventDefault();
-                    onSave();
-                }
-            };
-            containerRef.current.addEventListener('keydown', handleKeydown);
-            containerRef.current._wysiwygKeydownHandler = handleKeydown;
-        }
-
         if (editorRef) editorRef.current = editor;
 
         console.debug(LOG_PREFIX, 'mount: editor created');
 
         return () => {
             console.debug(LOG_PREFIX, 'unmount: destroying editor');
-            if (containerRef.current?._wysiwygKeydownHandler) {
-                containerRef.current.removeEventListener('keydown', containerRef.current._wysiwygKeydownHandler);
-            }
             editor.destroy();
             if (editorRef) editorRef.current = null;
         };
