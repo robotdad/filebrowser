@@ -1804,7 +1804,7 @@ body {
 .terminal-container {
     flex: 1;
     min-height: 0;
-    padding: 4px;
+    padding: 12px;
     overflow: hidden;
 }
 
@@ -1821,8 +1821,9 @@ body {
     position: absolute;
     top: 0;
     bottom: 0;
-    left: 0;
+    right: var(--terminal-width, 400px);
     width: 8px;
+    transform: translateX(50%);
     cursor: col-resize;
     z-index: 10;
 }
@@ -1830,10 +1831,11 @@ body {
 /* === (8) Vertical Resize Handle (bottom dock — row-resize) === */
 .terminal-resize-handle-vertical {
     position: absolute;
-    left: 0;
+    left: var(--sidebar-width, 280px);
     right: 0;
-    top: 0;
+    bottom: var(--terminal-height, 300px);
     height: 8px;
+    transform: translateY(50%);
     cursor: row-resize;
     z-index: 10;
 }
