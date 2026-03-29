@@ -13,6 +13,7 @@
     --danger: #ff3b30;
     --danger-hover: #d63027;
     --success: #34c759;
+    --text-on-accent: #ffffff;
 
     /* Fills — semi-transparent for layered surfaces */
     --fill: rgba(120, 120, 128, 0.20);
@@ -236,7 +237,7 @@ body {
     top: calc(100% + 6px);
     left: 50%;
     transform: translateX(-50%) scale(0.95);
-    padding: 4px 8px;
+    padding: var(--space-xs) var(--space-sm);
     background: var(--bg-primary);
     color: var(--text-primary);
     border: 0.5px solid var(--border-color);
@@ -396,7 +397,7 @@ body {
     width: 24px;
     height: 24px;
     border-radius: var(--radius-xs);
-    color: #fff;
+    color: var(--text-on-accent);
     font-size: 13px;
     flex-shrink: 0;
 }
@@ -606,7 +607,7 @@ body {
 .markdown-editor-tabs button.active {
     background: var(--accent);
     border-color: var(--accent);
-    color: #fff;
+    color: var(--text-on-accent);
 }
 
 /* Edit tab — split pane: source editor + live preview */
@@ -773,6 +774,17 @@ body {
 .wysiwyg-editor .ProseMirror th,
 .wysiwyg-editor .ProseMirror td { border: 0.5px solid var(--border-color); padding: 8px 12px; text-align: left; }
 .wysiwyg-editor .ProseMirror th { background: var(--bg-secondary); font-weight: 600; }
+.wysiwyg-editor .ProseMirror tr:nth-child(even) td { background: var(--fill-tertiary); }
+.wysiwyg-editor .ProseMirror pre { margin: 0.8em 0; }
+.wysiwyg-editor .ProseMirror pre code {
+    display: block;
+    padding: var(--space-md);
+    overflow-x: auto;
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    font-size: 0.9em;
+    line-height: 1.5;
+}
 
 /* WysiwygBar toolbar */
 .wysiwyg-bar {
@@ -806,7 +818,7 @@ body {
     margin-left: auto;
 }
 .wysiwyg-bar-btn {
-    padding: 4px 8px;
+    padding: var(--space-xs) var(--space-sm);
     border: none;
     background: transparent;
     color: var(--text-secondary);
@@ -816,17 +828,13 @@ body {
     transition: background 0.1s, color 0.1s;
 }
 .wysiwyg-bar-btn:hover { background: var(--fill); color: var(--text-primary); }
-.wysiwyg-bar-btn.active { background: var(--accent); color: #fff; }
+.wysiwyg-bar-btn.active { background: var(--accent); color: var(--text-on-accent); }
 .wysiwyg-bar-divider {
     width: 1px;
     height: 18px;
     background: var(--border-color);
     margin: 0 var(--space-xs);
     flex-shrink: 0;
-}
-/* Dark mode adjustments */
-@media (prefers-color-scheme: dark) {
-    .wysiwyg-editor .ProseMirror { caret-color: #fff; }
 }
 /* ── end WYSIWYG ──────────────────────────────────────────────────────── */
 
@@ -878,7 +886,7 @@ body {
 .html-viewer-toolbar button.active {
     background: var(--accent);
     border-color: var(--accent);
-    color: #fff;
+    color: var(--text-on-accent);
 }
 .html-preview-frame {
     flex: 1;
@@ -929,10 +937,10 @@ body {
 @media (prefers-color-scheme: dark) {
     .code-editor .cm-cursor,
     .code-editor .cm-cursor-primary {
-        border-left-color: #fff;
+        border-left-color: var(--text-on-accent);
     }
     .code-editor .cm-content {
-        caret-color: #fff;
+        caret-color: var(--text-primary);
     }
     .code-editor .cm-gutters {
         background-color: transparent;
@@ -973,12 +981,12 @@ body {
 .edit-bar-save.dirty {
     background: var(--accent);
     border-color: var(--accent);
-    color: #fff;
+    color: var(--text-on-accent);
 }
 .edit-bar-save.dirty:hover { background: var(--accent-hover); }
 .edit-bar-save:disabled { opacity: 0.5; cursor: default; }
 .edit-bar-btn {
-    padding: 4px 8px;
+    padding: var(--space-xs) var(--space-sm);
     border: none;
     background: transparent;
     color: var(--text-secondary);
@@ -1047,7 +1055,7 @@ body {
 .editable-viewer-toolbar button.active {
     background: var(--accent);
     border-color: var(--accent);
-    color: #fff;
+    color: var(--text-on-accent);
 }
 .dirty-dot {
     display: inline-block;
@@ -1107,7 +1115,7 @@ body {
 .graphviz-tabs button.active {
     background: var(--accent);
     border-color: var(--accent);
-    color: #fff;
+    color: var(--text-on-accent);
 }
 .graphviz-engine-select {
     appearance: none;
@@ -1230,7 +1238,7 @@ body {
     padding: 0 6px;
     border-radius: var(--radius-full);
     background: var(--accent);
-    color: #fff;
+    color: var(--text-on-accent);
     font-size: 11px;
     font-weight: 600;
     line-height: 1;
@@ -1441,7 +1449,7 @@ body {
     margin-top: var(--space-md);
     padding: var(--space-sm) var(--space-md);
     background: var(--accent);
-    color: #fff;
+    color: var(--text-on-accent);
     text-decoration: none;
     border-radius: var(--radius-sm);
     font-weight: 500;
@@ -1574,7 +1582,7 @@ body {
     bottom: calc(100% + 6px);
     left: 50%;
     transform: translateX(-50%) scale(0.95);
-    padding: 4px 8px;
+    padding: var(--space-xs) var(--space-sm);
     background: var(--bg-primary);
     color: var(--text-primary);
     border: 0.5px solid var(--border-color);
@@ -1645,7 +1653,7 @@ body {
 .login-form button {
     padding: 12px;
     background: var(--accent);
-    color: #fff;
+    color: var(--text-on-accent);
     border: none;
     border-radius: var(--radius-md);
     font-size: 16px;
@@ -1764,7 +1772,7 @@ body {
 }
 .toast-error {
     background: var(--danger);
-    color: #fff;
+    color: var(--text-on-accent);
 }
 
 @keyframes toast-in {
@@ -2039,11 +2047,11 @@ body {
 }
 .context-menu-item:hover {
     background: var(--accent);
-    color: #fff;
+    color: var(--text-on-accent);
 }
 .context-menu-item.danger:hover {
     background: var(--danger);
-    color: #fff;
+    color: var(--text-on-accent);
 }
 .context-menu-item i {
     font-size: 16px;
