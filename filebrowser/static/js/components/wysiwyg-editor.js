@@ -18,6 +18,7 @@ import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import { Markdown } from 'tiptap-markdown';
+import Placeholder from '@tiptap/extension-placeholder';
 
 const LOG_PREFIX = '[WysiwygEditor]';
 
@@ -46,6 +47,9 @@ export function WysiwygEditor({ doc, onDocChange, onSave, editorRef, onEditorRea
                     html: false,
                     tightLists: true,
                     bulletListMarker: '-',
+                }),
+                Placeholder.configure({
+                    placeholder: 'Start writing\u2026',
                 }),
             ],
             content: doc || '',
