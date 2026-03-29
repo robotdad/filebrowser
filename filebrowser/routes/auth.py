@@ -45,7 +45,23 @@ async def logout(request: Request, response: Response):
 
 
 @router.get("/me")
-async def me(request: Request, username: str = Depends(require_auth)):
+async def me(
+    request: Request, response: Response, username: str = Depends(require_auth)
+):
+    # In frontdoor mode, the user authenticates through frontdoor and Caddy
+    # passes X-Authenticated-User on HTTP requests.  But WebSocket connections
+    # don't get that header, so we issue a filebrowser session cookie here
+    # that the WebSocket can use as a fallback.
+    if get_auth_source(request) == "frontdoor" and "session" not in request.cookies:
+        token = create_session_token(username, settings.secret_key)
+        response.set_cookie(
+            key="session",
+            value=token,
+            httponly=True,
+            secure=settings.secure_cookies,
+            samesite="strict",
+            max_age=settings.session_timeout,
+        )
     return {
         "username": username,
         "auth_source": get_auth_source(request),
