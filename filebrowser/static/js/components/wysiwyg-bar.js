@@ -11,17 +11,15 @@
  *   onSave   — function, trigger save
  */
 import { html } from '../html.js';
-import { useCallback } from 'preact/hooks';
 
 function TipButton({ editor, icon, title, command, isActive }) {
     const active = editor && isActive ? isActive(editor) : false;
-    const handleClick = useCallback((e) => {
+    const handleClick = (e) => {
         e.preventDefault();
         if (editor && command) {
             command(editor);
-            editor.commands.focus();
         }
-    }, [editor, command]);
+    };
 
     return html`
         <button class=${'wysiwyg-bar-btn' + (active ? ' active' : '')}
@@ -88,7 +86,14 @@ export function WysiwygBar({ editor, dirty, saving, onSave }) {
                 <${TipButton} editor=${editor} icon="ph-link" title="Link"
                     command=${(ed) => {
                         if (ed.isActive('link')) {
-                            ed.chain().focus().unsetLink().run();
+                            const existing = ed.getAttributes('link').href || '';
+                            const url = prompt('Enter URL:', existing);
+                            if (url === null) return;           // cancelled
+                            if (url === '') {
+                                ed.chain().focus().unsetLink().run();
+                            } else {
+                                ed.chain().focus().setLink({ href: url }).run();
+                            }
                         } else {
                             const url = prompt('Enter URL:');
                             if (url) ed.chain().focus().setLink({ href: url }).run();
