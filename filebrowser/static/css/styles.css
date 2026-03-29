@@ -639,14 +639,26 @@ body {
     color: var(--text-muted);
     font-size: 13px;
 }
+/* Cursor visibility — ensure caret is always visible */
+.code-editor .cm-cursor,
+.code-editor .cm-cursor-primary {
+    border-left-width: 2px;
+    border-left-color: #000;
+}
+.code-editor .cm-content {
+    caret-color: #000;
+}
 /* Dark mode adjustments for CM6 */
 @media (prefers-color-scheme: dark) {
+    .code-editor .cm-cursor,
+    .code-editor .cm-cursor-primary {
+        border-left-color: #fff;
+    }
+    .code-editor .cm-content {
+        caret-color: #fff;
+    }
     .code-editor .cm-gutters {
         background-color: transparent;
-    }
-    .code-editor .cm-activeLineGutter,
-    .code-editor .cm-activeLine {
-        background-color: rgba(255, 255, 255, 0.03);
     }
 }
 

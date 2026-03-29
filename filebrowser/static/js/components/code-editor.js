@@ -19,6 +19,7 @@ import { syntaxHighlighting, defaultHighlightStyle,
          indentOnInput } from '@codemirror/language';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
+import { oneDark } from '@codemirror/theme-one-dark';
 
 /** Load a CM6 LanguageSupport for the given file path. Returns null for unknown. */
 async function loadLanguage(path) {
@@ -33,13 +34,56 @@ async function loadLanguage(path) {
     }
 }
 
-/** App-aware CM6 theme using CSS variables from styles.css. */
-const appTheme = EditorView.theme({
+/** Detect current color scheme preference. */
+function isDarkMode() {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+/** Light mode base theme. */
+const lightTheme = EditorView.theme({
+    '&': {
+        fontSize: '13px',
+        fontFamily: "'JetBrains Mono', 'SF Mono', 'Fira Code', 'Consolas', monospace",
+        backgroundColor: 'var(--bg-secondary)',
+        color: 'var(--text-primary)',
+    },
+    '.cm-content': {
+        padding: '8px 0',
+        caretColor: '#000',
+    },
+    '&.cm-focused .cm-cursor': {
+        borderLeftColor: '#000',
+        borderLeftWidth: '2px',
+    },
+    '.cm-gutters': {
+        backgroundColor: 'transparent',
+        color: 'var(--text-muted)',
+        border: 'none',
+    },
+    '.cm-lineNumbers .cm-gutterElement': {
+        padding: '0 8px 0 4px',
+        minWidth: '3em',
+    },
+    '&.cm-focused': { outline: 'none' },
+    '.cm-scroller': { overflow: 'auto' },
+    '.cm-activeLine': { backgroundColor: 'rgba(0, 0, 0, 0.04)' },
+    '.cm-activeLineGutter': { backgroundColor: 'rgba(0, 0, 0, 0.04)' },
+});
+
+/** Dark mode base theme — cursor, gutter, active line overrides. */
+const darkTheme = EditorView.theme({
     '&': {
         fontSize: '13px',
         fontFamily: "'JetBrains Mono', 'SF Mono', 'Fira Code', 'Consolas', monospace",
     },
-    '.cm-content': { padding: '8px 0' },
+    '.cm-content': {
+        padding: '8px 0',
+        caretColor: '#fff',
+    },
+    '&.cm-focused .cm-cursor': {
+        borderLeftColor: '#fff',
+        borderLeftWidth: '2px',
+    },
     '.cm-gutters': {
         backgroundColor: 'transparent',
         border: 'none',
@@ -50,7 +94,7 @@ const appTheme = EditorView.theme({
     },
     '&.cm-focused': { outline: 'none' },
     '.cm-scroller': { overflow: 'auto' },
-});
+}, { dark: true });
 
 /**
  * CodeEditor — shared Preact component wrapping CodeMirror 6.
@@ -80,6 +124,7 @@ export function CodeEditor({ doc, path, readOnly = false, onDocChange,
             const lang = await loadLanguage(path || '');
             if (destroyed) return;
 
+            const dark = isDarkMode();
             const extensions = [
                 lineNumbers(),
                 highlightActiveLineGutter(),
@@ -93,8 +138,10 @@ export function CodeEditor({ doc, path, readOnly = false, onDocChange,
                 closeBrackets(),
                 highlightActiveLine(),
                 highlightSelectionMatches(),
-                appTheme,
-                syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+                dark ? darkTheme : lightTheme,
+                // oneDark provides both a base theme AND a highlight style for dark mode.
+                // For light mode, use defaultHighlightStyle as the syntax color scheme.
+                dark ? oneDark : syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
                 keymap.of([
                     ...closeBracketsKeymap,
                     ...defaultKeymap,
