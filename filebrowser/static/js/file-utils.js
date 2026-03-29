@@ -105,6 +105,72 @@ export function formatDate(isoString) {
     return relative ? `${relative} (${absolute})` : absolute;
 }
 
+// ---------------------------------------------------------------------------
+// CodeMirror 6 language loaders (lazy, keyed by extension)
+// ---------------------------------------------------------------------------
+
+/**
+ * Lazy CodeMirror 6 language loaders, keyed by file extension.
+ * Each returns a Promise<LanguageSupport>. Missing extensions = plain text.
+ */
+export const LANGUAGE_MAP = {
+    '.py':    () => import('@codemirror/lang-python').then(m => m.python()),
+    '.js':    () => import('@codemirror/lang-javascript').then(m => m.javascript()),
+    '.mjs':   () => import('@codemirror/lang-javascript').then(m => m.javascript()),
+    '.jsx':   () => import('@codemirror/lang-javascript').then(m => m.javascript({ jsx: true })),
+    '.ts':    () => import('@codemirror/lang-javascript').then(m => m.javascript({ typescript: true })),
+    '.tsx':   () => import('@codemirror/lang-javascript').then(m => m.javascript({ jsx: true, typescript: true })),
+    '.json':  () => import('@codemirror/lang-json').then(m => m.json()),
+    '.html':  () => import('@codemirror/lang-html').then(m => m.html()),
+    '.htm':   () => import('@codemirror/lang-html').then(m => m.html()),
+    '.css':   () => import('@codemirror/lang-css').then(m => m.css()),
+    '.md':    () => import('@codemirror/lang-markdown').then(m => m.markdown()),
+    '.rs':    () => import('@codemirror/lang-rust').then(m => m.rust()),
+    '.go':    () => import('@codemirror/lang-go').then(m => m.go()),
+    '.sql':   () => import('@codemirror/lang-sql').then(m => m.sql()),
+    '.yaml':  () => import('@codemirror/lang-yaml').then(m => m.yaml()),
+    '.yml':   () => import('@codemirror/lang-yaml').then(m => m.yaml()),
+    '.xml':   () => import('@codemirror/lang-xml').then(m => m.xml()),
+    '.c':     () => import('@codemirror/lang-cpp').then(m => m.cpp()),
+    '.cpp':   () => import('@codemirror/lang-cpp').then(m => m.cpp()),
+    '.h':     () => import('@codemirror/lang-cpp').then(m => m.cpp()),
+    '.hpp':   () => import('@codemirror/lang-cpp').then(m => m.cpp()),
+    '.java':  () => import('@codemirror/lang-java').then(m => m.java()),
+    '.php':   () => import('@codemirror/lang-php').then(m => m.php()),
+    '.dot':   () => import('cm-lang-dot').then(m => m.dot()),
+    '.gv':    () => import('cm-lang-dot').then(m => m.dot()),
+    // Fallback: extensions not listed here get plain text (still line numbers, etc.)
+};
+
+/**
+ * Return the file extension (lowercase, with dot) for a path.
+ */
+export function getFileExtension(nameOrPath) {
+    const dot = nameOrPath.lastIndexOf('.');
+    return dot === -1 ? '' : nameOrPath.slice(dot).toLowerCase();
+}
+
+/**
+ * Display name for a language by extension (for UI labels).
+ */
+export const LANG_NAMES = {
+    '.py': 'Python', '.js': 'JavaScript', '.mjs': 'JavaScript',
+    '.ts': 'TypeScript', '.jsx': 'JSX', '.tsx': 'TSX',
+    '.json': 'JSON', '.html': 'HTML', '.htm': 'HTML',
+    '.css': 'CSS', '.md': 'Markdown', '.rs': 'Rust',
+    '.go': 'Go', '.sql': 'SQL', '.yaml': 'YAML', '.yml': 'YAML',
+    '.xml': 'XML', '.c': 'C', '.cpp': 'C++', '.h': 'C/C++ Header',
+    '.hpp': 'C++ Header', '.java': 'Java', '.php': 'PHP',
+    '.sh': 'Shell', '.bash': 'Bash',
+    '.txt': 'Plain Text', '.log': 'Log', '.csv': 'CSV',
+    '.toml': 'TOML', '.env': 'Env', '.conf': 'Config',
+    '.dot': 'DOT', '.gv': 'Graphviz',
+};
+
+// ---------------------------------------------------------------------------
+// Formatting helpers
+// ---------------------------------------------------------------------------
+
 /**
  * Format an ISO date string as a compact relative label.
  * Returns "just now", "5m ago", "3h ago", "2d ago", or a short date.

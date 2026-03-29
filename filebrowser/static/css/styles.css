@@ -592,9 +592,11 @@ body {
 .html-viewer-toolbar button:first-child {
     border-radius: var(--radius-sm) 0 0 var(--radius-sm);
 }
+.html-viewer-toolbar button:not(:first-child) {
+    border-left: none;
+}
 .html-viewer-toolbar button:last-child {
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-    border-left: none;
 }
 .html-viewer-toolbar button.active {
     background: var(--accent);
@@ -608,6 +610,172 @@ body {
     border: 0.5px solid var(--border-color);
     border-radius: var(--radius-md);
     background: #fff;
+}
+
+/* === CodeEditor (CodeMirror 6 wrapper) === */
+.code-editor {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    border-radius: var(--radius-md);
+    border: 0.5px solid var(--border-color);
+    background: var(--bg-secondary);
+}
+.code-editor .cm-editor {
+    height: 100%;
+}
+.code-editor .cm-scroller {
+    font-family: 'JetBrains Mono', "SF Mono", "Fira Code", "Consolas", monospace;
+    font-size: 13px;
+    line-height: 1.6;
+}
+.code-editor-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+}
+.code-editor-placeholder {
+    color: var(--text-muted);
+    font-size: 13px;
+}
+/* Dark mode adjustments for CM6 */
+@media (prefers-color-scheme: dark) {
+    .code-editor .cm-gutters {
+        background-color: transparent;
+    }
+    .code-editor .cm-activeLineGutter,
+    .code-editor .cm-activeLine {
+        background-color: rgba(255, 255, 255, 0.03);
+    }
+}
+
+/* === EditBar === */
+.edit-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-xs) var(--space-sm);
+    border-bottom: 0.5px solid var(--border-color);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    flex-shrink: 0;
+    gap: var(--space-sm);
+}
+.edit-bar-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+.edit-bar-save {
+    padding: 4px 12px;
+    border: 0.5px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    transition: all 0.15s var(--ease-out);
+}
+.edit-bar-save.dirty {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+.edit-bar-save.dirty:hover { background: var(--accent-hover); }
+.edit-bar-save:disabled { opacity: 0.5; cursor: default; }
+.edit-bar-btn {
+    padding: 4px 8px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: var(--radius-xs);
+    font-size: 14px;
+}
+.edit-bar-btn:hover { background: var(--fill); color: var(--text-primary); }
+.edit-bar-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+.edit-bar-hint kbd {
+    background: var(--fill);
+    border: 0.5px solid var(--border-color);
+    border-radius: 4px;
+    padding: 1px 4px;
+    font-size: 10px;
+    font-family: inherit;
+    color: var(--text-secondary);
+}
+.edit-bar-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    font-size: 12px;
+    color: var(--text-muted);
+}
+.edit-bar-lang {
+    padding: 2px 8px;
+    background: var(--fill-tertiary);
+    border-radius: var(--radius-xs);
+    font-size: 11px;
+}
+.edit-bar-cursor { font-variant-numeric: tabular-nums; }
+
+/* === EditableViewer === */
+.editable-viewer {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+.editable-viewer-toolbar {
+    display: flex;
+    margin-bottom: var(--space-sm);
+    flex-shrink: 0;
+}
+.editable-viewer-toolbar button {
+    padding: 6px 16px;
+    border: 0.5px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s var(--ease-out);
+}
+.editable-viewer-toolbar button:first-child {
+    border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+.editable-viewer-toolbar button:last-child {
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    border-left: none;
+}
+.editable-viewer-toolbar button.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+.dirty-dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: var(--radius-full);
+    background: var(--yellow);
+    margin-left: 4px;
+    vertical-align: middle;
+}
+/* When EditBar is present, connect it to the editor below */
+.editable-viewer .edit-bar + .code-editor {
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+.editable-viewer .edit-bar {
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    border: 0.5px solid var(--border-color);
+    border-bottom: none;
 }
 
 /* === Graphviz Viewer === */
@@ -844,29 +1012,19 @@ body {
         grid-template-rows: 1fr 1fr;
     }
 }
-.graphviz-editor {
-    width: 100%;
-    height: 100%;
-    resize: none;
+.graphviz-edit-editor {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+.graphviz-edit-editor .edit-bar {
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
     border: 0.5px solid var(--border-color);
-    border-radius: var(--radius-md);
-    padding: var(--space-md);
-    font-family: 'JetBrains Mono', "SF Mono", "Fira Code", "Consolas", monospace;
-    font-size: 13px;
-    line-height: 1.6;
-    background: var(--bg-secondary);
-    color: var(--text-primary);
-    outline: none;
-    tab-size: 4;
-    white-space: pre;
-    overflow: auto;
+    border-bottom: none;
 }
-.graphviz-editor:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
-}
-.graphviz-editor::placeholder {
-    color: var(--text-muted);
+.graphviz-edit-editor .code-editor {
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
 }
 .graphviz-preview {
     border: 0.5px solid var(--border-color);
@@ -895,38 +1053,6 @@ body {
     font-size: 15px;
     margin-top: 1px;
 }
-.graphviz-save-btn {
-    padding: 6px 14px;
-    border: 0.5px solid var(--border-color);
-    background: var(--bg-primary);
-    color: var(--text-secondary);
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    border-radius: var(--radius-sm);
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-xs);
-    transition: all 0.15s var(--ease-out);
-}
-.graphviz-save-btn:hover:not(:disabled) {
-    background: var(--fill);
-    color: var(--text-primary);
-}
-.graphviz-save-btn:disabled {
-    opacity: 0.5;
-    cursor: default;
-}
-.graphviz-save-btn.dirty {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #fff;
-    opacity: 1;
-}
-.graphviz-save-btn.dirty:hover {
-    background: var(--accent-hover);
-    border-color: var(--accent-hover);
-}
 .graphviz-dirty-indicator {
     display: inline-block;
     width: 7px;
@@ -939,20 +1065,6 @@ body {
 .graphviz-tabs button.active .graphviz-dirty-indicator {
     background: rgba(255, 255, 255, 0.9);
 }
-.graphviz-save-hint {
-    font-size: 12px;
-    color: var(--text-muted);
-}
-.graphviz-save-hint kbd {
-    background: var(--fill);
-    border: 0.5px solid var(--border-color);
-    border-radius: 4px;
-    padding: 1px 5px;
-    font-size: 11px;
-    font-family: inherit;
-    color: var(--text-secondary);
-}
-
 /* Graphviz file icon gradient */
 .file-icon-graphviz { background: linear-gradient(145deg, #06b6d4, #0891b2); }
 

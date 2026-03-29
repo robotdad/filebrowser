@@ -1,9 +1,13 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'preact/hooks';
 import { html } from '../html.js';
 import { api } from '../api.js';
-import hljs from 'highlight.js';
+import { getFileCategory, formatSize, formatDate } from '../file-utils.js';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import { EditableViewer } from './editable-viewer.js';
+import { CodeEditor } from './code-editor.js';
+import { EditBar } from './edit-bar.js';
+import { undo, redo } from '@codemirror/commands';
 import { wasmFolder, graphviz as hpccGraphviz } from '@hpcc-js/wasm';
 import * as d3 from 'd3';
 import { graphviz as d3Graphviz } from 'd3-graphviz';
@@ -11,98 +15,6 @@ import GraphvizSvg from '../graphviz-svg.js';
 
 // Set WASM path before d3-graphviz tries to load it
 wasmFolder('https://cdn.jsdelivr.net/npm/@hpcc-js/wasm@1.16.6/dist');
-
-// Register DOT/Graphviz language for highlight.js
-hljs.registerLanguage('dot', function() {
-    return {
-        name: 'DOT',
-        aliases: ['gv', 'graphviz'],
-        case_insensitive: true,
-        keywords: {
-            keyword: 'strict digraph graph subgraph node edge',
-        },
-        contains: [
-            hljs.C_LINE_COMMENT_MODE,          // // comment
-            hljs.C_BLOCK_COMMENT_MODE,          // /* comment */
-            hljs.HASH_COMMENT_MODE,             // # comment
-            hljs.QUOTE_STRING_MODE,             // "string"
-            {
-                // HTML-like labels: < ... >
-                className: 'string',
-                begin: /</, end: />/,
-                contains: [{ begin: /[^<>]+/ }],
-            },
-            {
-                // Attribute names (before =)
-                className: 'attr',
-                begin: /\b[a-zA-Z_]\w*(?=\s*=)/,
-            },
-            {
-                // Edge operators
-                className: 'operator',
-                begin: /->|--/,
-            },
-            {
-                // Numbers
-                className: 'number',
-                begin: /\b\d+(\.\d+)?\b/,
-            },
-            {
-                // Hex colors
-                className: 'number',
-                begin: /"#[0-9a-fA-F]{3,8}"/,
-            },
-        ],
-    };
-});
-
-const FILE_TYPES = {
-    text:     ['.txt', '.log', '.csv', '.json', '.xml', '.yaml', '.yml', '.toml', '.env', '.conf'],
-    code:     ['.py', '.js', '.ts', '.go', '.rs', '.c', '.cpp', '.java', '.sh', '.sql', '.css'],
-    html:     ['.html', '.htm'],
-    markdown: ['.md'],
-    image:    ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp'],
-    audio:    ['.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a'],
-    video:    ['.mp4', '.webm', '.mkv', '.mov', '.avi'],
-    pdf:      ['.pdf'],
-    graphviz: ['.dot', '.gv'],
-};
-
-function getFileType(path) {
-    const dot = path.lastIndexOf('.');
-    if (dot === -1) return 'other';
-    const ext = path.slice(dot).toLowerCase();
-    for (const [type, exts] of Object.entries(FILE_TYPES)) {
-        if (exts.includes(ext)) return type;
-    }
-    return 'other';
-}
-
-function formatSize(bytes) {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
-    if (bytes < 1073741824) return `${(bytes / 1048576).toFixed(1)} MB`;
-    return `${(bytes / 1073741824).toFixed(1)} GB`;
-}
-
-function formatDate(isoString) {
-    const d = new Date(isoString);
-    const now = new Date();
-    const diffMs = now - d;
-    const diffMin = Math.floor(diffMs / 60000);
-    const diffHr = Math.floor(diffMs / 3600000);
-    const diffDay = Math.floor(diffMs / 86400000);
-    let relative;
-    if (diffMin < 1) relative = 'just now';
-    else if (diffMin < 60) relative = `${diffMin}m ago`;
-    else if (diffHr < 24) relative = `${diffHr}h ago`;
-    else if (diffDay < 7) relative = `${diffDay}d ago`;
-    else relative = null;
-
-    const absolute = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-        + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-    return relative ? `${relative} (${absolute})` : absolute;
-}
 
 function FileInfoBar({ filePath }) {
     const [info, setInfo] = useState(null);
@@ -124,38 +36,6 @@ function FileInfoBar({ filePath }) {
                 ${info.size != null && html`<span>${formatSize(info.size)}</span>`}
                 ${info.modified && html`<span>Modified ${formatDate(info.modified)}</span>`}
             </span>
-        </div>
-    `;
-}
-
-function TextViewer({ text }) {
-    const lines = text.split('\n');
-    return html`
-        <div class="text-viewer">
-            <pre><code>${lines.map(
-                (line, i) => html`<div class="line"><span class="line-number">${i + 1}</span><span class="line-content">${line}</span></div>`
-            )}</code></pre>
-        </div>
-    `;
-}
-
-function CodeViewer({ text, path }) {
-    const codeRef = useRef(null);
-
-    useEffect(() => {
-        if (codeRef.current) {
-            codeRef.current.textContent = text;
-            hljs.highlightElement(codeRef.current);
-        }
-    }, [text]);
-
-    const ext = path.split('.').pop();
-    const langMap = { py: 'python', js: 'javascript', ts: 'typescript', rs: 'rust', sh: 'bash', yml: 'yaml' };
-    const lang = langMap[ext] || ext;
-
-    return html`
-        <div class="code-viewer">
-            <pre><code ref=${codeRef} class="language-${lang}">${text}</code></pre>
         </div>
     `;
 }
@@ -259,26 +139,70 @@ function ImageViewer({ contentUrl, filePath }) {
     `;
 }
 
-function HtmlViewer({ text, path, contentUrl }) {
-    const [showSource, setShowSource] = useState(false);
-    const codeRef = useRef(null);
+function HtmlViewer({ text, path, contentUrl, onSave }) {
+    const [mode, setMode] = useState('preview'); // 'preview' | 'source' | 'edit'
+    const [editText, setEditText] = useState(text);
+    const [dirty, setDirty] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [cursor, setCursor] = useState(null);
+    const viewRef = useRef(null);
 
-    useEffect(() => {
-        if (showSource && codeRef.current) {
-            codeRef.current.textContent = text;
-            hljs.highlightElement(codeRef.current);
+    const handleDocChange = useCallback((newDoc) => {
+        setEditText(newDoc);
+        setDirty(newDoc !== text);
+    }, [text]);
+
+    const handleSave = useCallback(async () => {
+        if (!dirty || saving) return;
+        setSaving(true);
+        try {
+            await api.put('/api/files/content', { path, content: editText });
+            setDirty(false);
+            if (onSave) onSave(editText);
+        } catch (e) {
+            // error toast handled by api client
+        } finally {
+            setSaving(false);
         }
-    }, [showSource, text]);
+    }, [dirty, saving, path, editText, onSave]);
+
+    const handleUndo = useCallback(() => { if (viewRef.current) undo(viewRef.current); }, []);
+    const handleRedo = useCallback(() => { if (viewRef.current) redo(viewRef.current); }, []);
+
+    const handleModeSwitch = useCallback((newMode) => {
+        if (mode === 'edit' && newMode !== 'edit' && dirty) {
+            if (!confirm('Discard unsaved changes?')) return;
+            setEditText(text);
+            setDirty(false);
+        }
+        setMode(newMode);
+    }, [mode, dirty, text]);
 
     return html`
         <div class="html-viewer">
             <div class="html-viewer-toolbar">
-                <button class=${!showSource ? 'active' : ''} onClick=${() => setShowSource(false)}>Preview</button>
-                <button class=${showSource ? 'active' : ''} onClick=${() => setShowSource(true)}>Source</button>
+                <button class=${mode === 'preview' ? 'active' : ''} onClick=${() => handleModeSwitch('preview')}>Preview</button>
+                <button class=${mode === 'source' ? 'active' : ''} onClick=${() => handleModeSwitch('source')}>Source</button>
+                <button class=${mode === 'edit' ? 'active' : ''} onClick=${() => handleModeSwitch('edit')}>
+                    Edit${dirty ? html` <span class="dirty-dot"></span>` : ''}
+                </button>
             </div>
-            ${showSource
-                ? html`<div class="code-viewer"><pre><code ref=${codeRef} class="language-html">${text}</code></pre></div>`
-                : html`<iframe class="html-preview-frame" src=${contentUrl} sandbox=""></iframe>`
+            ${mode === 'edit' && html`
+                <${EditBar} dirty=${dirty} saving=${saving} language="HTML"
+                            cursor=${cursor} onSave=${handleSave}
+                            onUndo=${handleUndo} onRedo=${handleRedo} />
+            `}
+            ${mode === 'preview'
+                ? html`<iframe class="html-preview-frame" src=${contentUrl} sandbox=""></iframe>`
+                : html`<${CodeEditor}
+                    doc=${mode === 'edit' ? editText : text}
+                    path=${path}
+                    readOnly=${mode === 'source'}
+                    onDocChange=${mode === 'edit' ? handleDocChange : null}
+                    onCursorChange=${mode === 'edit' ? setCursor : null}
+                    onSave=${mode === 'edit' ? handleSave : null}
+                    viewRef=${viewRef}
+                    key=${path + ':' + mode} />`
             }
         </div>
     `;
@@ -323,11 +247,10 @@ function GraphvizViewer({ text, path, onSave }) {
     const [saving, setSaving] = useState(false);
     const [previewSvg, setPreviewSvg] = useState('');
     const [previewError, setPreviewError] = useState(null);
+    const [cursor, setCursor] = useState(null);
 
     const containerRef = useRef(null);
-    const codeRef = useRef(null);
-    const editorRef = useRef(null);
-    const cursorRef = useRef(null);
+    const editorViewRef = useRef(null);
     const editInitRef = useRef(false);
     const graphvizSvgRef = useRef(new GraphvizSvg());
     const rendererRef = useRef(null);
@@ -338,15 +261,6 @@ function GraphvizViewer({ text, path, onSave }) {
         setEditText(text);
         setDirty(false);
     }, [text]);
-
-    // Restore cursor position after Tab key insertion
-    useEffect(() => {
-        if (cursorRef.current !== null && editorRef.current) {
-            editorRef.current.selectionStart = cursorRef.current;
-            editorRef.current.selectionEnd = cursorRef.current;
-            cursorRef.current = null;
-        }
-    });
 
     // Render DOT → SVG via d3-graphviz whenever text or engine changes
     useEffect(() => {
@@ -399,14 +313,6 @@ function GraphvizViewer({ text, path, onSave }) {
             rendererRef.current = null;
         };
     }, [text, engine]);
-
-    // Highlight source when switching to source tab
-    useEffect(() => {
-        if (activeTab === 'source' && codeRef.current) {
-            codeRef.current.textContent = text;
-            hljs.highlightElement(codeRef.current);
-        }
-    }, [activeTab, text]);
 
     // Live preview for Edit tab (immediate on tab switch, debounced on edits)
     useEffect(() => {
@@ -573,29 +479,14 @@ function GraphvizViewer({ text, path, onSave }) {
     };
     const handleSave = useCallback(() => saveRef.current?.(), []);
 
-    // Editor input handler
-    const handleEditorInput = useCallback((e) => {
-        const val = e.target.value;
-        setEditText(val);
-        setDirty(val !== text);
+    // CM6 doc-change handler for edit tab
+    const handleEditorDocChange = useCallback((newDoc) => {
+        setEditText(newDoc);
+        setDirty(newDoc !== text);
     }, [text]);
 
-    // Editor keydown handler (Tab inserts spaces, Ctrl+S / Cmd+S saves)
-    const handleEditorKeyDown = useCallback((e) => {
-        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-            e.preventDefault();
-            saveRef.current?.();
-            return;
-        }
-        if (e.key === 'Tab') {
-            e.preventDefault();
-            const start = e.target.selectionStart;
-            const end = e.target.selectionEnd;
-            setEditText(prev => prev.substring(0, start) + '    ' + prev.substring(end));
-            setDirty(true);
-            cursorRef.current = start + 4;
-        }
-    }, []);
+    const handleUndo = useCallback(() => { if (editorViewRef.current) undo(editorViewRef.current); }, []);
+    const handleRedo = useCallback(() => { if (editorViewRef.current) redo(editorViewRef.current); }, []);
 
     return html`
         <div class="graphviz-viewer">
@@ -647,13 +538,6 @@ function GraphvizViewer({ text, path, onSave }) {
                             title="Layout engine">
                         ${GRAPHVIZ_ENGINES.map(eng => html`<option value=${eng}>${eng}</option>`)}
                     </select>
-                    <button class=${'graphviz-save-btn' + (dirty ? ' dirty' : '')}
-                            onClick=${handleSave}
-                            disabled=${!dirty || saving}>
-                        <i class="ph ${saving ? 'ph-circle-notch' : dirty ? 'ph-floppy-disk' : 'ph-check'}"></i>
-                        ${' '}${saving ? 'Saving…' : dirty ? 'Save' : 'Saved'}
-                    </button>
-                    <span class="graphviz-save-hint"><kbd>${navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}</kbd>+<kbd>S</kbd></span>
                 `}
             </div>
             ${error && activeTab === 'graph' && html`
@@ -669,13 +553,20 @@ function GraphvizViewer({ text, path, onSave }) {
             </div>
             ${activeTab === 'edit' && html`
                 <div class="graphviz-edit-pane">
-                    <textarea class="graphviz-editor"
-                              ref=${editorRef}
-                              value=${editText}
-                              onInput=${handleEditorInput}
-                              onKeyDown=${handleEditorKeyDown}
-                              spellcheck="false"
-                              placeholder="Enter DOT source…"></textarea>
+                    <div class="graphviz-edit-editor">
+                        <${EditBar} dirty=${dirty} saving=${saving} language="DOT"
+                                    cursor=${cursor} onSave=${handleSave}
+                                    onUndo=${handleUndo} onRedo=${handleRedo} />
+                        <${CodeEditor}
+                            doc=${editText}
+                            path=${path}
+                            readOnly=${false}
+                            onDocChange=${handleEditorDocChange}
+                            onCursorChange=${setCursor}
+                            onSave=${handleSave}
+                            viewRef=${editorViewRef}
+                            key=${path + ':edit'} />
+                    </div>
                     <div class="graphviz-preview">
                         ${previewError
                             ? html`<div class="graphviz-preview-error">
@@ -688,7 +579,7 @@ function GraphvizViewer({ text, path, onSave }) {
                 </div>
             `}
             ${activeTab === 'source' && html`
-                <div class="code-viewer"><pre><code ref=${codeRef} class="language-dot">${text}</code></pre></div>
+                <${CodeEditor} doc=${text} path=${path} readOnly=${true} key=${path + ':source'} />
             `}
         </div>
     `;
@@ -718,7 +609,7 @@ export function PreviewPane({ filePath }) {
 
         // Fade out then load new content
         prevPath.current = filePath;
-        const type = getFileType(filePath);
+        const type = getFileCategory(filePath);
         setLoading(true);
         setContent(null);
 
@@ -735,8 +626,8 @@ export function PreviewPane({ filePath }) {
         }
     }, [filePath]);
 
-    // Callback for GraphvizViewer to update content after saving edits
-    const handleGraphvizSave = useCallback((newText) => {
+    // Callback to update content after saving edits (shared by all editable viewers)
+    const handleContentSave = useCallback((newText) => {
         setContent(prev => prev ? { ...prev, text: newText } : prev);
     }, []);
 
@@ -754,19 +645,18 @@ export function PreviewPane({ filePath }) {
     let inner;
     switch (content.type) {
         case 'text':
-            inner = html`<${TextViewer} text=${content.text} />`;
-            break;
         case 'code':
-            inner = html`<${CodeViewer} text=${content.text} path=${filePath} />`;
+            inner = html`<${EditableViewer} text=${content.text} path=${filePath}
+                                             onSave=${handleContentSave} />`;
             break;
         case 'markdown':
             inner = html`<${MarkdownViewer} text=${content.text} />`;
             break;
         case 'html':
-            inner = html`<${HtmlViewer} text=${content.text} path=${filePath} contentUrl=${contentUrl} />`;
+            inner = html`<${HtmlViewer} text=${content.text} path=${filePath} contentUrl=${contentUrl} onSave=${handleContentSave} />`;
             break;
         case 'graphviz':
-            inner = html`<${GraphvizViewer} text=${content.text} path=${filePath} onSave=${handleGraphvizSave} />`;
+            inner = html`<${GraphvizViewer} text=${content.text} path=${filePath} onSave=${handleContentSave} />`;
             break;
         case 'image':
             inner = html`<${ImageViewer} contentUrl=${contentUrl} filePath=${filePath} />`;
