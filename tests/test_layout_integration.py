@@ -604,6 +604,14 @@ class TestTabManagerIntegration:
             "tabManager.open(path) not found — handleSelectFile must call tabManager.open"
         )
 
+    def test_set_selected_file_not_called_as_setter(self):
+        """setSelectedFile setter must not be called — state ownership transferred to tabManager."""
+        src = read_layout()
+        assert not re.search(r"\bsetSelectedFile\s*\(", src), (
+            "setSelectedFile() called directly — this setter was removed in task-6; "
+            "use tabManager.close() to deactivate the active file"
+        )
+
 
 # ── TestTabBarRendering ───────────────────────────────────────────────────────
 

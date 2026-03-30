@@ -323,7 +323,7 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
         if (!confirm(`Delete ${path.split('/').pop()}?`)) return;
         try {
             await api.del(`/api/files?path=${encodeURIComponent(path)}`);
-            if (selectedFile === path) setSelectedFile(null);
+            if (selectedFile === path) tabManager.close(path);
             refresh();
         } catch { /* toast shown */ }
     };
