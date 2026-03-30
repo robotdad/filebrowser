@@ -120,9 +120,14 @@ class TestRendering:
         )
 
     def test_renders_push_pin_icon(self):
-        """Must render a push-pin icon."""
+        """Must render a push-pin icon with the ph base class for Phosphor font rendering."""
         src = read_component()
         assert "ph-push-pin" in src, "ph-push-pin icon not found in component"
+        # The ph base class is required for Phosphor icon font to render — without it icons
+        # appear as empty boxes. Every other component uses the two-class pattern: ph ph-<name>.
+        assert re.search(r"ph ph-push-pin", src), (
+            "ph base class missing from push-pin icon — must use 'ph ph-push-pin' pattern"
+        )
 
     def test_renders_close_button_with_file_tab_close_class(self):
         """Must render a close button with class 'file-tab-close'."""

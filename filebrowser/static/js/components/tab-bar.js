@@ -38,11 +38,11 @@ export function TabBar({ tabs, activeTabId, onActivate, onPin, onClose }) {
                         ${tab.dirty && html`<span class="file-tab-dirty">●</span>`}
                         <button class="file-tab-pin" title=${tab.pinned ? 'Unpin tab' : 'Pin tab'}
                             onClick=${(e) => { e.stopPropagation(); log.debug('pin tab: %s', tab.id); onPin(tab.id); }}>
-                            <i class=${tab.pinned ? 'ph-push-pin' : 'ph-push-pin ph-push-pin-outline'}></i>
+                            <i class=${tab.pinned ? 'ph ph-push-pin-fill' : 'ph ph-push-pin'}></i>
                         </button>
                         <button class="file-tab-close" title="Close tab"
                             onClick=${(e) => { e.stopPropagation(); onClose(tab.id); }}>
-                            <i class="ph-x"></i>
+                            <i class="ph ph-x"></i>
                         </button>
                     </div>
                 `;
