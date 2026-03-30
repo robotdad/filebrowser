@@ -5,17 +5,18 @@ import { html } from '../html.js';
  * ContextMenu — right-click menu for tree items.
  *
  * Props:
- *   menu  — null | { x, y, path, type }
+ *   menu  — null | { x, y, path, type, pinnedRoot? }
  *   onClose()
  *   onOpen(path)
  *   onDownload(path)
  *   onRename(path)
  *   onDelete(path)
  *   onCopyPath(path)
+ *   onCopyRelativePath(path, pinnedRoot) — copy path relative to pinned folder
  *   onTogglePin(path) — pin/unpin directories
  *   isPinned          — whether the current item is pinned
  */
-export function ContextMenu({ menu, onClose, onOpen, onDownload, onRename, onDelete, onCopyPath, onTogglePin, isPinned, onOpenTerminal }) {
+export function ContextMenu({ menu, onClose, onOpen, onDownload, onRename, onDelete, onCopyPath, onCopyRelativePath, onTogglePin, isPinned, onOpenTerminal }) {
     const ref = useRef(null);
 
     // Close on outside click or Escape
@@ -43,7 +44,7 @@ export function ContextMenu({ menu, onClose, onOpen, onDownload, onRename, onDel
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const menuW = 192;
-    const menuH = menu.type === 'file' ? 200 : 220;
+    const menuH = (menu.type === 'file' ? 200 : 220) + (menu.pinnedRoot ? 36 : 0);
     const x = menu.x + menuW > vw ? vw - menuW - 8 : menu.x;
     const y = menu.y + menuH > vh ? vh - menuH - 8 : menu.y;
 
@@ -88,6 +89,11 @@ export function ContextMenu({ menu, onClose, onOpen, onDownload, onRename, onDel
             <button class="context-menu-item" onClick=${act(onCopyPath)}>
                 <i class="ph ph-copy"></i> Copy path
             </button>
+            ${menu.pinnedRoot && onCopyRelativePath && html`
+                <button class="context-menu-item" onClick=${(e) => { e.stopPropagation(); onCopyRelativePath(menu.path, menu.pinnedRoot); onClose(); }}>
+                    <i class="ph ph-file-arrow-down"></i> Copy relative path
+                </button>
+            `}
             <div class="context-menu-divider"></div>
             <button class="context-menu-item danger" onClick=${act(onDelete)}>
                 <i class="ph ph-trash"></i> Delete

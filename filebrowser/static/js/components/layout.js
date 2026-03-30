@@ -9,7 +9,7 @@ import { CommandPalette } from './command-palette.js';
 import { ContextMenu } from './context-menu.js';
 import { TerminalPanel } from './terminal.js';
 
-export function Layout({ username, authSource, terminalEnabled, onLogout }) {
+export function Layout({ username, authSource, terminalEnabled, homeDir, onLogout }) {
     // ── Core state ──────────────────────────────────────────────
     const [currentPath, setCurrentPath] = useState('');
     const [selectedFile, setSelectedFile] = useState(null);
@@ -290,16 +290,30 @@ export function Layout({ username, authSource, terminalEnabled, onLogout }) {
         } catch { /* toast shown */ }
     };
 
+    const showToast = (message) => {
+        const t = document.createElement('div');
+        t.className = 'toast';
+        t.style.cssText = 'background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border-color)';
+        t.textContent = message;
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), 2000);
+    };
+
     const handleCtxCopyPath = (path) => {
-        navigator.clipboard?.writeText(path).then(() => {
-            // brief visual feedback via toast
-            const t = document.createElement('div');
-            t.className = 'toast';
-            t.style.cssText = 'background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border-color)';
-            t.textContent = 'Path copied!';
-            document.body.appendChild(t);
-            setTimeout(() => t.remove(), 2000);
-        });
+        const fullPath = homeDir ? `${homeDir}/${path}` : path;
+        navigator.clipboard?.writeText(fullPath).then(() => showToast('Path copied!'));
+    };
+
+    const handleCtxCopyRelativePath = (path, pinnedRoot) => {
+        let rel;
+        if (path === pinnedRoot) {
+            rel = path.split('/').pop() || path;
+        } else if (path.startsWith(pinnedRoot + '/')) {
+            rel = path.slice(pinnedRoot.length + 1);
+        } else {
+            rel = path;
+        }
+        navigator.clipboard?.writeText(rel).then(() => showToast('Relative path copied!'));
     };
 
     return html`
@@ -461,6 +475,7 @@ export function Layout({ username, authSource, terminalEnabled, onLogout }) {
                 onRename=${handleCtxRename}
                 onDelete=${handleCtxDelete}
                 onCopyPath=${handleCtxCopyPath}
+                onCopyRelativePath=${handleCtxCopyRelativePath}
                 onTogglePin=${toggleFavorite}
                 isPinned=${contextMenu && favorites.includes(contextMenu.path)}
                 onOpenTerminal=${terminalEnabled ? openTerminal : null}

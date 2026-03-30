@@ -115,13 +115,13 @@ export function PinnedFavorites({
         else { onSelectFile(itemPath); }
     };
 
-    const handleContextMenu = (e, itemPath, itemType) => {
+    const handleContextMenu = (e, itemPath, itemType, pinnedRoot) => {
         e.preventDefault();
-        onContextMenu?.({ x: e.clientX, y: e.clientY, path: itemPath, type: itemType });
+        onContextMenu?.({ x: e.clientX, y: e.clientY, path: itemPath, type: itemType, pinnedRoot });
     };
 
     // Render contents of a directory (recursive, identical to FileTree list view)
-    const renderChildren = (path, depth) => {
+    const renderChildren = (path, depth, pinnedRoot) => {
         const items = sortEntries(entries[path] || [], sortBy);
         return items.map((item) => {
             const itemPath = path ? `${path}/${item.name}` : item.name;
@@ -136,7 +136,7 @@ export function PinnedFavorites({
                                 if (e.ctrlKey || e.metaKey) { onBatchToggle?.(itemPath); }
                                 else { toggleFolder(itemPath); }
                             }}
-                            onContextMenu=${(e) => handleContextMenu(e, itemPath, 'directory')}
+                            onContextMenu=${(e) => handleContextMenu(e, itemPath, 'directory', pinnedRoot)}
                             title=${item.name}
                         >
                             <span class="file-icon file-icon-folder">
@@ -144,7 +144,7 @@ export function PinnedFavorites({
                             </span>
                             <span class="tree-name">${item.name}</span>
                         </div>
-                        ${isExpanded && renderChildren(itemPath, depth + 1)}
+                        ${isExpanded && renderChildren(itemPath, depth + 1, pinnedRoot)}
                     </div>
                 `;
             }
@@ -157,7 +157,7 @@ export function PinnedFavorites({
                     class="tree-item tree-file has-detail ${isSelected ? 'selected' : ''} ${isBatch ? 'multi-selected' : ''}"
                     style=${{ paddingLeft: `${depth * 16 + 12}px` }}
                     onClick=${(e) => handleFileClick(e, itemPath)}
-                    onContextMenu=${(e) => handleContextMenu(e, itemPath, 'file')}
+                    onContextMenu=${(e) => handleContextMenu(e, itemPath, 'file', pinnedRoot)}
                     title=${item.name}
                 >
                     <span class="file-icon ${fi.cls}"><i class="ph ${fi.icon}"></i></span>
@@ -215,7 +215,7 @@ export function PinnedFavorites({
                                 const from = parseInt(e.dataTransfer.getData('text/x-fav-index'), 10);
                                 if (!isNaN(from) && from !== i) onReorder(from, i);
                             }}
-                            onContextMenu=${(e) => handleContextMenu(e, path, 'directory')}
+                            onContextMenu=${(e) => handleContextMenu(e, path, 'directory', path)}
                             title=${path}
                         >
                             <span class="file-icon file-icon-folder">
@@ -230,7 +230,7 @@ export function PinnedFavorites({
                                 <i class="ph ph-x"></i>
                             </button>
                         </div>
-                        ${isExpanded && renderChildren(path, 1)}
+                        ${isExpanded && renderChildren(path, 1, path)}
                     </div>
                 `;
             })}

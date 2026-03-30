@@ -42,6 +42,7 @@ async def login(body: LoginRequest, response: Response) -> dict[str, object]:
     return {
         "username": body.username,
         "terminal_enabled": settings.terminal_enabled,
+        "home_dir": str(settings.home_dir),
     }
 
 
@@ -83,4 +84,5 @@ async def me(
         "username": username,
         "auth_source": auth_source,
         "terminal_enabled": settings.terminal_enabled,
+        "home_dir": str(settings.home_dir),
     }
