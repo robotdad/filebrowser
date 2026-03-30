@@ -662,7 +662,9 @@ class TestTabBarRendering:
     def test_tab_bar_rendered_in_preview_section(self):
         """TabBar must be rendered in the preview section via <${TabBar}."""
         src = read_layout()
-        assert "<${TabBar}" in src, "TabBar not rendered in layout (expected <${TabBar})"
+        assert "<${TabBar}" in src, (
+            "TabBar not rendered in layout (expected <${TabBar})"
+        )
 
     def test_tab_bar_receives_tabs_prop(self):
         """TabBar must receive tabs=${tabManager.tabs}."""
@@ -728,18 +730,21 @@ class TestPreviewPaneDirtyIntegration:
     def test_on_dirty_change_passed_to_editable_viewer(self):
         """PreviewPane must pass onDirtyChange to EditableViewer."""
         src = read_preview()
-        assert re.search(r"EditableViewer[^`]*onDirtyChange=\$\{onDirtyChange\}", src, re.DOTALL) or \
-               "onDirtyChange=${onDirtyChange}" in src, (
-            "onDirtyChange not passed to EditableViewer in preview.js"
-        )
+        assert (
+            re.search(
+                r"EditableViewer[^`]*onDirtyChange=\$\{onDirtyChange\}", src, re.DOTALL
+            )
+            or "onDirtyChange=${onDirtyChange}" in src
+        ), "onDirtyChange not passed to EditableViewer in preview.js"
 
     def test_on_dirty_change_passed_to_markdown_editor(self):
         """PreviewPane must pass onDirtyChange to MarkdownEditor."""
         src = read_preview()
-        assert re.search(r"MarkdownEditor[^`]*onDirtyChange=\$\{onDirtyChange\}", src, re.DOTALL) or \
-               re.search(r"onDirtyChange=\$\{onDirtyChange\}.*MarkdownEditor", src, re.DOTALL), (
-            "onDirtyChange not passed to MarkdownEditor in preview.js"
-        )
+        assert re.search(
+            r"MarkdownEditor[^`]*onDirtyChange=\$\{onDirtyChange\}", src, re.DOTALL
+        ) or re.search(
+            r"onDirtyChange=\$\{onDirtyChange\}.*MarkdownEditor", src, re.DOTALL
+        ), "onDirtyChange not passed to MarkdownEditor in preview.js"
 
     def test_editable_viewer_accepts_on_dirty_change(self):
         """EditableViewer function signature must include onDirtyChange parameter."""

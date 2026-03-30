@@ -67,8 +67,7 @@ class TestExports:
         """Must export useTabManager as a named function."""
         src = read_hook()
         assert (
-            "export function useTabManager" in src
-            or "export { useTabManager" in src
+            "export function useTabManager" in src or "export { useTabManager" in src
         ), "useTabManager is not exported as a named function"
 
 
@@ -121,30 +120,48 @@ class TestHookAPI:
     def test_activate_is_use_callback(self):
         """activate() must be defined with useCallback."""
         src = read_hook()
-        assert "const activate" in src, "activate not declared as const with useCallback"
+        assert "const activate" in src, (
+            "activate not declared as const with useCallback"
+        )
 
     def test_set_dirty_is_use_callback(self):
         """setDirty() must be defined with useCallback."""
         src = read_hook()
-        assert "const setDirty" in src, "setDirty not declared as const with useCallback"
+        assert "const setDirty" in src, (
+            "setDirty not declared as const with useCallback"
+        )
 
     def test_update_path_is_use_callback(self):
         """updatePath() must be defined with useCallback."""
         src = read_hook()
-        assert "const updatePath" in src, "updatePath not declared as const with useCallback"
+        assert "const updatePath" in src, (
+            "updatePath not declared as const with useCallback"
+        )
 
     def test_close_by_path_is_use_callback(self):
         """closeByPath() must be defined with useCallback."""
         src = read_hook()
-        assert "const closeByPath" in src, "closeByPath not declared as const with useCallback"
+        assert "const closeByPath" in src, (
+            "closeByPath not declared as const with useCallback"
+        )
 
     def test_returns_all_api_members(self):
         """Hook must return all API members including state and functions."""
         src = read_hook()
         assert "return" in src, "No return statement found"
         # All public API members must appear in the return value
-        for member in ["tabs", "activeTabId", "activeFilePath", "open", "pin",
-                       "close", "activate", "setDirty", "updatePath", "closeByPath"]:
+        for member in [
+            "tabs",
+            "activeTabId",
+            "activeFilePath",
+            "open",
+            "pin",
+            "close",
+            "activate",
+            "setDirty",
+            "updatePath",
+            "closeByPath",
+        ]:
             assert member in src, f"{member} not found in hook source"
 
 
@@ -200,9 +217,9 @@ class TestDefaultTabBehavior:
         """open() must find an unpinned tab to replace instead of always creating new."""
         src = read_hook()
         # Should check for pinned:false or !pinned to find a replaceable tab
-        assert "!pinned" in src or "pinned === false" in src or "pinned == false" in src, (
-            "open() does not look for unpinned tabs to replace"
-        )
+        assert (
+            "!pinned" in src or "pinned === false" in src or "pinned == false" in src
+        ), "open() does not look for unpinned tabs to replace"
 
     def test_creates_new_tab_when_all_pinned(self):
         """open() must create a new tab when all existing tabs are pinned."""
@@ -220,11 +237,14 @@ class TestLogging:
     def test_creates_logger_named_use_tab_manager(self):
         """Must create a logger named 'useTabManager' via createLogger."""
         src = read_hook()
-        assert "createLogger('useTabManager')" in src or 'createLogger("useTabManager")' in src, (
-            "createLogger('useTabManager') not found"
-        )
+        assert (
+            "createLogger('useTabManager')" in src
+            or 'createLogger("useTabManager")' in src
+        ), "createLogger('useTabManager') not found"
 
     def test_logs_open_events_at_debug_level(self):
         """open() must log events at debug level."""
         src = read_hook()
-        assert "log.debug" in src, "log.debug() not found — open events must be logged at debug level"
+        assert "log.debug" in src, (
+            "log.debug() not found — open events must be logged at debug level"
+        )
