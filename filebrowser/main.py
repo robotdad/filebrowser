@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from filebrowser.config import settings
-from filebrowser.routes import auth, files
+from filebrowser.routes import auth, files, locations
 
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper(), logging.INFO),
@@ -34,6 +34,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 app.include_router(auth.router)
 app.include_router(files.router)
+app.include_router(locations.router)
 
 if settings.terminal_enabled:
     from filebrowser.routes import terminal

@@ -36,3 +36,20 @@ def tmp_home(tmp_path):
 def fs(tmp_home):
     """FilesystemService rooted at tmp_home."""
     return FilesystemService(tmp_home)
+
+
+@pytest.fixture
+def ext_dir(tmp_path):
+    """An external directory outside the home dir."""
+    ext = tmp_path / "external"
+    ext.mkdir()
+    (ext / "data.txt").write_text("external data")
+    (ext / "subdir").mkdir()
+    (ext / "subdir" / "nested.txt").write_text("nested content")
+    return ext
+
+
+@pytest.fixture
+def fs_with_ext(tmp_home, ext_dir):
+    """FilesystemService with an external location registered."""
+    return FilesystemService(tmp_home, locations=[{"id": 1, "path": str(ext_dir)}])

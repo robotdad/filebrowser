@@ -3,6 +3,64 @@ import { html } from '../html.js';
 import { api } from '../api.js';
 import { UploadModal } from './upload.js';
 
+function AddLocationModal({ onClose, onAdd }) {
+    const [path, setPath] = useState('');
+    const [name, setName] = useState('');
+    const [error, setError] = useState('');
+    const [adding, setAdding] = useState(false);
+
+    const handleAdd = async () => {
+        if (!path.trim()) { setError('Path is required'); return; }
+        setAdding(true);
+        setError('');
+        try {
+            await onAdd(path.trim(), name.trim() || null);
+            onClose();
+        } catch (e) {
+            setError(e.message || 'Failed to add location');
+        } finally {
+            setAdding(false);
+        }
+    };
+
+    return html`
+        <div class="modal-overlay" onClick=${onClose}>
+            <div class="modal add-location-modal" onClick=${(e) => e.stopPropagation()}>
+                <h2>Add Folder</h2>
+                <p class="modal-hint">Enter the absolute path to a folder on this server.</p>
+                <label class="modal-label">
+                    Path
+                    <input
+                        type="text"
+                        value=${path}
+                        onInput=${(e) => setPath(e.target.value)}
+                        onKeyDown=${(e) => e.key === 'Enter' && handleAdd()}
+                        placeholder="/mnt/data or /opt/logs"
+                        autoFocus
+                    />
+                </label>
+                <label class="modal-label">
+                    Label (optional)
+                    <input
+                        type="text"
+                        value=${name}
+                        onInput=${(e) => setName(e.target.value)}
+                        onKeyDown=${(e) => e.key === 'Enter' && handleAdd()}
+                        placeholder="Friendly name"
+                    />
+                </label>
+                ${error && html`<p class="modal-error">${error}</p>`}
+                <div class="modal-actions">
+                    <button onClick=${onClose} disabled=${adding}>Cancel</button>
+                    <button class="primary" onClick=${handleAdd} disabled=${adding || !path.trim()}>
+                        ${adding ? 'Adding…' : 'Add'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 export function ActionBar({
     currentPath,
     selectedFile,
@@ -14,9 +72,11 @@ export function ActionBar({
     onHideUpload,
     terminalOpen,
     onToggleTerminal,
+    onAddLocation,
 }) {
     const [renaming, setRenaming] = useState(false);
     const [newName, setNewName] = useState('');
+    const [showAddLocation, setShowAddLocation] = useState(false);
 
     // F2 keyboard shortcut → start rename (dispatched from layout.js)
     useEffect(() => {
@@ -130,6 +190,9 @@ export function ActionBar({
             <button onClick=${handleNewFolder} title="New Folder (Shift+N)">
                 <i class="ph ph-folder-plus"></i>
             </button>
+            <button onClick=${() => setShowAddLocation(true)} title="Add Folder">
+                <i class="ph ph-map-pin-line"></i>
+            </button>
 
             ${selectedFile && !renaming && html`
                 <a
@@ -166,6 +229,13 @@ export function ActionBar({
                     path=${currentPath}
                     onClose=${onHideUpload}
                     onUploaded=${() => { onHideUpload(); onRefresh(); }}
+                />
+            `}
+
+            ${showAddLocation && html`
+                <${AddLocationModal}
+                    onClose=${() => setShowAddLocation(false)}
+                    onAdd=${onAddLocation}
                 />
             `}
         </div>

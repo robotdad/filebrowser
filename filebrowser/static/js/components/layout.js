@@ -49,17 +49,52 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
         catch { return []; }
     });
 
+    const [externalLocations, setExternalLocations] = useState([]);
+
+    useEffect(() => {
+        api.get('/api/locations').then(setExternalLocations).catch(() => {});
+    }, []);
+
+    // Sync external locations into favorites when locations load/change
+    useEffect(() => {
+        if (!externalLocations.length) return;
+        setFavorites(prev => {
+            const extPaths = externalLocations.map(l => `@ext/${l.id}`);
+            const existing = new Set(prev);
+            const toAdd = extPaths.filter(p => !existing.has(p));
+            if (!toAdd.length) return prev;
+            const next = [...prev, ...toAdd];
+            localStorage.setItem('fb-favorites', JSON.stringify(next));
+            return next;
+        });
+    }, [externalLocations]);
+
     const saveFavorites = (next) => {
         setFavorites(next);
         localStorage.setItem('fb-favorites', JSON.stringify(next));
     };
 
-    const toggleFavorite = (path) => {
-        saveFavorites(
-            favorites.includes(path)
-                ? favorites.filter(p => p !== path)
-                : [...favorites, path]
-        );
+    const addLocation = async (path, name) => {
+        const location = await api.post('/api/locations', { path, name });
+        setExternalLocations(prev => [...prev, location]);
+        // The useEffect above will auto-add to favorites
+    };
+
+    const toggleFavorite = async (path) => {
+        if (favorites.includes(path)) {
+            // Unpinning
+            saveFavorites(favorites.filter(p => p !== path));
+            // If it's an external location, also remove from backend
+            if (path.startsWith('@ext/')) {
+                const id = parseInt(path.split('/')[1], 10);
+                try {
+                    await api.del(`/api/locations/${id}`);
+                    setExternalLocations(prev => prev.filter(l => l.id !== id));
+                } catch { /* toast shown */ }
+            }
+        } else {
+            saveFavorites([...favorites, path]);
+        }
     };
 
     const reorderFavorite = (fromIndex, toIndex) => {
@@ -401,6 +436,7 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
                         onReorder=${reorderFavorite}
                         onUnpin=${toggleFavorite}
                         sortBy=${sortBy}
+                        externalLocations=${externalLocations}
                     />
 
                     <${FileTree}
@@ -456,6 +492,7 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
                 onHideUpload=${() => setShowUpload(false)}
                 terminalOpen=${terminalOpen}
                 onToggleTerminal=${() => terminalOpen ? closeTerminal() : openTerminal(currentPath)}
+                onAddLocation=${addLocation}
             />
 
             <!-- Command palette (Feature 2) -->

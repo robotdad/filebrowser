@@ -4,6 +4,63 @@ from pathlib import Path
 import pytest
 
 
+class TestExternalPathValidation:
+    def test_ext_path_resolves_correctly(self, fs_with_ext, ext_dir):
+        result = fs_with_ext.validate_path("@ext/1")
+        assert result == ext_dir.resolve()
+
+    def test_ext_path_resolves_subpath(self, fs_with_ext, ext_dir):
+        result = fs_with_ext.validate_path("@ext/1/data.txt")
+        assert result == ext_dir.resolve() / "data.txt"
+
+    def test_ext_path_resolves_nested(self, fs_with_ext, ext_dir):
+        result = fs_with_ext.validate_path("@ext/1/subdir/nested.txt")
+        assert result == ext_dir.resolve() / "subdir" / "nested.txt"
+
+    def test_ext_path_traversal_blocked(self, fs_with_ext):
+        with pytest.raises(PermissionError):
+            fs_with_ext.validate_path("@ext/1/../../etc/passwd")
+
+    def test_ext_unknown_location_blocked(self, fs_with_ext):
+        with pytest.raises(PermissionError):
+            fs_with_ext.validate_path("@ext/99/some/path")
+
+    def test_ext_invalid_id_blocked(self, fs_with_ext):
+        with pytest.raises(PermissionError):
+            fs_with_ext.validate_path("@ext/notanid/file")
+
+    def test_ext_list_directory_works(self, fs_with_ext, ext_dir):
+        entries = fs_with_ext.list_directory("@ext/1")
+        names = [e["name"] for e in entries]
+        assert "data.txt" in names
+        assert "subdir" in names
+
+    def test_ext_get_info_works(self, fs_with_ext, ext_dir):
+        info = fs_with_ext.get_info("@ext/1/data.txt")
+        assert info["name"] == "data.txt"
+        assert info["type"] == "file"
+        assert info["path"] == "@ext/1/data.txt"
+
+    def test_ext_get_info_dir_works(self, fs_with_ext):
+        info = fs_with_ext.get_info("@ext/1")
+        assert info["type"] == "directory"
+
+    def test_ext_path_not_registered_without_locations(self, fs):
+        """A FilesystemService with no locations rejects all @ext paths."""
+        with pytest.raises(PermissionError):
+            fs.validate_path("@ext/1/file")
+
+    def test_ext_symlink_traversal_blocked(self, fs_with_ext, ext_dir, tmp_path):
+        """A symlink inside the external dir that points outside is blocked."""
+        outside = tmp_path / "outside_secret"
+        outside.mkdir()
+        (outside / "secret.txt").write_text("secret")
+        evil_link = ext_dir / "evil_link"
+        evil_link.symlink_to(outside)
+        with pytest.raises(PermissionError):
+            fs_with_ext.validate_path("@ext/1/evil_link/secret.txt")
+
+
 class TestValidatePath:
     def test_valid_relative_path(self, fs, tmp_home):
         result = fs.validate_path("hello.txt")

@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from filebrowser.auth import require_auth
 from filebrowser.config import settings
 from filebrowser.services.filesystem import FilesystemService
+from filebrowser.services.locations import LocationsService
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,8 @@ router = APIRouter(prefix="/api/files", tags=["files"])
 
 
 def get_fs() -> FilesystemService:
-    return FilesystemService(settings.home_dir)
+    locations = LocationsService(settings.data_dir).list()
+    return FilesystemService(settings.home_dir, locations=locations)
 
 
 @router.get("")

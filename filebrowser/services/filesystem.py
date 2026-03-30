@@ -115,10 +115,15 @@ def is_likely_text(path: Path, sample_size: int = 8192) -> bool:
 
 
 class FilesystemService:
-    def __init__(self, home_dir: Path):
+    def __init__(self, home_dir: Path, locations: list[dict] | None = None):
         self.home_dir = home_dir.resolve()
+        self._locations = {
+            loc["id"]: Path(loc["path"]).resolve() for loc in (locations or [])
+        }
 
     def validate_path(self, path: str) -> Path:
+        if path.startswith("@ext/"):
+            return self._validate_external_path(path)
         cleaned = path.lstrip("/")
         resolved = (self.home_dir / cleaned).resolve()
         try:
@@ -126,6 +131,29 @@ class FilesystemService:
         except ValueError:
             logger.warning("Path traversal blocked: path=%s", path)
             raise PermissionError(f"Path outside home directory: {path}")
+        return resolved
+
+    def _validate_external_path(self, path: str) -> Path:
+        """Validate a path within a registered external location."""
+        parts = path.split("/", 2)  # ['@ext', '<id>', 'relative/path']
+        if len(parts) < 2:
+            raise PermissionError(f"Invalid external path: {path}")
+        try:
+            loc_id = int(parts[1])
+        except ValueError:
+            raise PermissionError(f"Invalid location ID in path: {path}")
+        root = self._locations.get(loc_id)
+        if root is None:
+            raise PermissionError(f"Unknown external location: {loc_id}")
+        relative = parts[2] if len(parts) > 2 else ""
+        resolved = (root / relative).resolve()
+        try:
+            resolved.relative_to(root)
+        except ValueError:
+            logger.warning(
+                "External path traversal blocked: path=%s root=%s", path, root
+            )
+            raise PermissionError(f"Path outside external location: {path}")
         return resolved
 
     def list_directory(self, path: str = "", show_hidden: bool = False) -> list[dict]:
@@ -181,6 +209,15 @@ class FilesystemService:
 
         return "other"
 
+    def _virtual_path(self, original_path: str, resolved: Path) -> str:
+        """Return the virtual path string for a resolved filesystem path."""
+        if original_path.startswith("@ext/"):
+            return original_path
+        try:
+            return str(resolved.relative_to(self.home_dir))
+        except ValueError:
+            return original_path
+
     def get_info(self, path: str) -> dict:
         resolved = self.validate_path(path)
         if not resolved.exists():
@@ -188,7 +225,7 @@ class FilesystemService:
         stat = resolved.stat()
         return {
             "name": resolved.name,
-            "path": str(resolved.relative_to(self.home_dir)),
+            "path": self._virtual_path(path, resolved),
             "type": "directory" if resolved.is_dir() else "file",
             "size": stat.st_size,
             "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),

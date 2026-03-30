@@ -2410,3 +2410,68 @@ body {
         grid-template-rows: 1fr;
     }
 }
+
+/* === Add Location modal === */
+.add-location-modal {
+    width: 440px;
+}
+.modal-hint {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin: 0 0 var(--space-md);
+}
+.modal-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: var(--space-sm);
+}
+.modal-label input {
+    display: block;
+    width: 100%;
+    margin-top: var(--space-xs);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--bg-secondary);
+    border: 0.5px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: var(--mono);
+    box-sizing: border-box;
+}
+.modal-label input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.modal-label input::placeholder {
+    color: var(--text-muted);
+}
+.modal-error {
+    color: var(--danger);
+    font-size: 13px;
+    margin: var(--space-xs) 0;
+}
+.modal-actions {
+    display: flex;
+    gap: var(--space-sm);
+    justify-content: flex-end;
+    margin-top: var(--space-md);
+}
+.modal-actions button.primary {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+.modal-actions button.primary:hover {
+    filter: brightness(1.1);
+}
+.modal-actions button.primary:disabled {
+    opacity: 0.5;
+}
+
+/* External location icon in pinned favorites */
+.file-icon-external {
+    color: var(--accent);
+}

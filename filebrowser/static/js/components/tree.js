@@ -83,6 +83,7 @@ export function PinnedFavorites({
     onReorder,
     onUnpin,
     sortBy,
+    externalLocations,
 }) {
     const [entries, setEntries] = useState({});
     const [expanded, setExpanded] = useState({});
@@ -180,7 +181,11 @@ export function PinnedFavorites({
             </div>
             ${favorites.map((path, i) => {
                 const isExpanded = !!expanded[path];
-                const name = path.split('/').pop() || 'Home';
+                const isExternal = path.startsWith('@ext/');
+                const extLoc = isExternal ? externalLocations?.find(l => `@ext/${l.id}` === path) : null;
+                const name = extLoc ? extLoc.name : (path.split('/').pop() || 'Home');
+                const folderIcon = isExternal ? 'ph-map-pin-line' : (isExpanded ? 'ph-folder-open' : 'ph-folder');
+                const iconCls = isExternal ? 'file-icon-external' : 'file-icon-folder';
                 return html`
                     <div key=${'pin-' + path}>
                         <div
@@ -218,8 +223,8 @@ export function PinnedFavorites({
                             onContextMenu=${(e) => handleContextMenu(e, path, 'directory', path)}
                             title=${path}
                         >
-                            <span class="file-icon file-icon-folder">
-                                <i class="ph ${isExpanded ? 'ph-folder-open' : 'ph-folder'}"></i>
+                            <span class="file-icon ${iconCls}">
+                                <i class="ph ${folderIcon}"></i>
                             </span>
                             <span class="tree-name">${name}</span>
                             <button
