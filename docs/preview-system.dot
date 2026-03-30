@@ -72,6 +72,7 @@ digraph preview_system {
             pv_audio [label="audio\n.mp3 .wav .ogg\n.flac .aac .m4a" fillcolor="#bbdefb" color="#1565c0" fontsize=9]
             pv_video [label="video\n.mp4 .webm .mkv .mov .avi" fillcolor="#bbdefb" color="#1565c0" fontsize=9]
             pv_pdf   [label="pdf\n.pdf" fillcolor="#bbdefb" color="#1565c0" fontsize=9]
+            pv_dot   [label="dot\n.dot .gv" fillcolor="#bbdefb" color="#1565c0" fontsize=9]
         }
         pv_other [label="[no match]\n→ 'other'" fillcolor="#e3f2fd" color="#1565c0" fontsize=9 style="filled,rounded,dashed"]
     }
@@ -93,6 +94,7 @@ digraph preview_system {
             ti_audio [label="ph-music-note  (audio)\n.mp3 .wav .ogg .flac .aac .m4a" fillcolor="#fff9c4" color="#f57f17" fontsize=9]
             ti_video [label="ph-film-strip  (video)\n.mp4 .webm .mkv .mov .avi" fillcolor="#fff9c4" color="#f57f17" fontsize=9]
             ti_pdf   [label="ph-file-pdf  (pdf)\n.pdf" fillcolor="#fff9c4" color="#f57f17" fontsize=9]
+            ti_dot   [label="ph-graph  (dot)\n.dot .gv" fillcolor="#fff9c4" color="#f57f17" fontsize=9]
         }
         ti_default [label="ph-file  (default)\nno extension match" fillcolor="#fff9c4" color="#f57f17" fontsize=9 style="filled,rounded,dashed"]
     }
@@ -164,11 +166,11 @@ digraph preview_system {
 
         // Fetch decision
         fetch_branch [
-            label="type in\n['text','code','markdown','html']?"
+            label="type in\n['text','code','markdown','html','dot']?"
             shape=diamond
             fillcolor="#ce93d8"
             color="#6a1b9a"
-            width=3.0
+            width=3.2
         ]
 
         // Text content fetch path
@@ -239,20 +241,25 @@ digraph preview_system {
                 color="#283593"
             ]
             r_code [
-                label="CodeViewer\n<pre><code class=language-{lang}>\nhljs.highlightElement(codeRef)\nlangMap: py→python js→javascript\nrs→rust sh→bash yml→yaml"
+                label="CodeEditor\n(code-editor.js)\nCodeMirror 6 editor\nlangMap: py→python js→javascript\nrs→rust sh→bash yml→yaml"
                 fillcolor="#e8eaf6"
                 color="#283593"
             ]
             r_md [
-                label="MarkdownViewer\ndangerouslySetInnerHTML\n{ __html: marked.parse(text) }"
+                label="MarkdownEditor\n(markdown-editor.js)\nView tab: marked.js render\nEdit tab: Tiptap v2 WYSIWYG\nSource tab: CodeMirror 6"
                 fillcolor="#e8eaf6"
                 color="#283593"
             ]
             r_html [
-                label="HtmlViewer  ◄ .html only (not backend 'code')\nPreview tab: <iframe src={contentUrl}>\nSource tab: <code class=language-html>\n             hljs.highlightElement()"
+                label="HtmlViewer  ◄ .html only (not backend 'code')\nPreview tab: <iframe src={contentUrl}>\nSource tab: CodeMirror 6 editor"
                 fillcolor="#ef9a9a"
                 color="#b71c1c"
                 fontcolor="#b71c1c"
+            ]
+            r_dot [
+                label="DotViewer\ngraphviz-svg.js\nIn-browser DOT rendering\nvia @viz-js/viz WASM"
+                fillcolor="#e8eaf6"
+                color="#283593"
             ]
         }
 
@@ -303,8 +310,18 @@ digraph preview_system {
         fontname="Helvetica,Arial,sans-serif"
         fontsize=10
 
-        lib_hljs [
-            label="highlight.js\nimport hljs from 'highlight.js'\nused by: CodeViewer, HtmlViewer (source tab)"
+        lib_cm6 [
+            label="CodeMirror 6\nimport CodeMirror from 'cm6'\nused by: CodeEditor, HtmlViewer (source tab)"
+            fillcolor="#dcedc8"
+            color="#558b2f"
+        ]
+        lib_tiptap [
+            label="Tiptap v2\nimport { Editor } from '@tiptap/core'\nused by: MarkdownEditor (Edit tab)"
+            fillcolor="#dcedc8"
+            color="#558b2f"
+        ]
+        lib_viz [
+            label="@viz-js/viz WASM\nin-browser Graphviz\nused by: DotViewer"
             fillcolor="#dcedc8"
             color="#558b2f"
         ]
@@ -374,6 +391,7 @@ digraph preview_system {
     renderer_switch -> r_audio [label="'audio'"]
     renderer_switch -> r_video [label="'video'"]
     renderer_switch -> r_pdf   [label="'pdf'"]
+    renderer_switch -> r_dot   [label="'dot'"]
     renderer_switch -> r_other [label="default\n'other'"]
 
     // contentUrl used by these renderers
@@ -384,9 +402,12 @@ digraph preview_system {
     content_url -> r_pdf   [style=dashed label="iframe src"]
 
     // Library → renderer connections
-    lib_hljs   -> r_code  [style=dashed color="#558b2f" label="hljs.highlightElement()"]
-    lib_hljs   -> r_html  [style=dashed color="#558b2f" label="source tab highlight"]
+    lib_cm6    -> r_code  [style=dashed color="#558b2f" label="CodeMirror editor"]
+    lib_cm6    -> r_html  [style=dashed color="#558b2f" label="source tab editor"]
+    lib_cm6    -> r_md    [style=dashed color="#558b2f" label="source tab editor"]
+    lib_tiptap -> r_md    [style=dashed color="#558b2f" label="WYSIWYG edit tab"]
     lib_marked -> r_md    [style=dashed color="#558b2f" label="marked.parse(text)"]
+    lib_viz    -> r_dot   [style=dashed color="#558b2f" label="WASM rendering"]
     lib_native -> r_image [style=dashed color="#558b2f"]
     lib_native -> r_audio [style=dashed color="#558b2f"]
     lib_native -> r_video [style=dashed color="#558b2f"]

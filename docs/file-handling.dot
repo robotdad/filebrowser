@@ -113,9 +113,24 @@ digraph file_handling {
                 color="#2e7d32"
             ]
         }
+
+        ep_terminal [
+            label="WS /api/terminal\nterminal WebSocket\nPTY bridge\n(routes/terminal.py)"
+            fillcolor="#a5d6a7"
+            color="#1b5e20"
+        ]
     }
 
     // ── FilesystemService Methods ─────────────────────────────────
+    // ─── Terminal Auth Note ───────────────────────────────────────────────────────
+    note_terminal_auth [
+        label="⚠  Terminal auth:\nWS /api/terminal uses\nresolve_authenticated_user()\nnot require_auth Depends()\n— checks header then cookie"
+        shape=note
+        fillcolor="#fff9c4"
+        color="#f9a825"
+        fontsize=9
+    ]
+
     subgraph cluster_service {
         label="FilesystemService  (services/filesystem.py)"
         style=filled
@@ -481,6 +496,7 @@ digraph file_handling {
 
     // Client → endpoint cluster
     client -> ep_list [lhead=cluster_endpoints label="HTTP request\n+ session cookie"]
+    ep_terminal -> note_terminal_auth [style=dashed arrowhead=none color="#f9a825" label="custom auth"]
 
     // Auth injected into every endpoint (representative arrow)
     dep_auth -> ep_list [

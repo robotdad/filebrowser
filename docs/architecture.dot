@@ -27,7 +27,9 @@ digraph filebrowser_architecture {
 
         cdn_preact     [label="Preact 10\n+ Hooks", shape=component, fillcolor="#ffe082"]
         cdn_htm        [label="htm 3\n(tagged templates)", shape=component, fillcolor="#ffe082"]
-        cdn_hljs       [label="highlight.js 11\n(syntax coloring)", shape=component, fillcolor="#ffe082"]
+        cdn_cm6        [label="CodeMirror 6\n(code editing)", shape=component, fillcolor="#ffe082"]
+        cdn_tiptap     [label="Tiptap v2\n(WYSIWYG editor)", shape=component, fillcolor="#ffe082"]
+        cdn_xterm      [label="xterm.js\n(terminal emulator)", shape=component, fillcolor="#ffe082"]
         cdn_marked     [label="marked 15\n(Markdown)", shape=component, fillcolor="#ffe082"]
         cdn_phosphor   [label="Phosphor Icons", shape=component, fillcolor="#ffe082"]
         cdn_fonts      [label="Inter +\nJetBrains Mono", shape=component, fillcolor="#ffe082"]
@@ -85,7 +87,7 @@ digraph filebrowser_architecture {
             layout       [label="Layout\n(layout.js)\nresizable sidebar,\nkeyboard shortcuts,\ndrag-drop", shape=box, fillcolor="#a5d6a7"]
             breadcrumb   [label="Breadcrumb\n(breadcrumb.js)\npath nav", shape=box, fillcolor="#a5d6a7"]
             file_tree    [label="FileTree\n(tree.js)\nlist/grid view,\nmulti-select", shape=box, fillcolor="#a5d6a7"]
-            preview_pane [label="PreviewPane\n(preview.js)\ntext, code, markdown,\nHTML, image, audio,\nvideo, PDF", shape=box, fillcolor="#a5d6a7"]
+            preview_pane [label="PreviewPane\n(preview.js)\ntext, CodeMirror 6,\nWYSIWYG markdown,\nHTML, image, audio,\nvideo, PDF, DOT preview", shape=box, fillcolor="#a5d6a7"]
             action_bar   [label="ActionBar\n(actions.js)\nbatch mode", shape=box, fillcolor="#a5d6a7"]
             cmd_palette  [label="CommandPalette\n(command-palette.js)\nCmd+K search", shape=box, fillcolor="#a5d6a7"]
             context_menu [label="ContextMenu\n(context-menu.js)\nright-click actions", shape=box, fillcolor="#a5d6a7"]
@@ -98,6 +100,16 @@ digraph filebrowser_architecture {
             layout -> cmd_palette
             layout -> context_menu
             action_bar -> upload_modal [label="opens"]
+
+            terminal     [label="Terminal\n(terminal.js)\nxterm.js + PTY\nCtrl+` toggle", shape=box, fillcolor="#a5d6a7"]
+            code_editor  [label="CodeEditor\n(code-editor.js)\nCodeMirror 6", shape=box, fillcolor="#a5d6a7"]
+            md_editor    [label="MarkdownEditor\n(markdown-editor.js)\nView/Edit/Source tabs", shape=box, fillcolor="#a5d6a7"]
+            graphviz_svg [label="GraphvizSVG\n(graphviz-svg.js)\nDOT file preview", shape=box, fillcolor="#a5d6a7"]
+
+            layout -> terminal
+            layout -> code_editor
+            layout -> md_editor
+            layout -> graphviz_svg
         }
 
         app_js -> layout [label="authenticated"]
@@ -120,8 +132,9 @@ digraph filebrowser_architecture {
             color="#64b5f6"
             fontsize=10
 
-            auth_routes [label="/api/auth/*\nPOST login\nPOST logout\nGET me", shape=box, fillcolor="#90caf9"]
-            file_routes [label="/api/files/*\nGET list, info,\ncontent, download\nPOST upload, mkdir\nPUT rename\nDELETE", shape=box, fillcolor="#90caf9"]
+            auth_routes     [label="/api/auth/*\nPOST login\nPOST logout\nGET me", shape=box, fillcolor="#90caf9"]
+            file_routes     [label="/api/files/*\nGET list, info,\ncontent, download\nPOST upload, mkdir\nPUT rename\nDELETE", shape=box, fillcolor="#90caf9"]
+            terminal_routes [label="/api/terminal\nWebSocket PTY\n(routes/terminal.py)", shape=box, fillcolor="#90caf9"]
         }
 
         subgraph cluster_services {
@@ -132,12 +145,13 @@ digraph filebrowser_architecture {
             fontsize=10
 
             auth_module [label="auth.py\nPAM auth\nitsdangerous\nsession tokens", shape=box, fillcolor="#90caf9"]
-            config      [label="config.py\nSettings\n(home_dir, secrets,\nupload_max, timeouts)", shape=box, fillcolor="#90caf9"]
+            config      [label="config.py\nSettings\n(home_dir, secrets,\nupload_max, timeouts,\nterminal_enabled)", shape=box, fillcolor="#90caf9"]
             fs_service  [label="FilesystemService\n(filesystem.py)\npath validation,\ntype detection,\nfile CRUD", shape=box, fillcolor="#90caf9"]
         }
 
         fastapi_app -> auth_routes
         fastapi_app -> file_routes
+        fastapi_app -> terminal_routes
         auth_routes -> auth_module [label="authenticate"]
         auth_routes -> config [label="reads"]
         file_routes -> auth_module [label="require_auth\n(dependency)"]
@@ -180,9 +194,11 @@ digraph filebrowser_architecture {
     action_bar -> api_js [label="CRUD ops", style=dotted, color="#388e3c"]
     upload_modal -> api_js [label="upload", style=dotted, color="#388e3c"]
     login_form -> api_js [label="login", style=dotted, color="#388e3c"]
+    terminal -> api_js [label="WebSocket\n/api/terminal", style=dotted, color="#388e3c"]
+    terminal -> cdn_xterm [label="renders", style=dotted, color="#e0c860"]
 
     // Frontend uses CDN libs
-    preview_pane -> cdn_hljs [label="highlight", style=dotted, color="#e0c860"]
+    preview_pane -> cdn_cm6 [label="code/edit", style=dotted, color="#e0c860"]
     preview_pane -> cdn_marked [label="parse MD", style=dotted, color="#e0c860"]
     app_js -> cdn_preact [label="render", style=dotted, color="#e0c860"]
     app_js -> cdn_htm [label="html``\ntemplates", style=dotted, color="#e0c860"]

@@ -91,7 +91,7 @@ digraph auth_and_tls {
 
             login_ep [label="POST /api/auth/login\nauthenticate + set cookie", shape=box, fillcolor="#ffcdd2"]
             logout_ep [label="POST /api/auth/logout\ndelete_cookie('session')", shape=box, fillcolor="#ffcdd2"]
-            me_ep [label="GET /api/auth/me\nvalidate cookie -> username", shape=box, fillcolor="#ffcdd2"]
+            me_ep [label="GET /api/auth/me\nvalidate cookie -> username\ncookie bridge: X-Authenticated-User\nheader present but no cookie -> issues session cookie", shape=box, fillcolor="#ffcdd2"]
         }
 
         subgraph cluster_file_endpoints {
@@ -103,6 +103,15 @@ digraph auth_and_tls {
             file_ep [label="/api/files/*\nlist | info | content\ndownload | upload | mkdir\nrename | delete", shape=box, fillcolor="#ffcdd2"]
         }
 
+        subgraph cluster_terminal_endpoint {
+            label="Terminal Route (routes/terminal.py)"
+            style=filled
+            fillcolor="#ffebee"
+            color="#e57373"
+
+            terminal_ep [label="WS /api/terminal\nWebSocket PTY bridge\n(no require_auth Depends())", shape=box, fillcolor="#ffcdd2"]
+        }
+
         subgraph cluster_auth_core {
             label="Auth Core (auth.py)"
             style=filled
@@ -110,10 +119,11 @@ digraph auth_and_tls {
             color="#7b1fa2"
             fontcolor="#4a148c"
 
-            require_auth [label="require_auth(request)\ncookies.get('session')\nFastAPI Depends()", shape=box, fillcolor="#ce93d8"]
+            require_auth [label="require_auth(request)  [dual-mode]\n[1] X-Authenticated-User header (frontdoor)\n[2] cookies.get('session') (standalone)\nFastAPI Depends()", shape=box, fillcolor="#ce93d8"]
             validate_token [label="validate_session_token()\nTimestampSigner.unsign(\n  token, max_age=2592000)", shape=box, fillcolor="#ce93d8"]
             pam_auth [label="authenticate_pam()\npam.pam().authenticate(\n  username, password)", shape=box, fillcolor="#ce93d8"]
             create_token [label="create_session_token()\nTimestampSigner.sign(\n  username)", shape=box, fillcolor="#ce93d8"]
+            terminal_ws_auth [label="resolve_authenticated_user()\nchecks X-Authenticated-User header\nthen session cookie\n(used by WS /api/terminal only)", shape=box, fillcolor="#ce93d8"]
         }
     }
 
@@ -171,6 +181,22 @@ digraph auth_and_tls {
         cert_decision [label="tailscale cert\nsucceeds?", shape=diamond, fillcolor="#d1c4e9"]
         mode_https [label="HTTPS=true\nCaddyfile.template\nSECURE_COOKIES=true", shape=box, fillcolor="#81d4fa"]
         mode_http [label="HTTPS=false\nCaddyfile.http.template\nSECURE_COOKIES=false", shape=box, fillcolor="#ffcc80"]
+    }
+
+    // =====================================================================
+    //  FRONTDOOR INTEGRATION
+    // =====================================================================
+    subgraph cluster_frontdoor {
+        label="Frontdoor Integration (forward_auth mode)"
+        style="filled,rounded"
+        fillcolor="#e8eaf6"
+        color="#3f51b5"
+        fontcolor="#1a237e"
+        fontsize=12
+
+        frontdoor_svc [label="frontdoor\nlocalhost:8420\n/api/auth/validate", shape=box, fillcolor="#c5cae9"]
+        caddy_fwd [label="Caddy forward_auth\nvalidates every request\ncopies X-Authenticated-User", shape=box, fillcolor="#c5cae9"]
+        ws_bypass [label="WebSocket Bypass\nhandle /api/terminal*\nskips forward_auth\n(Caddy 2.6 limitation)", shape=box, fillcolor="#ffcdd2", color="#c62828"]
     }
 
     // =====================================================================
@@ -251,6 +277,14 @@ digraph auth_and_tls {
     install_sh -> renew_timer [label="enable timer\n(HTTPS only)", style=dotted, color="#00695c"]
 
     // =====================================================================
+    //  EDGES: Frontdoor integration
+    // =====================================================================
+    caddy_fwd -> frontdoor_svc [label="HTTP/WS validate"]
+    frontdoor_svc -> caddy_fwd [label="200 + X-Authenticated-User", style=dashed, color="#888888"]
+    ws_bypass -> terminal_ep [label="WebSocket bypasses\nforward_auth"]
+    terminal_ep -> terminal_ws_auth [label="resolve_authenticated_user()"]
+
+    // =====================================================================
     //  LEGEND
     // =====================================================================
     subgraph cluster_legend {
@@ -303,6 +337,7 @@ digraph auth_and_tls {
         lg_c4 [label="  Teal cluster = Cert Lifecycle  ", shape=box, style="filled,rounded", fillcolor="#e0f2f1", color="#00695c", fontsize=8]
         lg_c5 [label="  Yellow cluster = Secret Key  ", shape=box, style="filled,rounded", fillcolor="#fff8e1", color="#f9a825", fontsize=8]
         lg_c6 [label="  Purple cluster = Install Decision  ", shape=box, style="filled,rounded", fillcolor="#ede7f6", color="#512da8", fontsize=8]
+        lg_c7 [label="  Indigo cluster = Frontdoor Integration  ", shape=box, style="filled,rounded", fillcolor="#e8eaf6", color="#3f51b5", fontsize=8]
 
         lg_e3b -> lg_c1 [style=invis]
         lg_c1 -> lg_c2 [style=invis]
@@ -310,5 +345,6 @@ digraph auth_and_tls {
         lg_c3 -> lg_c4 [style=invis]
         lg_c4 -> lg_c5 [style=invis]
         lg_c5 -> lg_c6 [style=invis]
+        lg_c6 -> lg_c7 [style=invis]
     }
 }
