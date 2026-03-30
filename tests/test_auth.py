@@ -138,7 +138,7 @@ class TestRequireAuthWithRemoteUser:
         from filebrowser.auth import require_auth
 
         request = MagicMock()
-        request.headers = {"Remote-User": "alice"}
+        request.headers = {"X-Authenticated-User": "alice"}
         request.cookies = {}
         result = asyncio.get_event_loop().run_until_complete(require_auth(request))
         assert result == "alice"
@@ -148,7 +148,7 @@ class TestRequireAuthWithRemoteUser:
 
         token = create_session_token("bob", SECRET)
         request = MagicMock()
-        request.headers = {"Remote-User": "alice"}
+        request.headers = {"X-Authenticated-User": "alice"}
         request.cookies = {"session": token}
         result = asyncio.get_event_loop().run_until_complete(require_auth(request))
         assert result == "alice"
@@ -158,7 +158,7 @@ class TestRequireAuthWithRemoteUser:
 
         token = create_session_token("bob", SECRET)
         request = MagicMock()
-        request.headers = {"Remote-User": ""}
+        request.headers = {"X-Authenticated-User": ""}
         request.cookies = {"session": token}
         with patch("filebrowser.auth.settings") as mock_settings:
             mock_settings.secret_key = SECRET
@@ -182,7 +182,7 @@ class TestGetAuthSource:
         from filebrowser.auth import get_auth_source
 
         request = MagicMock()
-        request.headers = {"Remote-User": "alice"}
+        request.headers = {"X-Authenticated-User": "alice"}
         assert get_auth_source(request) == "frontdoor"
 
     def test_returns_session_when_no_remote_user(self):
@@ -196,7 +196,7 @@ class TestGetAuthSource:
         from filebrowser.auth import get_auth_source
 
         request = MagicMock()
-        request.headers = {"Remote-User": ""}
+        request.headers = {"X-Authenticated-User": ""}
         assert get_auth_source(request) == "session"
 
 
@@ -251,7 +251,7 @@ class TestLogoutRouteAuthSource:
         self, auth_client
     ):
         response = auth_client.post(
-            "/api/auth/logout", headers={"Remote-User": "alice"}
+            "/api/auth/logout", headers={"X-Authenticated-User": "alice"}
         )
         assert response.status_code == 200
         data = response.json()
@@ -287,7 +287,9 @@ class TestMeRoute:
         assert response.status_code == 401
 
     def test_me_with_remote_user_header_returns_frontdoor_source(self, auth_client):
-        response = auth_client.get("/api/auth/me", headers={"Remote-User": "alice"})
+        response = auth_client.get(
+            "/api/auth/me", headers={"X-Authenticated-User": "alice"}
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["username"] == "alice"

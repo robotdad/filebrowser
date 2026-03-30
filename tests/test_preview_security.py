@@ -91,5 +91,5 @@ class TestImportMapDomPurify:
         parsed = self._extract_importmap_json()
         assert "imports" in parsed
         # Verify all previously-required entries are still present
-        for key in ("preact", "preact/hooks", "htm", "highlight.js", "marked"):
+        for key in ("preact", "preact/hooks", "htm", "marked"):
             assert key in parsed["imports"], f"'{key}' missing from importmap"

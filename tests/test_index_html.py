@@ -43,17 +43,17 @@ class TestXtermCSSLink:
             "xterm CSS link must appear before <script type='importmap'>"
         )
 
-    def test_xterm_css_link_after_highlight_dark_css(self):
-        """xterm CSS link must appear after the highlight.js dark CSS link."""
+    def test_xterm_css_link_after_main_styles(self):
+        """xterm CSS link must appear after the main styles.css link."""
         html = read_html()
-        dark_css_pos = html.find("github-dark.min.css")
+        styles_pos = html.find('href="/css/styles.css"')
         xterm_css_pos = html.find(
             'href="https://cdn.jsdelivr.net/npm/@xterm/xterm@6/css/xterm.min.css"'
         )
-        assert dark_css_pos != -1, "highlight.js dark CSS link not found"
+        assert styles_pos != -1, "main styles.css link not found"
         assert xterm_css_pos != -1, "xterm CSS link not found"
-        assert xterm_css_pos > dark_css_pos, (
-            "xterm CSS link must appear after the highlight.js dark CSS link"
+        assert xterm_css_pos > styles_pos, (
+            "xterm CSS link must appear after the main styles.css link"
         )
 
 
@@ -101,7 +101,7 @@ class TestXtermImportMap:
         ), f"@xterm/addon-fit URL is wrong: {imports['@xterm/addon-fit']}"
 
     def test_importmap_contains_all_required_entries(self):
-        """Import map must contain all required entries: preact, preact/hooks, htm, highlight.js, marked, @xterm/xterm, @xterm/addon-fit."""
+        """Import map must contain all required entries: preact, preact/hooks, htm, marked, @xterm/xterm, @xterm/addon-fit, @codemirror/."""
         html = read_html()
         raw_json = self._extract_importmap_json(html)
         parsed = json.loads(raw_json)
@@ -110,10 +110,10 @@ class TestXtermImportMap:
             "preact",
             "preact/hooks",
             "htm",
-            "highlight.js",
             "marked",
             "@xterm/xterm",
             "@xterm/addon-fit",
+            "@codemirror/",
         ]
         for key in required_keys:
             assert key in imports, f"'{key}' missing from importmap imports"

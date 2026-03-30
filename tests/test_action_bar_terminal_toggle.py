@@ -78,16 +78,15 @@ class TestTerminalButton:
     def test_terminal_button_has_keyboard_shortcut_in_title(self):
         """Terminal button title must include keyboard shortcut hint Ctrl+`."""
         src = read_actions()
-        # The title should be "Toggle terminal (Ctrl+`)"
-        assert "Toggle terminal (Ctrl+" in src, (
-            "Terminal button title does not contain keyboard shortcut hint 'Toggle terminal (Ctrl+`)"
+        assert "Terminal (Ctrl+" in src, (
+            "Terminal button title does not contain keyboard shortcut hint 'Terminal (Ctrl+`)'"
         )
 
-    def test_terminal_button_has_terminal_text(self):
-        """Terminal button must have 'Terminal' label text."""
+    def test_terminal_button_is_icon_only_with_title(self):
+        """Terminal button must be icon-only with title attribute for accessibility."""
         src = read_actions()
-        assert " Terminal</button>" in src or "> Terminal</button>" in src or "Terminal</button>" in src, (
-            "Terminal button text not found — button must contain 'Terminal' label"
+        assert 'title="Terminal' in src and "ph-terminal-window" in src, (
+            "Terminal button must have title attribute and terminal icon (icon-only style)"
         )
 
     def test_terminal_button_has_filled_icon_when_open(self):
