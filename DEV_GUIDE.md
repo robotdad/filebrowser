@@ -129,20 +129,42 @@ uv run uvicorn filebrowser.main:app --reload --host 0.0.0.0 --port 58080
 
 App object: `filebrowser.main:app`
 
-### Test
-
-```bash
-uv run pytest                    # 14 test files, ~109 tests, PAM always mocked
-```
-
-Tests cover: path traversal prevention, file operations, auth lifecycle, terminal WebSocket/PTY, config, routes, layout integration, preview security, context menu, action bar.
-
 ### Deploy to host
 
 ```bash
 sudo deploy/install.sh           # first time (creates /opt/filebrowser, systemd, Caddy snippet)
 sudo deploy/update.sh            # incremental update (rsync + restart)
 ```
+
+## Testing
+
+### Python Backend Tests
+
+```bash
+uv run pytest                         # run all tests
+uv run pytest tests/test_files.py -v  # run a specific test file
+```
+
+Tests cover: path traversal prevention, file operations, auth lifecycle, terminal WebSocket/PTY, config, routes, layout integration, preview security, context menu, action bar.
+
+PAM authentication is always mocked in tests.
+
+### Python Static-Analysis Tests
+
+Frontend JavaScript and CSS are tested via Python scripts that read the source files and assert on structural patterns. This approach verifies component structure, prop wiring, CSS class contracts, and import dependencies without a JavaScript runtime.
+
+Examples:
+- `test_layout_integration.py` — verifies Layout component state, terminal integration, tab manager wiring
+- `test_tab_bar.py` — verifies TabBar component structure and props
+- `test_terminal_css.py` — verifies terminal CSS selectors and properties
+
+Pattern: read the JS/CSS file with `Path.read_text()`, then use `assert "pattern" in src` or `re.search()` for structural checks.
+
+### Browser-Based Behavioral Tests
+
+For UI behavior that static analysis can't verify (user interactions, visual state changes, component coexistence), use Amplifier's browser testing agents. See `tests/BROWSER_TESTING.md` for the full guide.
+
+Key principle: always capture a baseline before changes, then verify the same flows after.
 
 ## Key Architectural Decisions
 
