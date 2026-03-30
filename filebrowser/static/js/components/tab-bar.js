@@ -21,7 +21,7 @@ export function TabBar({ tabs, activeTabId, onActivate, onPin, onClose }) {
     return html`
         <div class="file-tab-bar">
             ${tabs.map((tab) => {
-                const basename = tab.path ? tab.path.split('/').pop() : tab.id;
+                const basename = tab.filePath ? tab.filePath.split('/').pop() : tab.id;
                 const isActive = tab.id === activeTabId;
                 const tabClass = [
                     'file-tab',

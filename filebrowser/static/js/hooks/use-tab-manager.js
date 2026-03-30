@@ -57,7 +57,7 @@ export function useTabManager() {
             // All tabs are pinned (or no tabs exist) — create a new tab
             const newTab = { id: genId(), filePath, pinned: false, dirty: false };
             setActiveTabId(newTab.id);
-            return [...prev, newTab];
+            return [newTab, ...prev];
         });
     }, []);
 

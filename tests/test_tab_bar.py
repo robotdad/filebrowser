@@ -129,6 +129,34 @@ class TestRendering:
             "split('/').pop() pattern not found — basename must be extracted this way"
         )
 
+    def test_basename_reads_tab_file_path_not_tab_path(self):
+        """Basename extraction must use tab.filePath (the data model field), not tab.path.
+
+        The tab data model stores the path as ``tab.filePath``.  Reading the
+        wrong property (``tab.path``) silently returns ``undefined``, which
+        causes the tab label to fall back to the raw tab ID (e.g. "tab-1").
+        """
+        src = read_component()
+        assert "tab.filePath" in src, (
+            "tab.filePath not found — basename must be read from tab.filePath"
+        )
+        # Find the basename extraction line and confirm it uses the correct field.
+        basename_line = next(
+            (line for line in src.splitlines() if "basename" in line and "split" in line),
+            None,
+        )
+        assert basename_line is not None, "basename / split line not found in component"
+        assert "tab.filePath" in basename_line, (
+            f"basename line does not use tab.filePath: {basename_line.strip()!r}"
+        )
+        # Guard against the old wrong property silently regressing.
+        # Remove "tab.filePath" first so a hypothetical "tab.filePath || tab.path"
+        # expression doesn't mask a bare "tab.path" reference.
+        without_file_path = basename_line.replace("tab.filePath", "")
+        assert "tab.path" not in without_file_path, (
+            "basename line still references bare tab.path — must use tab.filePath"
+        )
+
     def test_renders_push_pin_icon(self):
         """Must render a push-pin icon with the ph base class for Phosphor font rendering."""
         src = read_component()
