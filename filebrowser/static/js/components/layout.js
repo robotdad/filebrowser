@@ -8,11 +8,14 @@ import { ActionBar } from './actions.js';
 import { CommandPalette } from './command-palette.js';
 import { ContextMenu } from './context-menu.js';
 import { TerminalPanel } from './terminal.js';
+import { useTabManager } from '../hooks/use-tab-manager.js';
+import { TabBar } from './tab-bar.js';
 
 export function Layout({ username, authSource, terminalEnabled, homeDir, onLogout }) {
     // ── Core state ──────────────────────────────────────────────
     const [currentPath, setCurrentPath] = useState('');
-    const [selectedFile, setSelectedFile] = useState(null);
+    const tabManager = useTabManager();
+    const selectedFile = tabManager.activeFilePath;
     const [selectedFiles, setSelectedFiles] = useState(new Set());
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
@@ -277,7 +280,7 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
 
     // ── File selection ───────────────────────────────────────────
     const handleSelectFile = (path) => {
-        setSelectedFile(path);
+        tabManager.open(path);
         setSelectedFiles(new Set([path]));
         setSidebarOpen(false);
     };
@@ -463,6 +466,13 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
                 ></div>
 
                 <main class="preview">
+                    <${TabBar}
+                        tabs=${tabManager.tabs}
+                        activeTabId=${tabManager.activeTabId}
+                        onActivate=${tabManager.activate}
+                        onPin=${tabManager.pin}
+                        onClose=${tabManager.close}
+                    />
                     <${PreviewPane} filePath=${selectedFile} />
                 </main>
 

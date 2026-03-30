@@ -546,3 +546,115 @@ class TestActionBarIntegration:
             "ActionBar does not render a terminal toggle button — "
             "onToggleTerminal must be wired to a visible button"
         )
+
+
+# ── TestTabManagerIntegration ─────────────────────────────────────────────────
+
+
+class TestTabManagerIntegration:
+    def test_imports_use_tab_manager_from_hooks(self):
+        """Must import useTabManager from '../hooks/use-tab-manager.js'."""
+        src = read_layout()
+        assert "useTabManager" in src, "useTabManager not imported"
+        assert "../hooks/use-tab-manager.js" in src, (
+            "../hooks/use-tab-manager.js import not found"
+        )
+
+    def test_use_tab_manager_import_is_named_import(self):
+        """useTabManager must be imported as a named import."""
+        src = read_layout()
+        assert re.search(
+            r"import\s*\{[^}]*useTabManager[^}]*\}\s*from\s*['\"]\.\.\/hooks\/use-tab-manager\.js['\"]",
+            src,
+        ), "useTabManager must be a named import from '../hooks/use-tab-manager.js'"
+
+    def test_imports_tab_bar_from_tab_bar_js(self):
+        """Must import TabBar from './tab-bar.js'."""
+        src = read_layout()
+        assert "TabBar" in src, "TabBar not imported"
+        assert "./tab-bar.js" in src, "./tab-bar.js import not found"
+
+    def test_tab_bar_import_is_named_import(self):
+        """TabBar must be imported as a named import from './tab-bar.js'."""
+        src = read_layout()
+        assert re.search(
+            r"import\s*\{[^}]*TabBar[^}]*\}\s*from\s*['\"]\.\/tab-bar\.js['\"]",
+            src,
+        ), "TabBar must be a named import from './tab-bar.js'"
+
+    def test_calls_use_tab_manager(self):
+        """Must call useTabManager() and assign result to tabManager."""
+        src = read_layout()
+        assert re.search(r"tabManager\s*=\s*useTabManager\(\)", src), (
+            "tabManager = useTabManager() not found in layout.js"
+        )
+
+    def test_selected_file_derived_from_active_file_path(self):
+        """selectedFile must be derived from tabManager.activeFilePath."""
+        src = read_layout()
+        assert re.search(
+            r"selectedFile\s*=\s*tabManager\.activeFilePath",
+            src,
+        ), "selectedFile must be assigned from tabManager.activeFilePath"
+
+    def test_handle_select_file_calls_tab_manager_open(self):
+        """handleSelectFile must call tabManager.open(path)."""
+        src = read_layout()
+        assert re.search(r"tabManager\.open\(path\)", src), (
+            "tabManager.open(path) not found — handleSelectFile must call tabManager.open"
+        )
+
+
+# ── TestTabBarRendering ───────────────────────────────────────────────────────
+
+
+class TestTabBarRendering:
+    def test_tab_bar_rendered_in_preview_section(self):
+        """TabBar must be rendered in the preview section via <${TabBar}."""
+        src = read_layout()
+        assert "<${TabBar}" in src, "TabBar not rendered in layout (expected <${TabBar})"
+
+    def test_tab_bar_receives_tabs_prop(self):
+        """TabBar must receive tabs=${tabManager.tabs}."""
+        src = read_layout()
+        assert "tabs=${tabManager.tabs}" in src, (
+            "tabs=${tabManager.tabs} not found — TabBar must receive tabs prop from tabManager"
+        )
+
+    def test_tab_bar_receives_active_tab_id_prop(self):
+        """TabBar must receive activeTabId=${tabManager.activeTabId}."""
+        src = read_layout()
+        assert re.search(r"activeTabId=\$\{tabManager\.activeTabId\}", src), (
+            "activeTabId prop not passed to TabBar from tabManager"
+        )
+
+    def test_tab_bar_receives_on_activate_prop(self):
+        """TabBar must receive onActivate=${tabManager.activate}."""
+        src = read_layout()
+        assert re.search(r"onActivate=\$\{tabManager\.activate\}", src), (
+            "onActivate prop not passed to TabBar from tabManager"
+        )
+
+    def test_tab_bar_receives_on_pin_prop(self):
+        """TabBar must receive onPin=${tabManager.pin}."""
+        src = read_layout()
+        assert re.search(r"onPin=\$\{tabManager\.pin\}", src), (
+            "onPin prop not passed to TabBar from tabManager"
+        )
+
+    def test_tab_bar_receives_on_close_from_tab_manager(self):
+        """TabBar must receive onClose=${tabManager.close}."""
+        src = read_layout()
+        assert "onClose=${tabManager.close}" in src, (
+            "onClose=${tabManager.close} not found — TabBar must receive onClose from tabManager"
+        )
+
+    def test_preview_pane_receives_active_file_path(self):
+        """PreviewPane must reference activeFilePath (derived via tabManager)."""
+        src = read_layout()
+        assert "activeFilePath" in src, (
+            "activeFilePath not referenced in layout.js — PreviewPane must use it"
+        )
+        assert re.search(r"<\$\{PreviewPane\}.*filePath", src, re.DOTALL), (
+            "PreviewPane does not receive filePath prop"
+        )
