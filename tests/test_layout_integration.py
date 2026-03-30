@@ -772,6 +772,55 @@ class TestPreviewPaneDirtyIntegration:
             "onDirtyChange callback must call tabManager.setDirty"
         )
 
+    def test_on_dirty_change_uses_stable_callback_not_inline_arrow(self):
+        """onDirtyChange on PreviewPane must be a stable useCallback ref, not an inline arrow.
+
+        Passing an inline arrow like ``(dirty) => tabManager.setDirty(...)`` directly
+        as the onDirtyChange prop creates a new function reference on every render.
+        Editor components list onDirtyChange in their useEffect dependency arrays, so
+        an unstable reference fires those effects on every render → setDirty() is
+        called again → triggers another render → infinite loop that freezes the
+        browser.  (This was the root cause of the filebrowser-tab infinite re-render
+        bug.)
+
+        Three invariants are enforced:
+          1. ``useCallback`` is imported in layout.js.
+          2. ``onDirtyChange`` is NOT an inline arrow at the PreviewPane call-site.
+          3. The handler is declared as a ``const`` wrapped in ``useCallback``.
+        """
+        src = read_layout()
+
+        # 1. useCallback must be imported.
+        assert "useCallback" in src, (
+            "useCallback not imported in layout.js — "
+            "the dirty-change handler must be wrapped in useCallback to stay stable"
+        )
+
+        # 2. onDirtyChange must NOT be an inline arrow function.
+        # An inline arrow looks like: onDirtyChange=${(dirty) => ...}
+        # The [^}]* ensures we don't accidentally match across prop boundaries.
+        assert not re.search(
+            r"onDirtyChange=\$\{[^}]*=>",
+            src,
+        ), (
+            "onDirtyChange is passed as an inline arrow to PreviewPane — "
+            "this creates a new function reference on every render, causing "
+            "useEffect dependency arrays in the editors to fire on every render "
+            "and producing an infinite re-render loop; "
+            "replace it with a useCallback-wrapped named handler"
+        )
+
+        # 3. A named handler must be declared with useCallback.
+        # Matches: const handleDirtyChange = useCallback(
+        assert re.search(
+            r"const\s+handleDirtyChange\s*=\s*useCallback\(",
+            src,
+        ), (
+            "handleDirtyChange not declared with useCallback in layout.js — "
+            "expected: const handleDirtyChange = useCallback(...) "
+            "so its reference stays stable across renders"
+        )
+
 
 # ── TestFileManagementTabIntegration ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 
