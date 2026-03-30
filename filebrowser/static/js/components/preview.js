@@ -611,7 +611,9 @@ export function PreviewPane({ filePath }) {
         setContent(null);
         log.debug('render: path=%s type=%s', filePath, type);
 
-        if (['text', 'code', 'markdown', 'html', 'graphviz'].includes(type)) {
+        const TEXT_TYPES = ['text', 'code', 'markdown', 'html', 'graphviz'];
+
+        if (TEXT_TYPES.includes(type)) {
             api.get(`/api/files/content?path=${encodeURIComponent(filePath)}`)
                 .then((text) => {
                     if (prevPath.current === filePath) {
@@ -627,12 +629,25 @@ export function PreviewPane({ filePath }) {
                 })
                 .finally(() => { if (prevPath.current === filePath) setLoading(false); });
         } else {
+            // Frontend didn't recognise this file — ask the backend for its
+            // category.  If the backend detected it as text-like (e.g. via
+            // content sniffing), fetch the content and render as text.
             api.get(`/api/files/info?path=${encodeURIComponent(filePath)}`)
                 .then((info) => {
-                    if (prevPath.current === filePath) {
-                        setContent({ type, info });
-                        log.debug('render complete: path=%s', filePath);
+                    if (prevPath.current !== filePath) return;
+                    const backendType = info.category;
+                    if (TEXT_TYPES.includes(backendType)) {
+                        // Backend says it's text — fetch content and render
+                        return api.get(`/api/files/content?path=${encodeURIComponent(filePath)}`)
+                            .then((text) => {
+                                if (prevPath.current === filePath) {
+                                    setContent({ type: backendType, text });
+                                    log.debug('render complete (backend-detected text): path=%s category=%s', filePath, backendType);
+                                }
+                            });
                     }
+                    setContent({ type, info });
+                    log.debug('render complete: path=%s', filePath);
                 })
                 .catch(() => {
                     if (prevPath.current === filePath) {

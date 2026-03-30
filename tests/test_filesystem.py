@@ -116,7 +116,6 @@ class TestDetectFileType:
             ("diagram.dot", "graphviz"),
             ("graph.gv", "graphviz"),
             ("archive.zip", "other"),
-            ("noext", "other"),
         ],
     )
     def test_detects_category(self, fs, filename, expected):
@@ -125,6 +124,83 @@ class TestDetectFileType:
     def test_case_insensitive(self, fs):
         assert fs.detect_file_type("PHOTO.JPG") == "image"
         assert fs.detect_file_type("Script.PY") == "code"
+
+    # -- Layer 2: well-known filenames -----------------------------------------
+
+    @pytest.mark.parametrize(
+        "filename,expected",
+        [
+            ("LICENSE", "text"),
+            ("LICENCE", "text"),
+            ("README", "text"),
+            ("CONTRIBUTING", "text"),
+            ("CHANGELOG", "text"),
+            ("NOTICE", "text"),
+            ("AUTHORS", "text"),
+            ("COPYING", "text"),
+            ("TODO", "text"),
+        ],
+    )
+    def test_known_text_filenames(self, fs, filename, expected):
+        assert fs.detect_file_type(filename) == expected
+
+    @pytest.mark.parametrize(
+        "filename,expected",
+        [
+            ("Makefile", "code"),
+            ("makefile", "code"),
+            ("Dockerfile", "code"),
+            ("dockerfile", "code"),
+            ("Vagrantfile", "code"),
+            ("Procfile", "code"),
+            ("Gemfile", "code"),
+            ("Justfile", "code"),
+        ],
+    )
+    def test_known_code_filenames(self, fs, filename, expected):
+        assert fs.detect_file_type(filename) == expected
+
+    # -- Layer 3: content sniffing ---------------------------------------------
+
+    def test_content_sniffing_detects_text(self, fs, tmp_home):
+        """An unknown extensionless file containing valid UTF-8 is detected as text."""
+        path = tmp_home / "mystery"
+        assert fs.detect_file_type("mystery", resolved_path=path) == "text"
+
+    def test_content_sniffing_rejects_binary(self, fs, tmp_home):
+        """An unknown extensionless file containing null bytes stays 'other'."""
+        path = tmp_home / "binaryblob"
+        assert fs.detect_file_type("binaryblob", resolved_path=path) == "other"
+
+    def test_unknown_extensionless_without_path_is_other(self, fs):
+        """Without a resolved path, unknown extensionless files remain 'other'."""
+        assert fs.detect_file_type("randomname") == "other"
+
+    def test_content_sniffing_empty_file_is_text(self, fs, tmp_home):
+        """An empty file is trivially text."""
+        empty = tmp_home / "emptyfile"
+        empty.write_bytes(b"")
+        assert fs.detect_file_type("emptyfile", resolved_path=empty) == "text"
+
+
+class TestGetInfoTextDetection:
+    """Verify that get_info() wires content sniffing into the category field."""
+
+    def test_license_detected_as_text(self, fs):
+        info = fs.get_info("LICENSE")
+        assert info["category"] == "text"
+
+    def test_makefile_detected_as_code(self, fs):
+        info = fs.get_info("Makefile")
+        assert info["category"] == "code"
+
+    def test_unknown_text_file_detected_via_sniffing(self, fs):
+        info = fs.get_info("mystery")
+        assert info["category"] == "text"
+
+    def test_binary_file_stays_other(self, fs):
+        info = fs.get_info("binaryblob")
+        assert info["category"] == "other"
 
 
 class TestGetInfo:

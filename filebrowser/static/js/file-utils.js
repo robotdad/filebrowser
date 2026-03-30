@@ -36,17 +36,45 @@ const CATEGORY_ICONS = {
 };
 
 // ---------------------------------------------------------------------------
+// Well-known extensionless filenames
+// ---------------------------------------------------------------------------
+
+const KNOWN_TEXT_NAMES = new Set([
+    'LICENSE', 'LICENCE', 'README', 'CONTRIBUTING', 'CHANGELOG', 'CHANGES',
+    'NOTICE', 'AUTHORS', 'COPYING', 'INSTALL', 'NEWS', 'TODO', 'PATENTS',
+]);
+
+const KNOWN_CODE_NAMES = new Set([
+    'Makefile', 'makefile', 'GNUmakefile',
+    'Dockerfile', 'dockerfile', 'Containerfile',
+    'Vagrantfile', 'Procfile', 'Brewfile', 'Gemfile',
+    'Rakefile', 'Guardfile', 'Capfile',
+    'Justfile', 'justfile', 'Snakefile',
+]);
+
+// ---------------------------------------------------------------------------
 // Category lookup
 // ---------------------------------------------------------------------------
 
 /**
  * Return the file category string for a given filename or path.
  * Falls back to 'other' for unknown extensions or no extension.
+ *
+ * Detection layers:
+ * 1. Extension lookup in FILE_CATEGORIES.
+ * 2. Well-known filename lookup (KNOWN_TEXT_NAMES / KNOWN_CODE_NAMES).
+ * 3. Returns 'other' — caller may use backend category as fallback.
  */
 export function getFileCategory(nameOrPath) {
-    const dot = nameOrPath.lastIndexOf('.');
-    if (dot === -1) return 'other';
-    const ext = nameOrPath.slice(dot).toLowerCase();
+    const name = nameOrPath.split('/').pop();
+    const dot = name.lastIndexOf('.');
+    if (dot === -1) {
+        // No extension — check well-known filenames
+        if (KNOWN_TEXT_NAMES.has(name)) return 'text';
+        if (KNOWN_CODE_NAMES.has(name)) return 'code';
+        return 'other';
+    }
+    const ext = name.slice(dot).toLowerCase();
     for (const [category, exts] of Object.entries(FILE_CATEGORIES)) {
         if (exts.includes(ext)) return category;
     }

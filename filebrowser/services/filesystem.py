@@ -56,6 +56,63 @@ FILE_CATEGORIES = {
     "graphviz": {".dot", ".gv"},
 }
 
+# Well-known filenames that are plain text despite having no extension.
+KNOWN_TEXT_FILENAMES: set[str] = {
+    "LICENSE",
+    "LICENCE",
+    "README",
+    "CONTRIBUTING",
+    "CHANGELOG",
+    "CHANGES",
+    "NOTICE",
+    "AUTHORS",
+    "COPYING",
+    "INSTALL",
+    "NEWS",
+    "TODO",
+    "PATENTS",
+}
+
+# Well-known filenames that are code/config despite having no extension.
+KNOWN_CODE_FILENAMES: set[str] = {
+    "Makefile",
+    "makefile",
+    "GNUmakefile",
+    "Dockerfile",
+    "dockerfile",
+    "Vagrantfile",
+    "Procfile",
+    "Brewfile",
+    "Gemfile",
+    "Rakefile",
+    "Guardfile",
+    "Capfile",
+    "Justfile",
+    "justfile",
+    "Containerfile",
+    "Snakefile",
+}
+
+
+def is_likely_text(path: Path, sample_size: int = 8192) -> bool:
+    """Return True if *path* appears to contain UTF-8 text (no null bytes).
+
+    Reads at most *sample_size* bytes from the beginning of the file and
+    applies two cheap heuristics:
+    1. No null bytes (\\x00) in the sample — binary files almost always have them.
+    2. The sample decodes as valid UTF-8.
+    """
+    try:
+        chunk = path.read_bytes()[:sample_size]
+        if not chunk:
+            return True  # empty files are trivially "text"
+        if b"\x00" in chunk:
+            return False
+        chunk.decode("utf-8")
+        return True
+    except (UnicodeDecodeError, OSError):
+        return False
+
 
 class FilesystemService:
     def __init__(self, home_dir: Path):
@@ -95,11 +152,33 @@ class FilesystemService:
         logger.debug("List: path=%s entries=%d", path, len(entries))
         return entries
 
-    def detect_file_type(self, filename: str) -> str:
+    def detect_file_type(self, filename: str, resolved_path: Path | None = None) -> str:
+        """Categorise a file by extension, well-known name, or content sniffing.
+
+        Detection layers (first match wins):
+        1. Extension lookup in FILE_CATEGORIES.
+        2. Well-known filename lookup (KNOWN_TEXT_FILENAMES / KNOWN_CODE_FILENAMES).
+        3. Content sniffing via is_likely_text() when *resolved_path* is supplied.
+        """
+        name = Path(filename).name
         ext = Path(filename).suffix.lower()
+
+        # Layer 1 – extension-based (fast path)
         for category, extensions in FILE_CATEGORIES.items():
             if ext in extensions:
                 return category
+
+        # Layer 2 – well-known filenames (no extension or unrecognised extension)
+        if name in KNOWN_TEXT_FILENAMES:
+            return "text"
+        if name in KNOWN_CODE_FILENAMES:
+            return "code"
+
+        # Layer 3 – content sniffing (only when a real path is available)
+        if resolved_path is not None and resolved_path.is_file():
+            if is_likely_text(resolved_path):
+                return "text"
+
         return "other"
 
     def get_info(self, path: str) -> dict:
@@ -113,7 +192,7 @@ class FilesystemService:
             "type": "directory" if resolved.is_dir() else "file",
             "size": stat.st_size,
             "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-            "category": self.detect_file_type(resolved.name)
+            "category": self.detect_file_type(resolved.name, resolved)
             if resolved.is_file()
             else None,
         }
