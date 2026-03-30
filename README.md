@@ -18,6 +18,8 @@ Web-based remote file browser for headless Linux machines, accessible over Tails
 
 ## Layout
 
+![filebrowser layout](docs/screenshots/layout.png)
+
 ```
 +-----------------------------------------------------------+
 |  Header: hostname | [Search Cmd+K] | [Terminal] | user    |
