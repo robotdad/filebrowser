@@ -18,6 +18,14 @@ COMPONENT_FILE = (
     / "tab-bar.js"
 )
 
+CSS_FILE = (
+    Path(__file__).parent.parent
+    / "filebrowser"
+    / "static"
+    / "css"
+    / "styles.css"
+)
+
 
 @lru_cache(maxsize=1)
 def read_component() -> str:
@@ -228,10 +236,107 @@ class TestEmptyState:
 # ── TestLogging ────────────────────────────────────────────────────────────────
 
 
+@lru_cache(maxsize=1)
+def read_css() -> str:
+    return CSS_FILE.read_text()
+
+
 class TestLogging:
     def test_creates_logger_named_tab_bar(self):
         """Must create a logger named 'TabBar'."""
         src = read_component()
         assert re.search(r"createLogger\s*\(\s*['\"]TabBar['\"]\s*\)", src), (
             "createLogger('TabBar') not found — must create a logger with name 'TabBar'"
+        )
+
+
+# ── TestCssClasses ────────────────────────────────────────────────────────────
+
+
+class TestCssClasses:
+    def test_file_tab_bar_selector_exists(self):
+        """.file-tab-bar CSS selector must exist in styles.css."""
+        css = read_css()
+        assert ".file-tab-bar" in css, ".file-tab-bar selector not found in styles.css"
+
+    def test_file_tab_selector_exists(self):
+        """.file-tab { pattern must exist as a distinct selector in styles.css."""
+        css = read_css()
+        assert re.search(r"\.file-tab\s*\{", css), (
+            ".file-tab { pattern not found in styles.css"
+        )
+
+    def test_file_tab_active_selector_exists(self):
+        """.file-tab.active selector must exist in styles.css."""
+        css = read_css()
+        assert ".file-tab.active" in css, (
+            ".file-tab.active selector not found in styles.css"
+        )
+
+    def test_file_tab_dirty_selector_exists(self):
+        """.file-tab-dirty selector must exist in styles.css."""
+        css = read_css()
+        assert ".file-tab-dirty" in css, (
+            ".file-tab-dirty selector not found in styles.css"
+        )
+
+    def test_file_tab_close_selector_exists(self):
+        """.file-tab-close selector must exist in styles.css."""
+        css = read_css()
+        assert ".file-tab-close" in css, (
+            ".file-tab-close selector not found in styles.css"
+        )
+
+    def test_file_tab_pin_selector_exists(self):
+        """.file-tab-pin selector must exist in styles.css."""
+        css = read_css()
+        assert ".file-tab-pin" in css, (
+            ".file-tab-pin selector not found in styles.css"
+        )
+
+    def test_uses_design_tokens_accent_and_bg_primary(self):
+        """Tab bar CSS must use var(--accent) and var(--bg-primary) design tokens."""
+        css = read_css()
+        # Find the tab bar section
+        tab_bar_idx = css.find(".file-tab-bar")
+        assert tab_bar_idx != -1, ".file-tab-bar not found in styles.css"
+        # The tab bar CSS block must use design tokens
+        tab_bar_section = css[tab_bar_idx : tab_bar_idx + 2000]
+        assert "var(--accent)" in tab_bar_section, (
+            "var(--accent) design token not used in .file-tab-bar CSS block"
+        )
+        assert "var(--bg-primary)" in tab_bar_section, (
+            "var(--bg-primary) design token not used in .file-tab-bar CSS block"
+        )
+
+    def test_active_tab_uses_accent_color(self):
+        """The .file-tab.active rule must use var(--accent) for background."""
+        css = read_css()
+        active_idx = css.find(".file-tab.active")
+        assert active_idx != -1, ".file-tab.active not found in styles.css"
+        # Extract the rule block after the selector
+        rule_start = css.find("{", active_idx)
+        rule_end = css.find("}", rule_start)
+        assert rule_start != -1 and rule_end != -1, (
+            ".file-tab.active rule block not found"
+        )
+        rule_block = css[rule_start : rule_end + 1]
+        assert "var(--accent)" in rule_block, (
+            "var(--accent) not used in .file-tab.active rule block"
+        )
+
+    def test_dirty_indicator_has_border_radius(self):
+        """.file-tab-dirty must have border-radius for circular dot pattern."""
+        css = read_css()
+        dirty_idx = css.find(".file-tab-dirty")
+        assert dirty_idx != -1, ".file-tab-dirty not found in styles.css"
+        # Extract the rule block after the selector
+        rule_start = css.find("{", dirty_idx)
+        rule_end = css.find("}", rule_start)
+        assert rule_start != -1 and rule_end != -1, (
+            ".file-tab-dirty rule block not found"
+        )
+        rule_block = css[rule_start : rule_end + 1]
+        assert "border-radius" in rule_block, (
+            "border-radius not found in .file-tab-dirty rule — must be circular (50%)"
         )
