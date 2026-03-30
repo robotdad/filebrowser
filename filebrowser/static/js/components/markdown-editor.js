@@ -33,10 +33,12 @@ function renderMarkdown(text) {
  *   path    — file path (for save API and language detection)
  *   onSave  — callback after successful save, receives new text
  */
-export function MarkdownEditor({ text, path, onSave }) {
+export function MarkdownEditor({ text, path, onSave, onDirtyChange }) {
     const [activeTab, setActiveTab] = useState('view');
     const [editText, setEditText] = useState(text);
     const [dirty, setDirty] = useState(false);
+
+    useEffect(() => { if (onDirtyChange) onDirtyChange(dirty); }, [dirty, onDirtyChange]);
     const [saving, setSaving] = useState(false);
     const [cursor, setCursor] = useState(null);
     const [previewHtml, setPreviewHtml] = useState(() => renderMarkdown(text));

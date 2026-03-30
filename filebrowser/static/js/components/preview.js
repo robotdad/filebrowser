@@ -139,10 +139,12 @@ function ImageViewer({ contentUrl, filePath }) {
     `;
 }
 
-function HtmlViewer({ text, path, contentUrl, onSave }) {
+function HtmlViewer({ text, path, contentUrl, onSave, onDirtyChange }) {
     const [mode, setMode] = useState('preview'); // 'preview' | 'source' | 'edit'
     const [editText, setEditText] = useState(text);
     const [dirty, setDirty] = useState(false);
+
+    useEffect(() => { if (onDirtyChange) onDirtyChange(dirty); }, [dirty, onDirtyChange]);
     const [saving, setSaving] = useState(false);
     const [cursor, setCursor] = useState(null);
     const viewRef = useRef(null);
@@ -229,7 +231,7 @@ function getAffectedElements(graphvizSvg, selectedElements, direction) {
     return result;
 }
 
-function GraphvizViewer({ text, path, onSave }) {
+function GraphvizViewer({ text, path, onSave, onDirtyChange }) {
     const [activeTab, setActiveTab] = useState('graph');
     const [engine, setEngine] = useState('dot');
     const [darkCanvas, setDarkCanvas] = useState(
@@ -244,6 +246,8 @@ function GraphvizViewer({ text, path, onSave }) {
     // Edit tab state
     const [editText, setEditText] = useState(text);
     const [dirty, setDirty] = useState(false);
+
+    useEffect(() => { if (onDirtyChange) onDirtyChange(dirty); }, [dirty, onDirtyChange]);
     const [saving, setSaving] = useState(false);
     const [previewSvg, setPreviewSvg] = useState('');
     const [previewError, setPreviewError] = useState(null);
@@ -594,7 +598,7 @@ function AnimatedContent({ filePath, children }) {
     `;
 }
 
-export function PreviewPane({ filePath }) {
+export function PreviewPane({ filePath, onDirtyChange }) {
     const [content, setContent] = useState(null);
     const [loading, setLoading] = useState(false);
     // Track previous filePath to detect actual changes
@@ -729,16 +733,16 @@ export function PreviewPane({ filePath }) {
         case 'text':
         case 'code':
             inner = html`<${EditableViewer} text=${content.text} path=${filePath}
-                                             onSave=${handleContentSave} />`;
+                                             onSave=${handleContentSave} onDirtyChange=${onDirtyChange} />`;
             break;
         case 'markdown':
-            inner = html`<${MarkdownEditor} text=${content.text} path=${filePath} onSave=${handleContentSave} />`;
+            inner = html`<${MarkdownEditor} text=${content.text} path=${filePath} onSave=${handleContentSave} onDirtyChange=${onDirtyChange} />`;
             break;
         case 'html':
-            inner = html`<${HtmlViewer} text=${content.text} path=${filePath} contentUrl=${contentUrl} onSave=${handleContentSave} />`;
+            inner = html`<${HtmlViewer} text=${content.text} path=${filePath} contentUrl=${contentUrl} onSave=${handleContentSave} onDirtyChange=${onDirtyChange} />`;
             break;
         case 'graphviz':
-            inner = html`<${GraphvizViewer} text=${content.text} path=${filePath} onSave=${handleContentSave} />`;
+            inner = html`<${GraphvizViewer} text=${content.text} path=${filePath} onSave=${handleContentSave} onDirtyChange=${onDirtyChange} />`;
             break;
         case 'image':
             inner = html`<${ImageViewer} contentUrl=${contentUrl} filePath=${filePath} />`;

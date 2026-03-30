@@ -23,10 +23,12 @@ const log = createLogger('EditableViewer');
  *   path     — file path (for save API and language detection)
  *   onSave   — optional callback after successful save, receives new text
  */
-export function EditableViewer({ text, path, onSave: onSaveCallback }) {
+export function EditableViewer({ text, path, onSave: onSaveCallback, onDirtyChange }) {
     const [editing, setEditing] = useState(false);
     const [editText, setEditText] = useState(text);
     const [dirty, setDirty] = useState(false);
+
+    useEffect(() => { if (onDirtyChange) onDirtyChange(dirty); }, [dirty, onDirtyChange]);
     const [saving, setSaving] = useState(false);
     const [cursor, setCursor] = useState(null);
     const viewRef = useRef(null);

@@ -473,7 +473,7 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
                         onPin=${tabManager.pin}
                         onClose=${tabManager.close}
                     />
-                    <${PreviewPane} filePath=${selectedFile} />
+                    <${PreviewPane} filePath=${selectedFile} onDirtyChange=${(dirty) => tabManager.setDirty(tabManager.activeTabId, dirty)} />
                 </main>
 
                 ${terminalOpen && html`

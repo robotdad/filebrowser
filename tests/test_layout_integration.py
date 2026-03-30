@@ -39,6 +39,33 @@ CONTEXT_MENU_FILE = (
     / "context-menu.js"
 )
 
+PREVIEW_FILE = (
+    Path(__file__).parent.parent
+    / "filebrowser"
+    / "static"
+    / "js"
+    / "components"
+    / "preview.js"
+)
+
+EDITABLE_VIEWER_FILE = (
+    Path(__file__).parent.parent
+    / "filebrowser"
+    / "static"
+    / "js"
+    / "components"
+    / "editable-viewer.js"
+)
+
+MARKDOWN_EDITOR_FILE = (
+    Path(__file__).parent.parent
+    / "filebrowser"
+    / "static"
+    / "js"
+    / "components"
+    / "markdown-editor.js"
+)
+
 
 @lru_cache(maxsize=1)
 def read_layout() -> str:
@@ -53,6 +80,21 @@ def read_actions() -> str:
 @lru_cache(maxsize=1)
 def read_context_menu() -> str:
     return CONTEXT_MENU_FILE.read_text()
+
+
+@lru_cache(maxsize=1)
+def read_preview() -> str:
+    return PREVIEW_FILE.read_text()
+
+
+@lru_cache(maxsize=1)
+def read_editable_viewer() -> str:
+    return EDITABLE_VIEWER_FILE.read_text()
+
+
+@lru_cache(maxsize=1)
+def read_markdown_editor() -> str:
+    return MARKDOWN_EDITOR_FILE.read_text()
 
 
 # ── TestFileExists ──────────────────────────────────────────────────────────────
@@ -665,4 +707,62 @@ class TestTabBarRendering:
         )
         assert re.search(r"<\$\{PreviewPane\}.*filePath", src, re.DOTALL), (
             "PreviewPane does not receive filePath prop"
+        )
+
+
+# ── TestPreviewPaneDirtyIntegration ────────────────────────────────────────────────────────────────
+
+
+class TestPreviewPaneDirtyIntegration:
+    def test_preview_pane_signature_includes_on_dirty_change(self):
+        """PreviewPane function signature must include onDirtyChange parameter."""
+        src = read_preview()
+        assert re.search(
+            r"export\s+function\s+PreviewPane\s*\(\s*\{[^}]*onDirtyChange[^}]*\}",
+            src,
+        ), (
+            "onDirtyChange not found in PreviewPane function signature (preview.js) — "
+            "PreviewPane must accept onDirtyChange as a prop"
+        )
+
+    def test_on_dirty_change_passed_to_editable_viewer(self):
+        """PreviewPane must pass onDirtyChange to EditableViewer."""
+        src = read_preview()
+        assert re.search(r"EditableViewer[^`]*onDirtyChange=\$\{onDirtyChange\}", src, re.DOTALL) or \
+               "onDirtyChange=${onDirtyChange}" in src, (
+            "onDirtyChange not passed to EditableViewer in preview.js"
+        )
+
+    def test_on_dirty_change_passed_to_markdown_editor(self):
+        """PreviewPane must pass onDirtyChange to MarkdownEditor."""
+        src = read_preview()
+        assert re.search(r"MarkdownEditor[^`]*onDirtyChange=\$\{onDirtyChange\}", src, re.DOTALL) or \
+               re.search(r"onDirtyChange=\$\{onDirtyChange\}.*MarkdownEditor", src, re.DOTALL), (
+            "onDirtyChange not passed to MarkdownEditor in preview.js"
+        )
+
+    def test_editable_viewer_accepts_on_dirty_change(self):
+        """EditableViewer function signature must include onDirtyChange parameter."""
+        src = read_editable_viewer()
+        assert re.search(
+            r"export\s+function\s+EditableViewer\s*\(\s*\{[^}]*onDirtyChange[^}]*\}",
+            src,
+        ), (
+            "onDirtyChange not found in EditableViewer function signature (editable-viewer.js) — "
+            "EditableViewer must accept onDirtyChange as a prop"
+        )
+
+    def test_layout_passes_on_dirty_change_to_preview_pane(self):
+        """layout.js must pass an onDirtyChange prop to PreviewPane."""
+        src = read_layout()
+        assert re.search(r"PreviewPane.*onDirtyChange", src, re.DOTALL), (
+            "onDirtyChange prop not passed to PreviewPane in layout.js"
+        )
+
+    def test_layout_on_dirty_change_calls_tab_manager_set_dirty(self):
+        """The onDirtyChange callback in layout.js must call tabManager.setDirty."""
+        src = read_layout()
+        assert "tabManager.setDirty" in src, (
+            "tabManager.setDirty not found in layout.js — "
+            "onDirtyChange callback must call tabManager.setDirty"
         )
