@@ -315,7 +315,7 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
         parts[parts.length - 1] = name;
         const newPath = parts.join('/');
         api.put('/api/files/rename', { old_path: path, new_path: newPath })
-            .then(refresh)
+            .then(() => { tabManager.updatePath(path, newPath); refresh(); })
             .catch(() => {});
     };
 
@@ -323,7 +323,7 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
         if (!confirm(`Delete ${path.split('/').pop()}?`)) return;
         try {
             await api.del(`/api/files?path=${encodeURIComponent(path)}`);
-            if (selectedFile === path) tabManager.close(path);
+            tabManager.closeByPath(path);
             refresh();
         } catch { /* toast shown */ }
     };

@@ -766,3 +766,42 @@ class TestPreviewPaneDirtyIntegration:
             "tabManager.setDirty not found in layout.js — "
             "onDirtyChange callback must call tabManager.setDirty"
         )
+
+
+# ── TestFileManagementTabIntegration ──────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+class TestFileManagementTabIntegration:
+    def test_handle_ctx_rename_calls_tab_manager_update_path(self):
+        """handleCtxRename must call tabManager.updatePath(path, newPath) after rename."""
+        src = read_layout()
+        assert re.search(r"tabManager\.updatePath\(", src), (
+            "tabManager.updatePath( not found in layout.js — "
+            "handleCtxRename must call tabManager.updatePath(path, newPath) in .then() callback"
+        )
+
+    def test_handle_ctx_delete_calls_tab_manager_close_by_path(self):
+        """handleCtxDelete must call tabManager.closeByPath(path) to close the tab."""
+        src = read_layout()
+        assert re.search(r"tabManager\.closeByPath\(", src), (
+            "tabManager.closeByPath( not found in layout.js — "
+            "handleCtxDelete must call tabManager.closeByPath(path)"
+        )
+
+    def test_handle_ctx_delete_does_not_use_set_selected_file_null(self):
+        """handleCtxDelete must not use setSelectedFile(null)."""
+        src = read_layout()
+        assert "setSelectedFile(null)" not in src, (
+            "setSelectedFile(null) found in layout.js — "
+            "handleCtxDelete must not set selectedFile to null directly; "
+            "use tabManager.closeByPath(path) instead"
+        )
+
+    def test_set_selected_file_does_not_exist_in_layout(self):
+        """setSelectedFile (singular) must not exist anywhere in layout.js."""
+        src = read_layout()
+        assert not re.search(r"\bsetSelectedFile\b", src), (
+            "setSelectedFile found in layout.js — "
+            "state ownership has been transferred to tabManager; "
+            "use tabManager methods to manage active file state"
+        )
