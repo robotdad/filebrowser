@@ -19,17 +19,21 @@ COMPONENT_FILE = (
 )
 
 CSS_FILE = (
-    Path(__file__).parent.parent
-    / "filebrowser"
-    / "static"
-    / "css"
-    / "styles.css"
+    Path(__file__).parent.parent / "filebrowser" / "static" / "css" / "styles.css"
 )
+
+
+TAB_BAR_SECTION_LOOKAHEAD = 2000  # tab bar CSS block is ~800 chars; 2000 is safe
 
 
 @lru_cache(maxsize=1)
 def read_component() -> str:
     return COMPONENT_FILE.read_text()
+
+
+@lru_cache(maxsize=1)
+def read_css() -> str:
+    return CSS_FILE.read_text()
 
 
 # ── TestFileExists ─────────────────────────────────────────────────────────────
@@ -64,9 +68,9 @@ class TestExports:
     def test_exports_tab_bar_as_named_function(self):
         """Component must export TabBar as a named function."""
         src = read_component()
-        assert (
-            "export function TabBar" in src or "export { TabBar" in src
-        ), "TabBar is not exported as a named function"
+        assert "export function TabBar" in src or "export { TabBar" in src, (
+            "TabBar is not exported as a named function"
+        )
 
 
 # ── TestProps ──────────────────────────────────────────────────────────────────
@@ -76,9 +80,9 @@ class TestProps:
     def test_accepts_tabs_prop(self):
         """Component must accept a tabs prop in destructured signature."""
         src = read_component()
-        assert re.search(
-            r"function\s+TabBar\s*\(\s*\{[^}]*\btabs\b[^}]*\}", src
-        ), "tabs prop not found in TabBar function signature"
+        assert re.search(r"function\s+TabBar\s*\(\s*\{[^}]*\btabs\b[^}]*\}", src), (
+            "tabs prop not found in TabBar function signature"
+        )
 
     def test_accepts_active_tab_id_prop(self):
         """Component must accept an activeTabId prop in destructured signature."""
@@ -97,16 +101,16 @@ class TestProps:
     def test_accepts_on_pin_prop(self):
         """Component must accept an onPin prop in destructured signature."""
         src = read_component()
-        assert re.search(
-            r"function\s+TabBar\s*\(\s*\{[^}]*\bonPin\b[^}]*\}", src
-        ), "onPin prop not found in TabBar function signature"
+        assert re.search(r"function\s+TabBar\s*\(\s*\{[^}]*\bonPin\b[^}]*\}", src), (
+            "onPin prop not found in TabBar function signature"
+        )
 
     def test_accepts_on_close_prop(self):
         """Component must accept an onClose prop in destructured signature."""
         src = read_component()
-        assert re.search(
-            r"function\s+TabBar\s*\(\s*\{[^}]*\bonClose\b[^}]*\}", src
-        ), "onClose prop not found in TabBar function signature"
+        assert re.search(r"function\s+TabBar\s*\(\s*\{[^}]*\bonClose\b[^}]*\}", src), (
+            "onClose prop not found in TabBar function signature"
+        )
 
 
 # ── TestRendering ──────────────────────────────────────────────────────────────
@@ -116,9 +120,7 @@ class TestRendering:
     def test_renders_container_with_file_tab_bar_class(self):
         """Must render a container element with class 'file-tab-bar'."""
         src = read_component()
-        assert "file-tab-bar" in src, (
-            "'file-tab-bar' CSS class not found in component"
-        )
+        assert "file-tab-bar" in src, "'file-tab-bar' CSS class not found in component"
 
     def test_displays_basename_via_split_pop(self):
         """Must display basename using split('/').pop() pattern."""
@@ -211,9 +213,7 @@ class TestDirtyIndicator:
             r"tab\.dirty.*file-tab-dirty|file-tab-dirty.*tab\.dirty",
             src,
             re.DOTALL,
-        ), (
-            "tab.dirty must be used to conditionally render the file-tab-dirty element"
-        )
+        ), "tab.dirty must be used to conditionally render the file-tab-dirty element"
 
 
 # ── TestEmptyState ─────────────────────────────────────────────────────────────
@@ -234,11 +234,6 @@ class TestEmptyState:
 
 
 # ── TestLogging ────────────────────────────────────────────────────────────────
-
-
-@lru_cache(maxsize=1)
-def read_css() -> str:
-    return CSS_FILE.read_text()
 
 
 class TestLogging:
@@ -290,9 +285,7 @@ class TestCssClasses:
     def test_file_tab_pin_selector_exists(self):
         """.file-tab-pin selector must exist in styles.css."""
         css = read_css()
-        assert ".file-tab-pin" in css, (
-            ".file-tab-pin selector not found in styles.css"
-        )
+        assert ".file-tab-pin" in css, ".file-tab-pin selector not found in styles.css"
 
     def test_uses_design_tokens_accent_and_bg_primary(self):
         """Tab bar CSS must use var(--accent) and var(--bg-primary) design tokens."""
@@ -301,7 +294,7 @@ class TestCssClasses:
         tab_bar_idx = css.find(".file-tab-bar")
         assert tab_bar_idx != -1, ".file-tab-bar not found in styles.css"
         # The tab bar CSS block must use design tokens
-        tab_bar_section = css[tab_bar_idx : tab_bar_idx + 2000]
+        tab_bar_section = css[tab_bar_idx : tab_bar_idx + TAB_BAR_SECTION_LOOKAHEAD]
         assert "var(--accent)" in tab_bar_section, (
             "var(--accent) design token not used in .file-tab-bar CSS block"
         )
