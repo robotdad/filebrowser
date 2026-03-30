@@ -17,7 +17,7 @@ import { createLogger } from '../logger.js';
 
 const log = createLogger('useTabManager');
 
-// ── ID generator ──────────────────────────────────────────────────────────────
+// ── ID generator ────────────────────────────────────────────────────────────
 
 let _counter = 0;
 
@@ -26,7 +26,7 @@ function genId() {
     return `tab-${_counter}`;
 }
 
-// ── Hook ──────────────────────────────────────────────────────────────────────
+// ── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useTabManager() {
     const [tabs, setTabs] = useState([]);
@@ -36,7 +36,7 @@ export function useTabManager() {
     const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
     const activeFilePath = activeTab ? activeTab.filePath : null;
 
-    // ── open(filePath) ─────────────────────────────────────────────────────────
+    // ── open(filePath) ───────────────────────────────────────────────────────
     // If there is an unpinned tab, replace it.  Otherwise create a new tab.
     const open = useCallback((filePath) => {
         log.debug('open:', filePath);
@@ -61,7 +61,7 @@ export function useTabManager() {
         });
     }, []);
 
-    // ── pin(tabId) ─────────────────────────────────────────────────────────────
+    // ── pin(tabId) ───────────────────────────────────────────────────────────
     // Mark a tab as pinned and move it to the end of the pinned section.
     const pin = useCallback((tabId) => {
         log.debug('pin:', tabId);
@@ -74,7 +74,7 @@ export function useTabManager() {
         });
     }, []);
 
-    // ── close(tabId) ───────────────────────────────────────────────────────────
+    // ── close(tabId) ─────────────────────────────────────────────────────────
     // Close a tab.  Prompt via confirm() if the tab is dirty.
     // Activate a neighbour tab after closing.
     const close = useCallback((tabId) => {
@@ -99,21 +99,28 @@ export function useTabManager() {
         });
     }, [activeTabId]);
 
-    // ── activate(tabId) ────────────────────────────────────────────────────────
+    // ── activate(tabId) ──────────────────────────────────────────────────────
     const activate = useCallback((tabId) => {
         log.debug('activate:', tabId);
         setActiveTabId(tabId);
     }, []);
 
-    // ── setDirty(tabId, dirty) ─────────────────────────────────────────────────
+    // ── setDirty(tabId, dirty) ───────────────────────────────────────────────
     const setDirty = useCallback((tabId, dirty) => {
         log.debug('setDirty:', tabId, dirty);
-        setTabs((prev) =>
-            prev.map((t) => (t.id === tabId ? { ...t, dirty } : t))
-        );
+        setTabs((prev) => {
+            const tab = prev.find((t) => t.id === tabId);
+            // Guard: return the same array reference when nothing actually changed.
+            // Without this, prev.map() always produces a new array (even when the
+            // dirty value is identical), which triggers a Layout re-render that
+            // creates a new onDirtyChange function reference, which re-fires the
+            // useEffect in the editor components, calling setDirty again → ∞ loop.
+            if (!tab || tab.dirty === dirty) return prev;
+            return prev.map((t) => (t.id === tabId ? { ...t, dirty } : t));
+        });
     }, []);
 
-    // ── updatePath(oldPath, newPath) ───────────────────────────────────────────
+    // ── updatePath(oldPath, newPath) ─────────────────────────────────────────
     const updatePath = useCallback((oldPath, newPath) => {
         log.debug('updatePath:', oldPath, '->', newPath);
         setTabs((prev) =>
@@ -123,7 +130,7 @@ export function useTabManager() {
         );
     }, []);
 
-    // ── closeByPath(filePath) ──────────────────────────────────────────────────
+    // ── closeByPath(filePath) ────────────────────────────────────────────────
     const closeByPath = useCallback((filePath) => {
         log.debug('closeByPath:', filePath);
         setTabs((prev) => {
@@ -144,7 +151,7 @@ export function useTabManager() {
         });
     }, [activeTabId]);
 
-    // ── Public API ─────────────────────────────────────────────────────────────
+    // ── Public API ───────────────────────────────────────────────────────────
     return {
         tabs,
         activeTabId,

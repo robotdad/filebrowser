@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'preact/hooks';
+import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
 import { html } from '../html.js';
 import { api } from '../api.js';
 import { Breadcrumb } from './breadcrumb.js';
@@ -12,7 +12,7 @@ import { useTabManager } from '../hooks/use-tab-manager.js';
 import { TabBar } from './tab-bar.js';
 
 export function Layout({ username, authSource, terminalEnabled, homeDir, onLogout }) {
-    // ── Core state ──────────────────────────────────────────────
+    // ── Core state ────────────────────────────────────────────────────────────
     const [currentPath, setCurrentPath] = useState('');
     const tabManager = useTabManager();
     const selectedFile = tabManager.activeFilePath;
@@ -23,7 +23,7 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
     const [sidebarWidth, setSidebarWidth] = useState(280);
     const isResizing = useRef(false);
 
-    // ── Feature state ────────────────────────────────────────────
+    // ── Feature state ─────────────────────────────────────────────────────────
     const [viewMode, setViewMode] = useState('list');         // 'list' | 'grid'
     const [sortBy, setSortBy] = useState('name');            // 'name' | 'modified' | 'size' | 'type'
     const [commandOpen, setCommandOpen] = useState(false);   // ⌘K palette
@@ -33,7 +33,7 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
     const [showUpload, setShowUpload] = useState(false);     // upload modal
     const dragCounter = useRef(0);
 
-    // ── Terminal state ──────────────────────────────────────────────────────
+    // ── Terminal state ────────────────────────────────────────────────────────
     const [terminalOpen, setTerminalOpen] = useState(false);
     const [terminalCwd, setTerminalCwd] = useState('');
     const [terminalDock, setTerminalDock] = useState(() => {
@@ -46,7 +46,7 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
     });
     const isTerminalResizing = useRef(false);
 
-    // ── Pinned favorites ─────────────────────────────────────────
+    // ── Pinned favorites ──────────────────────────────────────────────────────
     const [favorites, setFavorites] = useState(() => {
         try { return JSON.parse(localStorage.getItem('fb-favorites') || '[]'); }
         catch { return []; }
@@ -109,7 +109,7 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
 
     const refresh = () => setRefreshKey((k) => k + 1);
 
-    // ── Terminal helpers ────────────────────────────────────────────────────
+    // ── Terminal helpers ──────────────────────────────────────────────────────
     const openTerminal = (path) => {
         setTerminalCwd(path || currentPath);
         setTerminalOpen(true);
@@ -125,7 +125,7 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
         try { localStorage.setItem('fb-terminal-dock', next); } catch { /* ignore */ }
     };
 
-    // ── Terminal resize ─────────────────────────────────────────────────────
+    // ── Terminal resize ───────────────────────────────────────────────────────
     const startTerminalResize = (e) => {
         e.preventDefault();
         isTerminalResizing.current = true;
@@ -158,7 +158,7 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
         document.addEventListener('mouseup', onUp);
     };
 
-    // ── Keyboard shortcuts ───────────────────────────────────────
+    // ── Keyboard shortcuts ────────────────────────────────────────────────────
     useEffect(() => {
         const handler = (e) => {
             // ⌘K / Ctrl+K → open command palette
@@ -208,7 +208,7 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
         return () => window.removeEventListener('keydown', handler);
     }, [terminalOpen, currentPath]);
 
-    // ── Resize handle ────────────────────────────────────────────
+    // ── Resize handle ─────────────────────────────────────────────────────────
     const startResize = (e) => {
         e.preventDefault();
         isResizing.current = true;
@@ -229,7 +229,7 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
         document.addEventListener('mouseup', onUp);
     };
 
-    // ── Drag-drop overlay (Feature 6) ────────────────────────────
+    // ── Drag-drop overlay (Feature 6) ─────────────────────────────────────────
     const handleDragEnter = (e) => {
         if (!e.dataTransfer?.types?.includes('Files')) return;
         e.preventDefault();
@@ -255,7 +255,7 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
         }
     };
 
-    // ── Auth ─────────────────────────────────────────────────────
+    // ── Auth ──────────────────────────────────────────────────────────────────
     const handleLogout = async () => {
         await api.post('/api/auth/logout');
         if (authSource === 'frontdoor') {
@@ -272,13 +272,13 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
         }
     };
 
-    // ── Navigation ───────────────────────────────────────────────
+    // ── Navigation ────────────────────────────────────────────────────────────
     const handleNavigate = (path) => {
         setCurrentPath(path);
         setSidebarOpen(false);
     };
 
-    // ── File selection ───────────────────────────────────────────
+    // ── File selection ────────────────────────────────────────────────────────
     const handleSelectFile = (path) => {
         tabManager.open(path);
         setSelectedFiles(new Set([path]));
@@ -298,7 +298,7 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
         setSelectedFiles(new Set());
     };
 
-    // ── Context menu actions (Feature 5) ─────────────────────────
+    // ── Context menu actions (Feature 5) ──────────────────────────────────────
     const handleCtxOpen = (path) => handleSelectFile(path);
 
     const handleCtxDownload = (path) => {
@@ -353,6 +353,16 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
         }
         navigator.clipboard?.writeText(rel).then(() => showToast('Relative path copied!'));
     };
+
+    // ── Stable dirty-change callback ──────────────────────────────────────────
+    // Wrap in useCallback so the function reference only changes when activeTabId
+    // changes — NOT on every render.  An unstable (inline) arrow function here
+    // would cause all four editor components' `useEffect([dirty, onDirtyChange])`
+    // hooks to fire on every render, calling setDirty() each time, which
+    // (without the idempotency guard in setDirty) created an infinite loop.
+    const handleDirtyChange = useCallback((dirty) => {
+        tabManager.setDirty(tabManager.activeTabId, dirty);
+    }, [tabManager.setDirty, tabManager.activeTabId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     return html`
         <div
@@ -473,7 +483,7 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
                         onPin=${tabManager.pin}
                         onClose=${tabManager.close}
                     />
-                    <${PreviewPane} filePath=${selectedFile} onDirtyChange=${(dirty) => tabManager.setDirty(tabManager.activeTabId, dirty)} />
+                    <${PreviewPane} filePath=${selectedFile} onDirtyChange=${handleDirtyChange} />
                 </main>
 
                 ${terminalOpen && html`
