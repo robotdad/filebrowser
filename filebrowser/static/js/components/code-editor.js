@@ -190,8 +190,12 @@ export function CodeEditor({ doc, path, readOnly = false, onDocChange,
                 }]));
             }
 
+            // Ensure doc is always a string — guards against upstream
+            // callers passing parsed objects (e.g. JSON content).
+            const docStr = typeof doc === 'string' ? doc : '';
+
             const view = new EditorView({
-                doc: doc || '',
+                doc: docStr,
                 extensions,
                 parent: containerRef.current,
             });

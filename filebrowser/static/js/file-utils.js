@@ -11,7 +11,7 @@
 // ---------------------------------------------------------------------------
 
 export const FILE_CATEGORIES = {
-    text:     ['.txt', '.log', '.csv', '.json', '.xml', '.yaml', '.yml', '.toml', '.env', '.conf'],
+    text:     ['.txt', '.log', '.csv', '.json', '.jsonl', '.xml', '.yaml', '.yml', '.toml', '.env', '.conf'],
     code:     ['.py', '.js', '.ts', '.go', '.rs', '.c', '.cpp', '.java', '.sh', '.sql', '.css'],
     html:     ['.html', '.htm'],
     markdown: ['.md'],
@@ -149,6 +149,7 @@ export const LANGUAGE_MAP = {
     '.ts':    () => import('@codemirror/lang-javascript').then(m => m.javascript({ typescript: true })),
     '.tsx':   () => import('@codemirror/lang-javascript').then(m => m.javascript({ jsx: true, typescript: true })),
     '.json':  () => import('@codemirror/lang-json').then(m => m.json()),
+    '.jsonl': () => import('@codemirror/lang-json').then(m => m.json()),
     '.html':  () => import('@codemirror/lang-html').then(m => m.html()),
     '.htm':   () => import('@codemirror/lang-html').then(m => m.html()),
     '.css':   () => import('@codemirror/lang-css').then(m => m.css()),
@@ -184,7 +185,7 @@ export function getFileExtension(nameOrPath) {
 export const LANG_NAMES = {
     '.py': 'Python', '.js': 'JavaScript', '.mjs': 'JavaScript',
     '.ts': 'TypeScript', '.jsx': 'JSX', '.tsx': 'TSX',
-    '.json': 'JSON', '.html': 'HTML', '.htm': 'HTML',
+    '.json': 'JSON', '.jsonl': 'JSONL', '.html': 'HTML', '.htm': 'HTML',
     '.css': 'CSS', '.md': 'Markdown', '.rs': 'Rust',
     '.go': 'Go', '.sql': 'SQL', '.yaml': 'YAML', '.yml': 'YAML',
     '.xml': 'XML', '.c': 'C', '.cpp': 'C++', '.h': 'C/C++ Header',

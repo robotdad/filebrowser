@@ -13,6 +13,9 @@ function App() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        const shortname = window.location.hostname.split('.')[0];
+        document.title = `${shortname} Files`;
+
         api.get('/api/auth/me')
             .then((data) => {
                 setUser(data.username);

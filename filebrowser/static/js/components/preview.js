@@ -15,6 +15,9 @@ import { createLogger } from '../logger.js';
 
 const log = createLogger('Preview');
 
+// Files above this threshold show a confirmation gate before loading into the editor.
+const LARGE_FILE_THRESHOLD = 5 * 1024 * 1024; // 5 MB
+
 // Set WASM path before d3-graphviz tries to load it
 wasmFolder('https://cdn.jsdelivr.net/npm/@hpcc-js/wasm@1.16.6/dist');
 
@@ -597,6 +600,32 @@ export function PreviewPane({ filePath }) {
     // Track previous filePath to detect actual changes
     const prevPath = useRef(null);
 
+    // Helper: fetch text content and set state (shared by normal + force-load paths)
+    const loadTextContent = useCallback((path, type) => {
+        return api.get(`/api/files/content?path=${encodeURIComponent(path)}`)
+            .then((text) => {
+                if (prevPath.current === path) {
+                    setContent({ type, text });
+                    log.debug('render complete: path=%s', path);
+                }
+            });
+    }, []);
+
+    // Force-load handler for the large-file gate
+    const handleForceLoad = useCallback(() => {
+        if (!content || content.type !== 'large-text') return;
+        const { fileType, filePath: path } = content;
+        setLoading(true);
+        loadTextContent(path, fileType)
+            .catch(() => {
+                if (prevPath.current === path) {
+                    log.warn('load failed: path=%s', path);
+                    setContent(null);
+                }
+            })
+            .finally(() => { if (prevPath.current === path) setLoading(false); });
+    }, [content, loadTextContent]);
+
     useEffect(() => {
         if (!filePath) {
             setContent(null);
@@ -614,12 +643,17 @@ export function PreviewPane({ filePath }) {
         const TEXT_TYPES = ['text', 'code', 'markdown', 'html', 'graphviz'];
 
         if (TEXT_TYPES.includes(type)) {
-            api.get(`/api/files/content?path=${encodeURIComponent(filePath)}`)
-                .then((text) => {
-                    if (prevPath.current === filePath) {
-                        setContent({ type, text });
-                        log.debug('render complete: path=%s', filePath);
+            // Fetch info first to check file size before loading into editor
+            api.get(`/api/files/info?path=${encodeURIComponent(filePath)}`)
+                .then((info) => {
+                    if (prevPath.current !== filePath) return;
+                    if (info.size > LARGE_FILE_THRESHOLD) {
+                        log.info('large file gate: path=%s size=%d', filePath, info.size);
+                        setContent({ type: 'large-text', fileType: type, filePath, size: info.size });
+                        setLoading(false);
+                        return;
                     }
+                    return loadTextContent(filePath, type);
                 })
                 .catch(() => {
                     if (prevPath.current === filePath) {
@@ -637,14 +671,14 @@ export function PreviewPane({ filePath }) {
                     if (prevPath.current !== filePath) return;
                     const backendType = info.category;
                     if (TEXT_TYPES.includes(backendType)) {
+                        if (info.size > LARGE_FILE_THRESHOLD) {
+                            log.info('large file gate: path=%s size=%d', filePath, info.size);
+                            setContent({ type: 'large-text', fileType: backendType, filePath, size: info.size });
+                            setLoading(false);
+                            return;
+                        }
                         // Backend says it's text — fetch content and render
-                        return api.get(`/api/files/content?path=${encodeURIComponent(filePath)}`)
-                            .then((text) => {
-                                if (prevPath.current === filePath) {
-                                    setContent({ type: backendType, text });
-                                    log.debug('render complete (backend-detected text): path=%s category=%s', filePath, backendType);
-                                }
-                            });
+                        return loadTextContent(filePath, backendType);
                     }
                     setContent({ type, info });
                     log.debug('render complete: path=%s', filePath);
@@ -657,7 +691,7 @@ export function PreviewPane({ filePath }) {
                 })
                 .finally(() => { if (prevPath.current === filePath) setLoading(false); });
         }
-    }, [filePath]);
+    }, [filePath, loadTextContent]);
 
     // Callback to update content after saving edits (shared by all editable viewers)
     const handleContentSave = useCallback((newText) => {
@@ -677,6 +711,21 @@ export function PreviewPane({ filePath }) {
 
     let inner;
     switch (content.type) {
+        case 'large-text':
+            inner = html`
+                <div class="preview-large-file">
+                    <i class="ph ph-file-text" style="font-size: 48px; opacity: 0.4"></i>
+                    <h3>${filePath.split('/').pop()}</h3>
+                    <p>${formatSize(content.size)} — large files may be slow to load in the editor.</p>
+                    <div class="preview-large-file-actions">
+                        <button class="btn btn-primary" onClick=${handleForceLoad}>
+                            ${loading ? 'Loading…' : 'Load anyway'}
+                        </button>
+                        <a href=${downloadUrl} class="btn btn-secondary">Download</a>
+                    </div>
+                </div>
+            `;
+            break;
         case 'text':
         case 'code':
             inner = html`<${EditableViewer} text=${content.text} path=${filePath}

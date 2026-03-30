@@ -1444,6 +1444,56 @@ body {
 }
 .preview-other { padding: var(--space-lg); }
 
+/* Large file gate */
+.preview-large-file {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    height: 100%;
+    color: var(--text-muted);
+    text-align: center;
+    padding: var(--space-lg);
+}
+.preview-large-file h3 {
+    color: var(--text-primary);
+    margin: var(--space-xs) 0 0 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+.preview-large-file p {
+    margin: 0;
+    font-size: 14px;
+}
+.preview-large-file-actions {
+    display: flex;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+}
+.btn {
+    display: inline-block;
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+    font-size: 14px;
+    text-decoration: none;
+    cursor: pointer;
+    border: none;
+    transition: background 0.2s var(--ease-out), transform 0.15s var(--spring);
+}
+.btn:active { transform: scale(0.96); }
+.btn-primary {
+    background: var(--accent);
+    color: var(--text-on-accent);
+}
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-secondary {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+.btn-secondary:hover { background: var(--border-color); }
+
 .download-btn {
     display: inline-block;
     margin-top: var(--space-md);

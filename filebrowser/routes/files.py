@@ -91,7 +91,11 @@ async def get_content(
             status_code=400, detail={"error": "Is a directory", "code": "IS_DIRECTORY"}
         )
     logger.info("Read: user=%s path=%s", username, path)
-    return FileResponse(file_path)
+    # Always serve as text/plain so the API client doesn't auto-parse
+    # file content based on extension (e.g. .json → application/json
+    # would cause the frontend to receive a parsed object instead of
+    # the raw text string).
+    return FileResponse(file_path, media_type="text/plain; charset=utf-8")
 
 
 @router.get("/download")
