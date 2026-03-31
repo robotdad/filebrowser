@@ -1,19 +1,11 @@
 http://FILEBROWSER_FQDN:FILEBROWSER_CADDY_PORT {
-    # Terminal WebSocket: bypass forward_auth entirely.
-    # Caddy 2.6 can't proxy WebSocket connections after a forward_auth
-    # WS handshake, so terminal requests go straight to filebrowser.
-    # Filebrowser authenticates via its own session cookie instead.
-    handle /api/terminal* {
-        reverse_proxy localhost:FILEBROWSER_PORT
+    # All requests (including WebSocket upgrades) are validated by frontdoor.
+    # Frontdoor's forward_auth handles both HTTP and WebSocket via
+    # GET /api/auth/validate and WS /api/auth/validate respectively.
+    forward_auth localhost:FRONTDOOR_PORT {
+        uri /api/auth/validate
+        copy_headers X-Authenticated-User
     }
 
-    # All other requests: authenticate via frontdoor
-    handle {
-        forward_auth localhost:FRONTDOOR_PORT {
-            uri /api/auth/validate
-            copy_headers X-Authenticated-User
-        }
-
-        reverse_proxy localhost:FILEBROWSER_PORT
-    }
+    reverse_proxy localhost:FILEBROWSER_PORT
 }

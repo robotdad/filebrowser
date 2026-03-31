@@ -287,9 +287,7 @@ class TestMeRoute:
         assert response.status_code == 401
 
     def test_me_with_remote_user_header_returns_frontdoor_source(self, auth_client):
-        response = auth_client.get(
-            "/api/auth/me", headers={"X-Authenticated-User": "alice"}
-        )
+        response = auth_client.get("/api/auth/me", headers={"X-Authenticated-User": "alice"})
         assert response.status_code == 200
         data = response.json()
         assert data["username"] == "alice"
