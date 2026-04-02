@@ -25,6 +25,7 @@ export function LoginForm({ onLogin }) {
     return html`
         <div class="login-container">
             <form class="login-form" onSubmit=${handleSubmit}>
+                <img src="/filebrowser-icon.svg" width="56" height="56" alt="filebrowser" class="login-logo" />
                 <h1>File Browser</h1>
                 ${error && html`<div class="login-error">${error}</div>`}
                 <div class="login-field">

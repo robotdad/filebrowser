@@ -1,0 +1,54 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g clip-path="url(#clip0_filebrowser_dark)">
+
+<!-- Dark background fill -->
+<path d="M61.2547 2.7453H2.7453V61.2547H61.2547V2.7453Z" fill="#0D1117"/>
+
+<!-- Window chrome: outer border + header/body divider (evenodd rule) -->
+<path fill-rule="evenodd" clip-rule="evenodd"
+  d="M61.941 0C63.0781 0 64 0.921837 64 2.05898V61.941C64 63.0781 63.0781 64 61.941 64H2.05898C0.921839 64 0 63.0781 0 61.941V2.05898C0 0.921837 0.921837 0 2.05898 0H61.941ZM2.74531 18.1877V61.2547H61.2547V18.1877H2.74531ZM2.74531 15.7855H61.2547V2.74531H2.74531V15.7855Z"
+  fill="white"/>
+
+<!-- Header dot 1: Amber (dirty-state / tab indicator) -->
+<circle cx="9.2654" cy="9.2654" r="2.917" fill="#FF9500"/>
+<!-- Header dot 2: White (neutral) -->
+<circle cx="18.5308" cy="9.2654" r="2.917" fill="white"/>
+<!-- Header dot 3: Apple blue (primary accent) -->
+<circle cx="27.7962" cy="9.2654" r="2.917" fill="#007AFF"/>
+
+<!-- Sidebar panel -->
+<rect x="4.5" y="21" width="15" height="37" rx="1" fill="#1A1F2B"/>
+
+<!-- Sidebar tree items (simulating file tree) -->
+<rect x="7"  y="26" width="9" height="2" rx="1" fill="white" opacity="0.85"/>
+<rect x="7"  y="32" width="7" height="2" rx="1" fill="white" opacity="0.55"/>
+<rect x="9"  y="38" width="7" height="2" rx="1" fill="white" opacity="0.40"/>
+<rect x="9"  y="44" width="5" height="2" rx="1" fill="white" opacity="0.30"/>
+
+<!-- Divider between sidebar and content area -->
+<rect x="20" y="21" width="1" height="37" fill="white" opacity="0.22"/>
+
+<!-- Content panel -->
+<rect x="22.5" y="21" width="37" height="37" rx="1" fill="#1A1F2B"/>
+
+<!-- File-type squares — 3×3 grid, size 7px, gap 4px, origin (26, 25) -->
+<!-- Row 1 -->
+<rect x="26" y="25" width="7" height="7" rx="1.5" fill="#3b82f6"/>
+<rect x="37" y="25" width="7" height="7" rx="1.5" fill="#f59e0b"/>
+<rect x="48" y="25" width="7" height="7" rx="1.5" fill="#10b981"/>
+<!-- Row 2 -->
+<rect x="26" y="36" width="7" height="7" rx="1.5" fill="#8b5cf6"/>
+<rect x="37" y="36" width="7" height="7" rx="1.5" fill="#ef4444"/>
+<rect x="48" y="36" width="7" height="7" rx="1.5" fill="#06b6d4"/>
+<!-- Row 3 -->
+<rect x="26" y="47" width="7" height="7" rx="1.5" fill="#ec4899"/>
+<rect x="37" y="47" width="7" height="7" rx="1.5" fill="#6b7280"/>
+<rect x="48" y="47" width="7" height="7" rx="1.5" fill="#007AFF"/>
+
+</g>
+<defs>
+  <clipPath id="clip0_filebrowser_dark">
+    <rect width="64" height="64" fill="white"/>
+  </clipPath>
+</defs>
+</svg>

@@ -163,6 +163,23 @@ body {
     gap: var(--space-md);
 }
 
+.header-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.header-logo {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+}
+
+.login-logo {
+    display: block;
+    margin: 0 auto var(--space-md);
+}
+
 .username {
     color: var(--text-secondary);
     font-size: 13px;

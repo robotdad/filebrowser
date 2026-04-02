@@ -375,7 +375,10 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
             <!-- Header -->
             <header class="header">
                 <button class="hamburger" onClick=${() => setSidebarOpen(!sidebarOpen)}>&#9776;</button>
-                <span class="header-hostname"><span class="mono">${window.location.hostname.split('.')[0]}</span></span>
+                <span class="header-brand">
+                    <img src="/filebrowser-icon.svg" width="28" height="28" alt="" class="header-logo" />
+                    <span class="header-hostname"><span class="mono">${window.location.hostname.split('.')[0]}</span></span>
+                </span>
                 <${Breadcrumb} path=${currentPath} onNavigate=${setCurrentPath} />
                 <div class="header-right">
                     <!-- ⌘K hint -->

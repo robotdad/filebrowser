@@ -1,3 +1,11 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/branding/icons/filebrowser-icon-128.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/branding/icons/filebrowser-icon-128.png">
+    <img alt="filebrowser" src="assets/branding/icons/filebrowser-icon-128.png" width="80">
+  </picture>
+</p>
+
 # filebrowser
 
 Web-based remote file browser for headless Linux machines, accessible over Tailscale.
