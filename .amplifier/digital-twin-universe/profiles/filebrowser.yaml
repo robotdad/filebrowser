@@ -1,0 +1,80 @@
+# DTU profile for robotdad/filebrowser — reality-check discovery (Phase 0).
+#
+# NOT self-contained: requires the filebrowser checkout to exist at the path
+# three levels above this profile file (i.e. the repo root at ../../../
+# relative to profiles/).  The repo root is pushed into /root/filebrowser/
+# inside the container via provision.files.
+#
+# Browse-root mechanism (pinned from source inspection):
+#   filebrowser/config.py:9
+#     home_dir: Path = field(default_factory=Path.home)
+#   There is NO CLI flag and NO FILEBROWSER_HOME_DIR env var.
+#   Path.home() reads the HOME environment variable, so setting
+#     HOME=/root/filebrowser/fixtures
+#   before launching uvicorn makes settings.home_dir = /root/filebrowser/fixtures,
+#   which is exactly the committed fixtures/ directory.
+#   FILEBROWSER_DATA_DIR is pinned separately so the data directory does not
+#   pollute the browse root.
+#
+# ASGI app:    filebrowser.main:app  (filebrowser/main.py:22)
+# Install:     pip install -e ".[dev]"  (via uv sync from committed uv.lock)
+# Login creds: root / filebrowser  (set by chpasswd in setup_cmds)
+#
+# Launch:
+#   amplifier-digital-twin launch \
+#     filebrowser/.amplifier/digital-twin-universe/profiles/filebrowser.yaml
+
+name: filebrowser
+description: >
+  FileBrowser markdown app under test. Serves the committed fixtures/ directory
+  as the browse root so existing table documents are openable in the editor.
+
+base:
+  image: ubuntu:24.04
+
+provision:
+  files:
+    # Push the repo root into /root/filebrowser/ inside the container.
+    # Relative path ../../../ resolves to the repo root from this profile's
+    # directory; provision.files preserves the basename so files land at dest/filebrowser/.
+    - src: ../../../
+      dest: /root/
+      recursive: true
+
+  setup_cmds:
+    # System deps: curl for uv installer; libpam0g-dev + python3-dev for
+    # the python-pam C extension (required on aarch64 where no pre-built wheel exists)
+    - apt-get update -qq && apt-get install -y curl python3-dev libpam0g-dev
+
+    # Install uv (package manager — matches uv.lock committed in repo)
+    - curl -LsSf https://astral.sh/uv/install.sh | sh
+
+    # Install filebrowser + dev extras from the committed lockfile
+    - cd /root/filebrowser && uv sync
+
+    # Set a known root password for PAM login (used by the browser-tester)
+    - echo "root:filebrowser" | chpasswd
+
+    # Launch filebrowser in the background.
+    # HOME=/root/filebrowser/fixtures  →  Path.home() = fixtures/  →  settings.home_dir
+    # FILEBROWSER_DATA_DIR kept outside fixtures/ to avoid polluting the browse root.
+    # Uvicorn is run via the venv created by uv sync.
+    - |
+      nohup env HOME=/root/filebrowser/fixtures \
+        FILEBROWSER_DATA_DIR=/root/.config/filebrowser \
+        /root/filebrowser/.venv/bin/uvicorn filebrowser.main:app \
+        --host 0.0.0.0 --port 58080 \
+        > /var/log/filebrowser.log 2>&1 &
+      sleep 2
+
+access:
+  ports:
+    - host: 58080
+      container: 58080
+      label: FileBrowser
+      path: /
+
+readiness:
+  - name: filebrowser-ready
+    http:
+      url: http://localhost:58080/
