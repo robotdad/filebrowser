@@ -16,9 +16,28 @@
 #   FILEBROWSER_DATA_DIR is pinned separately so the data directory does not
 #   pollute the browse root.
 #
+# Auth-bypass (frontdoor mode):
+#   filebrowser/auth.py:46 — require_auth() checks for an X-Authenticated-User
+#   request header FIRST; when present it returns the username immediately and
+#   skips PAM authentication entirely.  This is the repo's documented
+#   Caddy-frontdoor integration path (see deploy/filebrowser.caddy.*.template).
+#
+#   In this profile nginx acts as a trivial header-injecting reverse proxy:
+#     uvicorn → 127.0.0.1:58081  (internal; never directly accessible)
+#     nginx   → :58080            (the port exposed to the reality-check tester)
+#   nginx adds "X-Authenticated-User: root" to every forwarded request, so the
+#   tester lands straight in the file browser with no login form.
+#
+#   Why nginx instead of Caddy:
+#     nginx is in Ubuntu 24.04's default apt repos — zero external network
+#     dependency during provisioning, guaranteed available.  The repo's Caddy
+#     templates are for production (TLS + a separate frontdoor auth service);
+#     nginx is lighter for this single-header-injection use case and
+#     its package availability is unconditional.
+#
 # ASGI app:    filebrowser.main:app  (filebrowser/main.py:22)
 # Install:     pip install -e ".[dev]"  (via uv sync from committed uv.lock)
-# Login creds: root / filebrowser  (set by chpasswd in setup_cmds)
+# Login creds: root / filebrowser  (set by chpasswd; never reached via proxy)
 #
 # Launch:
 #   amplifier-digital-twin launch \
@@ -28,6 +47,9 @@ name: filebrowser
 description: >
   FileBrowser markdown app under test. Serves the committed fixtures/ directory
   as the browse root so existing table documents are openable in the editor.
+  Deployed behind an nginx reverse proxy that injects X-Authenticated-User: root
+  on every request — bypassing the PAM login flow entirely (frontdoor mode per
+  filebrowser/auth.py:46).
 
 base:
   image: ubuntu:24.04
@@ -43,8 +65,10 @@ provision:
 
   setup_cmds:
     # System deps: curl for uv installer; libpam0g-dev + python3-dev for
-    # the python-pam C extension (required on aarch64 where no pre-built wheel exists)
-    - apt-get update -qq && apt-get install -y curl python3-dev libpam0g-dev
+    # the python-pam C extension (required on aarch64 where no pre-built wheel exists);
+    # nginx for the auth-bypass reverse proxy (available in Ubuntu 24.04 default repos —
+    # no external package source needed).
+    - apt-get update -qq && apt-get install -y curl python3-dev libpam0g-dev nginx
 
     # Install uv (package manager — matches uv.lock committed in repo)
     - curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -52,18 +76,43 @@ provision:
     # Install filebrowser + dev extras from the committed lockfile
     - cd /root/filebrowser && uv sync
 
-    # Set a known root password for PAM login (used by the browser-tester)
+    # Set a known root password for PAM login (harmless fallback — PAM is never reached
+    # because the nginx proxy injects X-Authenticated-User: root before filebrowser
+    # sees the request; filebrowser/auth.py:46 returns immediately on that header).
     - echo "root:filebrowser" | chpasswd
 
-    # Launch filebrowser in the background.
+    # Configure nginx as an auth-bypass reverse proxy.
+    # All requests to :58080 are forwarded to uvicorn on 127.0.0.1:58081 with
+    # the X-Authenticated-User: root header injected — filebrowser/auth.py:46
+    # trusts this header and returns the username without any PAM check.
+    # The single-quoted heredoc delimiter ('NGINX') prevents shell from expanding
+    # nginx variables like $http_host; nginx receives them literally as intended.
+    - |
+      rm -f /etc/nginx/sites-enabled/default
+      cat > /etc/nginx/conf.d/filebrowser.conf << 'NGINX'
+      server {
+          listen 58080;
+          location / {
+              proxy_pass http://127.0.0.1:58081;
+              # Frontdoor bypass header — trusted by filebrowser/auth.py:46
+              proxy_set_header X-Authenticated-User "root";
+              proxy_set_header Host $http_host;
+              proxy_read_timeout 300s;
+              proxy_send_timeout 300s;
+          }
+      }
+      NGINX
+      nginx -t && nginx -s reload 2>/dev/null || nginx
+
+    # Launch filebrowser on internal port 58081 (nginx proxies :58080 → :58081).
     # HOME=/root/filebrowser/fixtures  →  Path.home() = fixtures/  →  settings.home_dir
     # FILEBROWSER_DATA_DIR kept outside fixtures/ to avoid polluting the browse root.
-    # Uvicorn is run via the venv created by uv sync.
+    # Bind to 127.0.0.1 only — nginx is the sole external entry point on :58080.
     - |
       nohup env HOME=/root/filebrowser/fixtures \
         FILEBROWSER_DATA_DIR=/root/.config/filebrowser \
         /root/filebrowser/.venv/bin/uvicorn filebrowser.main:app \
-        --host 0.0.0.0 --port 58080 \
+        --host 127.0.0.1 --port 58081 \
         > /var/log/filebrowser.log 2>&1 &
       sleep 2
 
@@ -75,6 +124,16 @@ access:
       path: /
 
 readiness:
-  - name: filebrowser-ready
+  # Basic check: nginx is up and the app frontend loads (static assets, no auth required).
+  - name: filebrowser-frontend-ready
     http:
       url: http://localhost:58080/
+
+  # Auth-bypass proof: GET /api/locations is protected by require_auth
+  # (filebrowser/routes/locations.py:21 — username: str = Depends(require_auth)).
+  # Without the X-Authenticated-User header this endpoint returns 401.
+  # Through the nginx proxy (which injects the header on every request) it returns 200.
+  # A 200 here proves nginx is alive, config is loaded, and header injection is working.
+  - name: filebrowser-auth-bypass-ready
+    http:
+      url: http://localhost:58080/api/locations
