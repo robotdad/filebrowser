@@ -76,6 +76,20 @@ class TestFileContent:
         response = client.get("/api/files/content", params={"path": "../../etc/passwd"})
         assert response.status_code == 403
 
+    def test_svg_content_type(self, client):
+        """SVG files must be served with image/svg+xml MIME type to render in <img> tags."""
+        response = client.get("/api/files/content", params={"path": "images/icon.svg"})
+        assert response.status_code == 200
+        assert "image/svg+xml" in response.headers["content-type"]
+        assert "<svg" in response.text
+        assert "<circle" in response.text
+
+    def test_text_file_remains_text_plain(self, client):
+        """Non-SVG files should still be served as text/plain to prevent auto-parsing."""
+        response = client.get("/api/files/content", params={"path": "hello.txt"})
+        assert response.status_code == 200
+        assert "text/plain" in response.headers["content-type"]
+
 
 class TestDownload:
     def test_download_sets_content_disposition(self, client):

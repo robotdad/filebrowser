@@ -91,6 +91,9 @@ async def get_content(
             status_code=400, detail={"error": "Is a directory", "code": "IS_DIRECTORY"}
         )
     logger.info("Read: user=%s path=%s", username, path)
+    # SVG files need image/svg+xml to render in <img> tags
+    if file_path.suffix.lower() == '.svg':
+        return FileResponse(file_path, media_type="image/svg+xml")
     # Always serve as text/plain so the API client doesn't auto-parse
     # file content based on extension (e.g. .json → application/json
     # would cause the frontend to receive a parsed object instead of

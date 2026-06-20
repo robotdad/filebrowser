@@ -22,6 +22,13 @@ def tmp_home(tmp_path):
     (tmp_path / ".config" / "settings.json").write_text("{}")
     # Binary files
     (tmp_path / "images" / "photo.jpg").write_bytes(b"\xff\xd8\xff\xe0fake-jpg")
+    # SVG files
+    (tmp_path / "images" / "icon.svg").write_text(
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">\n'
+        '  <circle cx="50" cy="50" r="40" fill="blue"/>\n'
+        '</svg>'
+    )
     # Extension-less text files
     (tmp_path / "LICENSE").write_text("MIT License\n\nCopyright (c) 2024")
     (tmp_path / "Makefile").write_text("all:\n\techo hello")
