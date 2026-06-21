@@ -75,6 +75,38 @@ class TestFileContent:
     def test_content_traversal_returns_403(self, client):
         response = client.get("/api/files/content", params={"path": "../../etc/passwd"})
         assert response.status_code == 403
+    
+    def test_svg_has_correct_content_type(self, client):
+        """SVG files must be served with image/svg+xml for browser rendering."""
+        response = client.get("/api/files/content", params={"path": "images/logo.svg"})
+        assert response.status_code == 200
+        assert response.headers.get("content-type") == "image/svg+xml"
+        assert "<svg" in response.text
+    
+    def test_svg_has_security_headers(self, client):
+        """SVG files must have XSS prevention headers to block embedded scripts."""
+        response = client.get("/api/files/content", params={"path": "images/logo.svg"})
+        assert response.status_code == 200
+        # Verify X-Content-Type-Options header prevents MIME sniffing
+        assert response.headers.get("x-content-type-options") == "nosniff"
+        # Verify CSP sandboxes the SVG and blocks script execution
+        csp = response.headers.get("content-security-policy")
+        assert csp is not None
+        assert "default-src 'none'" in csp
+        assert "sandbox" in csp
+    
+    def test_text_file_content_type_remains_text_plain(self, client):
+        """Text files should still be served as text/plain (regression guard)."""
+        response = client.get("/api/files/content", params={"path": "hello.txt"})
+        assert response.status_code == 200
+        assert response.headers.get("content-type") == "text/plain; charset=utf-8"
+    
+    def test_jpg_has_correct_content_type(self, client):
+        """JPEG images should be served with image/jpeg."""
+        response = client.get("/api/files/content", params={"path": "images/photo.jpg"})
+        assert response.status_code == 200
+        content_type = response.headers.get("content-type")
+        assert content_type in ("image/jpeg", "image/jpg")
 
 
 class TestDownload:

@@ -1,4 +1,5 @@
 import logging
+import mimetypes
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
@@ -91,11 +92,32 @@ async def get_content(
             status_code=400, detail={"error": "Is a directory", "code": "IS_DIRECTORY"}
         )
     logger.info("Read: user=%s path=%s", username, path)
-    # Always serve as text/plain so the API client doesn't auto-parse
-    # file content based on extension (e.g. .json → application/json
-    # would cause the frontend to receive a parsed object instead of
-    # the raw text string).
-    return FileResponse(file_path, media_type="text/plain; charset=utf-8")
+    
+    # Determine the appropriate media type based on file category
+    file_category = fs.detect_file_type(file_path.name, file_path)
+    
+    # Image files need their actual MIME type for proper browser rendering
+    # (especially SVG which requires image/svg+xml to display in <img> tags).
+    # Text/code files stay as text/plain to prevent the API client from
+    # auto-parsing file content (e.g. .json → application/json would cause
+    # the frontend to receive a parsed object instead of raw text).
+    if file_category == "image":
+        guessed_type, _ = mimetypes.guess_type(str(file_path))
+        media_type = guessed_type if guessed_type else "application/octet-stream"
+        
+        # SVG files can contain JavaScript via <script> tags, creating an XSS
+        # vulnerability if served inline without protection. Add security headers
+        # to prevent script execution while still allowing inline display.
+        if media_type == "image/svg+xml":
+            headers = {
+                "X-Content-Type-Options": "nosniff",
+                "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+            }
+            return FileResponse(file_path, media_type=media_type, headers=headers)
+    else:
+        media_type = "text/plain; charset=utf-8"
+    
+    return FileResponse(file_path, media_type=media_type)
 
 
 @router.get("/download")
