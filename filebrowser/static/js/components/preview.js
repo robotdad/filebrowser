@@ -12,8 +12,13 @@ import * as d3 from 'd3';
 import { graphviz as d3Graphviz } from 'd3-graphviz';
 import GraphvizSvg from '../graphviz-svg.js';
 import { createLogger } from '../logger.js';
+import * as pdfjsLib from 'pdfjs-dist';
 
 const log = createLogger('Preview');
+
+// Configure pdf.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = 
+    'https://cdn.jsdelivr.net/npm/pdfjs-dist@4/build/pdf.worker.min.mjs';
 
 // Files above this threshold show a confirmation gate before loading into the editor.
 const LARGE_FILE_THRESHOLD = 5 * 1024 * 1024; // 5 MB
@@ -589,6 +594,142 @@ function GraphvizViewer({ text, path, onSave, onDirtyChange }) {
     `;
 }
 
+function PdfViewer({ contentUrl, filePath }) {
+    const [pdf, setPdf] = useState(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [numPages, setNumPages] = useState(0);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [scale, setScale] = useState(1.0);
+    const canvasRef = useRef(null);
+    const renderTask = useRef(null);
+
+    // Load PDF document
+    useEffect(() => {
+        if (!contentUrl) return;
+        
+        let cancelled = false;
+        setLoading(true);
+        setError(null);
+
+        pdfjsLib.getDocument(contentUrl).promise
+            .then((pdfDoc) => {
+                if (cancelled) return;
+                setPdf(pdfDoc);
+                setNumPages(pdfDoc.numPages);
+                setCurrentPage(1);
+                setLoading(false);
+            })
+            .catch((err) => {
+                if (cancelled) return;
+                log.error('PDF load failed: %s', err.message);
+                setError(err.message || 'Failed to load PDF');
+                setLoading(false);
+            });
+
+        return () => { cancelled = true; };
+    }, [contentUrl]);
+
+    // Render current page to canvas
+    useEffect(() => {
+        if (!pdf || !canvasRef.current || currentPage < 1 || currentPage > numPages) return;
+
+        // Cancel any pending render
+        if (renderTask.current) {
+            renderTask.current.cancel();
+            renderTask.current = null;
+        }
+
+        const canvas = canvasRef.current;
+        const context = canvas.getContext('2d');
+
+        pdf.getPage(currentPage)
+            .then((page) => {
+                const viewport = page.getViewport({ scale });
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+
+                const task = page.render({
+                    canvasContext: context,
+                    viewport: viewport,
+                });
+                renderTask.current = task;
+
+                return task.promise;
+            })
+            .then(() => {
+                renderTask.current = null;
+            })
+            .catch((err) => {
+                if (err.name === 'RenderingCancelledException') return;
+                log.error('PDF render failed: %s', err.message);
+                setError(err.message || 'Failed to render page');
+            });
+
+        return () => {
+            if (renderTask.current) {
+                renderTask.current.cancel();
+                renderTask.current = null;
+            }
+        };
+    }, [pdf, currentPage, scale, numPages]);
+
+    const handlePrevPage = () => {
+        if (currentPage > 1) setCurrentPage(currentPage - 1);
+    };
+
+    const handleNextPage = () => {
+        if (currentPage < numPages) setCurrentPage(currentPage + 1);
+    };
+
+    const handleZoomIn = () => setScale(s => Math.min(s * 1.2, 3.0));
+    const handleZoomOut = () => setScale(s => Math.max(s * 0.8, 0.5));
+    const handleZoomReset = () => setScale(1.0);
+
+    if (loading) {
+        return html`<div class="pdf-viewer-loading">Loading PDF...</div>`;
+    }
+
+    if (error) {
+        return html`
+            <div class="pdf-viewer-error">
+                <i class="ph ph-warning-circle"></i>
+                <span>Error loading PDF: ${error}</span>
+            </div>
+        `;
+    }
+
+    return html`
+        <div class="pdf-viewer">
+            <div class="pdf-viewer-toolbar">
+                <button onClick=${handlePrevPage} disabled=${currentPage <= 1} title="Previous page">
+                    <i class="ph ph-caret-left"></i>
+                </button>
+                <span class="pdf-page-info">
+                    Page ${currentPage} / ${numPages}
+                </span>
+                <button onClick=${handleNextPage} disabled=${currentPage >= numPages} title="Next page">
+                    <i class="ph ph-caret-right"></i>
+                </button>
+                <div class="pdf-toolbar-separator"></div>
+                <button onClick=${handleZoomOut} title="Zoom out">
+                    <i class="ph ph-magnifying-glass-minus"></i>
+                </button>
+                <span class="pdf-zoom-level">${Math.round(scale * 100)}%</span>
+                <button onClick=${handleZoomIn} title="Zoom in">
+                    <i class="ph ph-magnifying-glass-plus"></i>
+                </button>
+                <button onClick=${handleZoomReset} title="Reset zoom">
+                    <i class="ph ph-arrows-in"></i>
+                </button>
+            </div>
+            <div class="pdf-viewer-canvas-container">
+                <canvas ref=${canvasRef} class="pdf-viewer-canvas"></canvas>
+            </div>
+        </div>
+    `;
+}
+
 // Animated wrapper — remounts (via key) on each new filePath to retrigger animation
 function AnimatedContent({ filePath, children }) {
     return html`
@@ -754,7 +895,7 @@ export function PreviewPane({ filePath, onDirtyChange }) {
             inner = html`<div class="preview-video"><video controls src=${contentUrl}></video></div>`;
             break;
         case 'pdf':
-            inner = html`<div class="preview-pdf"><iframe src=${contentUrl}></iframe></div>`;
+            inner = html`<${PdfViewer} contentUrl=${contentUrl} filePath=${filePath} />`;
             break;
         default:
             inner = html`

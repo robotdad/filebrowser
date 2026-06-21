@@ -35,6 +35,14 @@ def tmp_home(tmp_path):
     (tmp_path / "mystery").write_text("just some plain text content")
     # Extension-less binary file
     (tmp_path / "binaryblob").write_bytes(b"\x00\x01\x02\xff\xfe binary data")
+    # Minimal valid PDF
+    (tmp_path / "sample.pdf").write_bytes(
+        b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj "
+        b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj "
+        b"3 0 obj<</Type/Page/MediaBox[0 0 3 3]>>endobj\n"
+        b"xref\n0 4\n0000000000 65535 f \n"
+        b"trailer<</Size 4/Root 1 0 R>>\nstartxref\n0\n%%EOF"
+    )
     return tmp_path
 
 
