@@ -107,6 +107,19 @@ class TestFileContent:
         assert response.status_code == 200
         content_type = response.headers.get("content-type")
         assert content_type in ("image/jpeg", "image/jpg")
+    
+    def test_pdf_has_correct_content_type(self, client):
+        """PDF files must be served with application/pdf for browser rendering."""
+        response = client.get("/api/files/content", params={"path": "sample.pdf"})
+        assert response.status_code == 200
+        assert response.headers.get("content-type") == "application/pdf"
+    
+    def test_pdf_does_not_set_content_disposition(self, client):
+        """PDF files must NOT set Content-Disposition: attachment (viewing, not downloading)."""
+        response = client.get("/api/files/content", params={"path": "sample.pdf"})
+        assert response.status_code == 200
+        cd = response.headers.get("content-disposition", "")
+        assert "attachment" not in cd
 
 
 class TestDownload:

@@ -114,6 +114,11 @@ async def get_content(
                 "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox"
             }
             return FileResponse(file_path, media_type=media_type, headers=headers)
+    elif file_category == "pdf":
+        # PDF files must be served with application/pdf for browser rendering.
+        # No Content-Disposition header (unlike /download endpoint) - we want
+        # the browser to display PDFs inline, not download them.
+        media_type = "application/pdf"
     else:
         media_type = "text/plain; charset=utf-8"
     
