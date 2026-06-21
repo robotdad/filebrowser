@@ -28,6 +28,14 @@ def tmp_home(tmp_path):
         '<circle cx="50" cy="50" r="40" fill="blue"/>'
         '</svg>'
     )
+    # PDF file
+    (tmp_path / "docs" / "sample.pdf").write_bytes(
+        b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n"
+        b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n"
+        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>\nendobj\n"
+        b"xref\n0 4\n0000000000 65535 f\n0000000009 00000 n\n0000000058 00000 n\n"
+        b"0000000115 00000 n\ntrailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n195\n%%EOF\n"
+    )
     # Extension-less text files
     (tmp_path / "LICENSE").write_text("MIT License\n\nCopyright (c) 2024")
     (tmp_path / "Makefile").write_text("all:\n\techo hello")

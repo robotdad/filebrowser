@@ -114,6 +114,20 @@ async def get_content(
                 "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox"
             }
             return FileResponse(file_path, media_type=media_type, headers=headers)
+    elif file_category == "pdf":
+        # PDF files need application/pdf MIME type for proper browser rendering.
+        # PDFs can contain JavaScript, creating an XSS vulnerability if served inline.
+        # Force download (Content-Disposition: attachment) instead of inline rendering
+        # to prevent embedded JavaScript execution. Browser PDF viewers often do NOT
+        # honor CSP headers, so attachment disposition is the only reliable mitigation.
+        media_type = "application/pdf"
+        headers = {
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; sandbox"
+        }
+        # Use FastAPI's filename parameter for RFC 6266 compliant header encoding
+        # instead of manual construction to prevent header injection attacks
+        return FileResponse(file_path, media_type=media_type, headers=headers, filename=file_path.name)
     else:
         media_type = "text/plain; charset=utf-8"
     

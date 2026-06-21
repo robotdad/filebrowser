@@ -107,6 +107,33 @@ class TestFileContent:
         assert response.status_code == 200
         content_type = response.headers.get("content-type")
         assert content_type in ("image/jpeg", "image/jpg")
+    
+    def test_pdf_has_correct_content_type(self, client):
+        """PDF files must be served with application/pdf for browser rendering."""
+        response = client.get("/api/files/content", params={"path": "docs/sample.pdf"})
+        assert response.status_code == 200
+        assert response.headers.get("content-type") == "application/pdf"
+        assert response.content.startswith(b"%PDF")
+    
+    def test_pdf_has_security_headers(self, client):
+        """PDF files must have XSS prevention headers to block embedded JavaScript."""
+        response = client.get("/api/files/content", params={"path": "docs/sample.pdf"})
+        assert response.status_code == 200
+        # Verify X-Content-Type-Options header prevents MIME sniffing attacks
+        assert response.headers.get("x-content-type-options") == "nosniff"
+        # Verify CSP sandboxes the PDF and blocks script execution
+        csp = response.headers.get("content-security-policy")
+        assert csp is not None
+        assert "default-src 'none'" in csp
+        assert "sandbox" in csp
+        # Verify Content-Disposition forces download instead of inline rendering
+        # (inline rendering allows browser PDF plugins to execute embedded JavaScript,
+        # bypassing CSP headers - attachment is the only reliable mitigation)
+        content_disposition = response.headers.get("content-disposition")
+        assert content_disposition is not None
+        assert "attachment" in content_disposition
+        assert "filename=" in content_disposition
+        assert "sample.pdf" in content_disposition
 
 
 class TestDownload:
