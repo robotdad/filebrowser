@@ -64,7 +64,10 @@ function ImageViewer({ contentUrl, filePath }) {
     const computeFitScale = () => {
         const canvas = canvasRef.current;
         const img = imgRef.current;
-        if (!canvas || !img || !img.naturalWidth) return 1;
+        // Guard against zero or missing natural dimensions (SVGs with pt units can report 0)
+        if (!canvas || !img || !img.naturalWidth || !img.naturalHeight) return 1;
+        // Guard against zero canvas dimensions (flex layout may not be complete yet)
+        if (!canvas.clientWidth || !canvas.clientHeight) return 1;
         const scale = Math.min(
             canvas.clientWidth / img.naturalWidth,
             canvas.clientHeight / img.naturalHeight,
@@ -74,9 +77,13 @@ function ImageViewer({ contentUrl, filePath }) {
     };
 
     const handleImageLoad = () => {
-        fitScale.current = computeFitScale();
-        setZoom(fitScale.current);
-        setOffset({ x: 0, y: 0 });
+        // Defer scale computation to after flex layout completes
+        // (canvas.clientHeight may be 0 on fast/cached loads otherwise)
+        requestAnimationFrame(() => {
+            fitScale.current = computeFitScale();
+            setZoom(fitScale.current);
+            setOffset({ x: 0, y: 0 });
+        });
     };
 
     const handleWheel = (e) => {
