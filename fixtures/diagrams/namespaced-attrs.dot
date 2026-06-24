@@ -1,0 +1,12 @@
+digraph demo {
+  graph [ label="demo", rankdir=LR, param.owner="Owner:required", param.count="Count:required" ];
+  Start [shape=Mdiamond, label="Start"];
+  // The label below intentionally contains a dotted token followed by '=' INSIDE
+  // the quoted string. A naive preprocessor that quotes dotted keys without
+  // skipping quoted strings would corrupt this label by inserting quotes around
+  // the dotted token. It must render verbatim.
+  Work  [shape=box,      label="emit metric.count=3"];
+  End   [shape=Msquare,  label="End"];
+  Start -> Work;
+  Work  -> End [ context.route="ok" ];
+}

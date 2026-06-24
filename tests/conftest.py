@@ -22,10 +22,16 @@ def tmp_home(tmp_path):
     (tmp_path / ".config" / "settings.json").write_text("{}")
     # Binary files
     (tmp_path / "images" / "photo.jpg").write_bytes(b"\xff\xd8\xff\xe0fake-jpg")
-    # SVG file
+    # SVG file (square, pixel dimensions)
     (tmp_path / "images" / "logo.svg").write_text(
         '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">'
         '<circle cx="50" cy="50" r="40" fill="blue"/>'
+        '</svg>'
+    )
+    # Tall SVG file (extreme aspect ratio, pt dimensions - regression test for viewer bug)
+    (tmp_path / "images" / "tall.svg").write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="100pt" height="175pt" viewBox="0 0 100 175">'
+        '<rect x="10" y="10" width="80" height="155" fill="green"/>'
         '</svg>'
     )
     # Extension-less text files
@@ -42,6 +48,17 @@ def tmp_home(tmp_path):
         b"3 0 obj<</Type/Page/MediaBox[0 0 3 3]>>endobj\n"
         b"xref\n0 4\n0000000000 65535 f \n"
         b"trailer<</Size 4/Root 1 0 R>>\nstartxref\n0\n%%EOF"
+    )
+    # HTML files
+    (tmp_path / "page.html").write_text(
+        "<!DOCTYPE html><html><body><h1>Hello HTML</h1></body></html>"
+    )
+    (tmp_path / "malicious.html").write_text(
+        '<html><body><script>alert(1)</script><img onerror="alert(2)" src=x></body></html>'
+    )
+    # .htm alias — must get the same html handling as .html
+    (tmp_path / "page.htm").write_text(
+        "<!DOCTYPE html><html><body><h1>Hello HTM</h1></body></html>"
     )
     return tmp_path
 

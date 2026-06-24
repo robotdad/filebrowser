@@ -137,6 +137,23 @@ async def get_content(
         media_type = "application/pdf"
         headers = {"Cache-Control": "no-cache"}
         return FileResponse(file_path, media_type=media_type, headers=headers)
+    elif file_category == "html":
+        # HTML files can contain JavaScript via <script> tags, inline event handlers,
+        # or other XSS vectors if served inline without protection. Serve with
+        # Content-Security-Policy: sandbox to create an opaque origin that cannot
+        # access the parent page's DOM, cookies, or localStorage.
+        # default-src 'none' blocks all external resource loading (images, CSS, fonts)
+        # to prevent data exfiltration attacks via resource URLs.
+        # style-src 'unsafe-inline' allows inline styles for basic HTML formatting.
+        # X-Content-Type-Options: nosniff prevents browsers from MIME-sniffing.
+        # Cache-Control: no-cache forces revalidation to prevent stale content.
+        media_type = "text/html; charset=utf-8"
+        headers = {
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+            "Cache-Control": "no-cache",
+        }
+        return FileResponse(file_path, media_type=media_type, headers=headers)
     else:
         media_type = "text/plain; charset=utf-8"
     
