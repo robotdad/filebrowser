@@ -1,0 +1,78 @@
+# config.yaml — YAML fixture for CodeMirror syntax highlighting test.
+# Exercises: nested mappings, sequences, anchors, aliases, comments,
+# multi-line strings, boolean/integer/float literals.
+
+app:
+  name: filebrowser
+  version: "1.4.0"
+  debug: false
+  log_level: INFO    # DEBUG | INFO | WARN | ERROR
+
+server:
+  host: 0.0.0.0
+  port: 58080
+  reload: true
+  workers: 4
+  timeout_keep_alive: 30
+
+auth:
+  enabled: true
+  # PAM is the default; set bypass: true for DTU / test environments
+  bypass: false
+  session:
+    secret_key: change-me-in-production
+    max_age: 86400       # seconds (24 h)
+    secure_cookie: true
+    samesite: lax
+
+storage:
+  root_dir: /srv/files
+  max_upload_mb: 50
+  hidden_patterns:
+    - ".*"              # dot-files
+    - "__pycache__"
+    - "*.pyc"
+
+features:
+  terminal:
+    enabled: true
+    allowed_users:
+      - root
+      - admin
+    shell: /bin/bash
+    timeout: 3600        # idle timeout in seconds
+
+  editor:
+    autosave_interval: 30   # 0 = disabled
+    max_file_size_kb: 2048
+
+# --- Anchors / aliases ---
+_defaults: &defaults
+  retries: 3
+  timeout: 10
+
+integrations:
+  s3:
+    <<: *defaults
+    bucket: filebrowser-backups
+    region: us-east-1
+    prefix: backups/
+
+  webhook:
+    <<: *defaults
+    url: https://hooks.example.com/filebrowser
+    events:
+      - file.uploaded
+      - file.deleted
+      - user.login
+
+# --- Multi-line strings ---
+welcome_message: |
+  Welcome to FileBrowser.
+  Browse, edit, and manage your files from any browser.
+  Press Ctrl+K to open the command palette.
+
+privacy_notice: >
+  All file operations are logged for auditing purposes.
+  Sessions expire after 24 hours of inactivity.
+  Contact your administrator for access changes.

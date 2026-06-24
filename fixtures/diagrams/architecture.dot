@@ -1,0 +1,187 @@
+// architecture.dot — Graphviz fixture for GraphvizViewer testing.
+// Exercises: digraph, subgraph clusters, node shapes/colors, labeled
+// edges, rankdir, compound edges, and HTML-like labels.
+// Open in GraphvizViewer to test: Graph render, engine switching
+// (dot/neato/fdp), and the Source/Edit tabs.
+
+digraph FileBrowserArchitecture {
+    graph [
+        label       = "FileBrowser — System Architecture"
+        labelloc    = t
+        fontname    = "Helvetica,Arial"
+        fontsize    = 18
+        rankdir     = TB
+        compound    = true
+        splines     = ortho
+        nodesep     = 0.6
+        ranksep     = 0.9
+        bgcolor     = "#0f1117"
+        fontcolor   = "#e2e4f0"
+    ]
+    node [
+        fontname    = "Helvetica,Arial"
+        fontsize    = 12
+        fontcolor   = "#e2e4f0"
+        style       = "filled,rounded"
+        penwidth    = 1.5
+    ]
+    edge [
+        fontname    = "Helvetica,Arial"
+        fontsize    = 10
+        fontcolor   = "#7f8299"
+        color       = "#2e3148"
+        penwidth    = 1.5
+        arrowsize   = 0.8
+    ]
+
+    // ---- Client tier ----
+    subgraph cluster_client {
+        label       = "Client (Browser)"
+        style       = "filled,rounded"
+        color       = "#1c1e2a"
+        fillcolor   = "#1c1e2a"
+        fontcolor   = "#a898ff"
+
+        browser [
+            label   = "Browser\n(Preact + HTM)"
+            shape   = box
+            fillcolor = "#2e3148"
+        ]
+        cm [
+            label   = "CodeMirror 6\nEditor"
+            shape   = box
+            fillcolor = "#2e3148"
+        ]
+        tiptap [
+            label   = "Tiptap WYSIWYG\nMarkdown Editor"
+            shape   = box
+            fillcolor = "#2e3148"
+        ]
+        xterm [
+            label   = "xterm.js\nTerminal"
+            shape   = box
+            fillcolor = "#2e3148"
+        ]
+        viz [
+            label   = "d3-graphviz\nDiagram Viewer"
+            shape   = box
+            fillcolor = "#2e3148"
+        ]
+    }
+
+    // ---- Reverse proxy tier ----
+    subgraph cluster_proxy {
+        label       = "Reverse Proxy"
+        style       = "filled,rounded"
+        color       = "#1c1e2a"
+        fillcolor   = "#1c1e2a"
+        fontcolor   = "#a898ff"
+
+        nginx [
+            label   = "nginx :58080\n(bypass header injection)"
+            shape   = box
+            fillcolor = "#3d2e5e"
+            color   = "#7c6af7"
+        ]
+    }
+
+    // ---- App tier ----
+    subgraph cluster_app {
+        label       = "Application (FastAPI / Python 3.11+)"
+        style       = "filled,rounded"
+        color       = "#1c1e2a"
+        fillcolor   = "#1c1e2a"
+        fontcolor   = "#a898ff"
+
+        uvicorn [
+            label   = "uvicorn\nASGI server :58081"
+            shape   = box
+            fillcolor = "#2e3148"
+        ]
+        auth [
+            label   = "auth.py\nPAM / header bypass"
+            shape   = box
+            fillcolor = "#2e3148"
+        ]
+        files [
+            label   = "routes/files.py\nFile CRUD"
+            shape   = box
+            fillcolor = "#2e3148"
+        ]
+        locations [
+            label   = "routes/locations.py\nBookmarks"
+            shape   = box
+            fillcolor = "#2e3148"
+        ]
+        terminal_ws [
+            label   = "routes/terminal.py\nWebSocket PTY"
+            shape   = box
+            fillcolor = "#2e3148"
+        ]
+        filesystem [
+            label   = "filesystem.py\nCategory detection\n+ content sniff"
+            shape   = box
+            fillcolor = "#2e3148"
+        ]
+    }
+
+    // ---- Storage tier ----
+    subgraph cluster_storage {
+        label       = "Storage"
+        style       = "filled,rounded"
+        color       = "#1c1e2a"
+        fillcolor   = "#1c1e2a"
+        fontcolor   = "#a898ff"
+
+        disk [
+            label   = "Local Filesystem\n/srv/files"
+            shape   = cylinder
+            fillcolor = "#1a2e1a"
+            color   = "#4caf50"
+        ]
+        settings_db [
+            label   = "settings.json\n(locations + prefs)"
+            shape   = note
+            fillcolor = "#2a2a1e"
+            color   = "#ffb74d"
+        ]
+    }
+
+    // ---- Auth provider ----
+    pam [
+        label   = "PAM\n(system auth)"
+        shape   = ellipse
+        fillcolor = "#1e1e2e"
+        color   = "#5c6bc0"
+    ]
+
+    // ---- Edges: client to proxy ----
+    browser -> nginx [label="HTTP/WS\n:58080"]
+
+    // ---- Edges: proxy to app ----
+    nginx -> uvicorn [
+        label = "HTTP + WS\nX-Authenticated-User"
+        color = "#7c6af7"
+    ]
+
+    // ---- Edges: app internals ----
+    uvicorn -> auth          [label = "every request"]
+    uvicorn -> files         [label = "GET/POST/DELETE\n/api/files/*"]
+    uvicorn -> locations     [label = "/api/locations/*"]
+    uvicorn -> terminal_ws   [label = "WS /api/terminal"]
+    files   -> filesystem    [label = "categorize()"]
+    filesystem -> disk       [label = "read / write"]
+    files   -> disk          [label = "read / write"]
+    locations -> settings_db [label = "read / write"]
+    auth    -> pam           [label = "PAM auth\n(if bypass=false)" style=dashed]
+
+    // ---- Edges: client sub-components ----
+    browser -> cm      [label = "code files"  style=dashed arrowhead=none]
+    browser -> tiptap  [label = ".md files"   style=dashed arrowhead=none]
+    browser -> xterm   [label = "terminal"    style=dashed arrowhead=none]
+    browser -> viz     [label = ".dot/.gv"    style=dashed arrowhead=none]
+
+    // ---- WebSocket path ----
+    xterm      -> terminal_ws [label = "WebSocket\nPTY bridge" color="#ff8a65"]
+    terminal_ws -> pam        [label = "shell exec" style=dashed color="#ff8a65"]
+}

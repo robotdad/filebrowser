@@ -1,0 +1,73 @@
+summary: >
+  Keyboard shortcuts work: Ctrl+K opens a filterable command palette and Escape
+  closes it; Escape closes open modals; an editor in Edit mode exposes a
+  Ctrl+S save affordance; Ctrl+` toggles the terminal panel (WebSocket-backed,
+  marked optional/fragile).
+software_type: web_app
+
+entry_points:
+  - type: url
+    value: "http://<container_ip>:58080/"
+    label: "FileBrowser SPA (DTU, auth-bypassed)"
+
+tests:
+  - description: "Ctrl+K opens the command palette and it can be filtered by typing."
+    type: browser
+    steps:
+      - action: "Open http://<container_ip>:58080/, then press Ctrl+K"
+        expect: "A command palette overlay appears with a search/filter input focused."
+      - action: "Type a few characters (e.g. 'open')"
+        expect: "The palette list narrows to entries matching the typed text."
+
+  - description: "Escape closes the command palette."
+    type: browser
+    steps:
+      - action: "Press Ctrl+K to open the command palette"
+        expect: "The command palette overlay is visible."
+      - action: "Press Escape"
+        expect: "The command palette overlay closes and the file browser is interactive again."
+
+  - description: "Escape closes an open modal/overlay."
+    type: browser
+    steps:
+      - action: "Open the command palette (Ctrl+K) as a representative overlay"
+        expect: "The overlay is visible."
+      - action: "Press Escape"
+        expect: "The overlay/modal is dismissed; no overlay remains on screen."
+
+  - description: "Editor edit mode exposes a save affordance (Ctrl+S) without navigating away."
+    type: browser
+    steps:
+      - action: "Open code/hello.py and switch to the 'Edit' tab"
+        expect: "The file content is shown in an editable editor."
+      - action: "Place focus in the editor and press Ctrl+S"
+        expect: >
+          A save action is triggered in-app (e.g. a 'saved' indicator/toast,
+          or the dirty/unsaved marker clears). The browser's native 'Save page
+          as' dialog does NOT appear, and the page does not navigate away.
+
+  - description: >
+      [priority: low — optional, fragile] Ctrl+` toggles the terminal panel.
+      This depends on the WebSocket terminal bridge (WS /api/terminal) which is
+      sensitive to proxy/cookie setup; treat a failure here as low-severity and
+      do not let it block the rest of the suite.
+    type: browser
+    steps:
+      - action: "Open http://<container_ip>:58080/ and press Ctrl+` (Control + backtick)"
+        expect: "A terminal panel appears (a terminal/console region becomes visible)."
+      - action: "Press Ctrl+` again"
+        expect: "The terminal panel toggles closed (becomes hidden)."
+
+metadata:
+  source_spec: "Parent session task brief; fixtures/README.md keyboard shortcut table"
+  feature_area: "keyboard-shortcuts"
+  tags: ["keyboard", "shortcuts"]
+  priorities:
+    "Ctrl+K opens the command palette": "high"
+    "Ctrl+` toggles the terminal panel": "low"
+
+assumptions:
+  - "Substitute the real DTU container IP for <container_ip>; not reachable on localhost."
+  - "Ctrl+S is assumed to be intercepted by the editor (preventDefault); if not implemented the native browser save dialog would appear — that is itself a meaningful failure signal."
+  - "The terminal test may fail purely due to WebSocket proxying; it is intentionally low priority and optional."
+  - "Command palette entry labels were not enumerated from source; the filter test uses a generic term ('open') and asserts narrowing rather than a specific result."

@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  sample.svg — SVG fixture for FileBrowser ImageViewer path testing.
+  Served under strict CSP/sandbox headers; exercises the ImageViewer
+  component (same path as PNG/JPEG).
+
+  Contains: linearGradient, rect with gradient fill, circle, text,
+  path (arrow), polyline, and a defs section — a representative
+  spread of SVG features without requiring external resources.
+-->
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 400 200"
+     width="400"
+     height="200"
+     role="img"
+     aria-label="FileBrowser SVG fixture — shapes, gradient, and text">
+
+  <title>FileBrowser SVG Fixture</title>
+  <desc>A sample SVG with gradient, shapes, and text for viewer testing.</desc>
+
+  <defs>
+    <!-- Horizontal gradient: purple → teal -->
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#1c1e2a"/>
+      <stop offset="100%" stop-color="#0f2030"/>
+    </linearGradient>
+
+    <!-- Accent gradient for the header bar -->
+    <linearGradient id="accent-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%"   stop-color="#7c6af7"/>
+      <stop offset="100%" stop-color="#26c6da"/>
+    </linearGradient>
+
+    <!-- Glow filter for the circle -->
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="400" height="200" fill="url(#bg-grad)" rx="8" ry="8"/>
+
+  <!-- Accent header bar -->
+  <rect x="0" y="0" width="400" height="6" fill="url(#accent-grad)" rx="3" ry="3"/>
+
+  <!-- Left panel: simulated file-list entries -->
+  <rect x="16" y="24" width="120" height="160" fill="#1c1e2a" rx="6" stroke="#2e3148" stroke-width="1"/>
+  <text x="24" y="44" font-family="monospace" font-size="11" fill="#a898ff">/ fixtures</text>
+
+  <!-- Simulated list items -->
+  <rect x="20" y="50" width="112" height="18" fill="#2e3148" rx="3"/>
+  <text x="28" y="63" font-family="monospace" font-size="10" fill="#7c6af7">📁 code/</text>
+
+  <rect x="20" y="72" width="112" height="18" fill="transparent" rx="3"/>
+  <text x="28" y="85" font-family="monospace" font-size="10" fill="#e2e4f0">📁 diagrams/</text>
+
+  <rect x="20" y="94" width="112" height="18" fill="transparent" rx="3"/>
+  <text x="28" y="107" font-family="monospace" font-size="10" fill="#e2e4f0">📁 markdown/</text>
+
+  <rect x="20" y="116" width="112" height="18" fill="transparent" rx="3"/>
+  <text x="28" y="129" font-family="monospace" font-size="10" fill="#e2e4f0">📄 README.md</text>
+
+  <rect x="20" y="138" width="112" height="18" fill="transparent" rx="3"/>
+  <text x="28" y="151" font-family="monospace" font-size="10" fill="#26c6da">◀ sample.svg</text>
+
+  <!-- Right panel: viewer area -->
+  <rect x="152" y="24" width="232" height="160" fill="#0f1117" rx="6" stroke="#2e3148" stroke-width="1"/>
+
+  <!-- Large glowing circle: main visual element -->
+  <circle cx="268" cy="104" r="52"
+          fill="none"
+          stroke="url(#accent-grad)"
+          stroke-width="3"
+          filter="url(#glow)"
+          opacity="0.9"/>
+
+  <!-- Inner filled circle -->
+  <circle cx="268" cy="104" r="36" fill="#1c1e2a" stroke="#7c6af7" stroke-width="1.5"/>
+
+  <!-- SVG label inside circle -->
+  <text x="268" y="100"
+        text-anchor="middle"
+        font-family="Helvetica, Arial, sans-serif"
+        font-size="14"
+        font-weight="bold"
+        fill="url(#accent-grad)">.svg</text>
+  <text x="268" y="118"
+        text-anchor="middle"
+        font-family="Helvetica, Arial, sans-serif"
+        font-size="9"
+        fill="#7f8299">ImageViewer</text>
+
+  <!-- Decorative dots: category indicator row -->
+  <circle cx="192" cy="170" r="4" fill="#7c6af7"/>
+  <circle cx="208" cy="170" r="4" fill="#2e3148"/>
+  <circle cx="224" cy="170" r="4" fill="#2e3148"/>
+
+  <!-- Bottom label -->
+  <text x="268" y="173"
+        text-anchor="middle"
+        font-family="Helvetica, Arial, sans-serif"
+        font-size="9"
+        fill="#7f8299">FileBrowser Fixture — sample.svg</text>
+
+  <!-- Decorative polyline: waveform / sparkline -->
+  <polyline
+    points="160,145 174,132 188,140 202,125 216,138 230,120 244,133 258,126"
+    fill="none"
+    stroke="#26c6da"
+    stroke-width="1.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    opacity="0.6"/>
+
+</svg>

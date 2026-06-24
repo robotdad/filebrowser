@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>FileBrowser — Web-Based File Browser & Editor</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --accent:       #00E5FF;
+            --accent-dim:   rgba(0, 229, 255, 0.15);
+            --accent-glow:  rgba(0, 229, 255, 0.35);
+            --surface-1:    rgba(255,255,255,0.06);
+            --surface-2:    rgba(255,255,255,0.10);
+            --surface-3:    rgba(255,255,255,0.15);
+            --border:       rgba(255,255,255,0.12);
+            --border-hi:    rgba(255,255,255,0.22);
+            --text-1:       #ffffff;
+            --text-2:       rgba(255,255,255,0.72);
+            --text-3:       rgba(255,255,255,0.50);
+            --green:        #30D158;
+            --yellow:       #FFD60A;
+            --orange:       #FF9F0A;
+            --red:          #FF453A;
+            --purple:       #BF5AF2;
+
+            --fs-label:     clamp(11px, 1.4vw, 13px);
+            --fs-body:      clamp(14px, 2vw, 16px);
+            --fs-sub:       clamp(16px, 2.5vw, 22px);
+            --fs-head:      clamp(28px, 5vw, 52px);
+            --fs-hero:      clamp(40px, 9vw, 90px);
+            --fs-num:       clamp(48px, 12vw, 120px);
+            --fs-code:      clamp(11px, 1.6vw, 14px);
+
+            --pad:          clamp(24px, 5vw, 80px);
+            --gap:          clamp(14px, 2.5vw, 28px);
+            --radius:       clamp(10px, 1.5vw, 16px);
+        }
+
+        html, body {
+            width: 100%; height: 100%;
+            background: #000;
+            color: var(--text-1);
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+            overscroll-behavior: none;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ── Slides ── */
+        .slide {
+            display: none;
+            position: fixed; inset: 0;
+            flex-direction: column;
+            padding: var(--pad);
+            padding-bottom: calc(var(--pad) + 56px);
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+        .slide.active { display: flex; }
+        .slide.center {
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+
+        /* ── Background treatments ── */
+        .bg-grid {
+            background-image:
+                linear-gradient(rgba(0,229,255,0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,229,255,0.04) 1px, transparent 1px);
+            background-size: 48px 48px;
+        }
+        .bg-grad-tl {
+            background:
+                radial-gradient(ellipse 60% 50% at 20% 20%, rgba(0,229,255,0.14) 0%, transparent 70%),
+                #000;
+        }
+        .bg-grad-tr {
+            background:
+                radial-gradient(ellipse 55% 45% at 80% 15%, rgba(191,90,242,0.14) 0%, transparent 70%),
+                #000;
+        }
+        .bg-grad-br {
+            background:
+                radial-gradient(ellipse 60% 50% at 85% 85%, rgba(48,209,88,0.12) 0%, transparent 70%),
+                #000;
+        }
+        .bg-grad-bl {
+            background:
+                radial-gradient(ellipse 60% 50% at 15% 85%, rgba(255,159,10,0.12) 0%, transparent 70%),
+                #000;
+        }
+
+        /* ── Typography ── */
+        .label {
+            font-size: var(--fs-label);
+            font-weight: 700;
+            letter-spacing: 2.5px;
+            text-transform: uppercase;
+            color: var(--accent);
+            margin-bottom: clamp(10px, 2vw, 20px);
+        }
+        .hero { font-size: var(--fs-hero); font-weight: 700; letter-spacing: -0.03em; line-height: 1.05; }
+        .headline { font-size: var(--fs-head); font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+        .subhead { font-size: var(--fs-sub); color: var(--text-2); line-height: 1.4; margin-top: clamp(10px, 2vw, 18px); }
+        .body { font-size: var(--fs-body); color: var(--text-2); line-height: 1.6; }
+        .small { font-size: var(--fs-label); color: var(--text-3); letter-spacing: 0.5px; }
+
+        /* ── Cards ── */
+        .card {
+            background: var(--surface-1);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: clamp(16px, 3vw, 28px);
+        }
+        .card-accent {
+            border-color: rgba(0,229,255,0.30);
+            background: rgba(0,229,255,0.06);
+        }
+        .card h3 { font-size: clamp(14px, 2vw, 18px); font-weight: 700; color: var(--text-1); margin-bottom: 8px; }
+        .card h4 { font-size: clamp(13px, 1.8vw, 15px); font-weight: 700; color: var(--text-1); margin-bottom: 6px; }
+        .card p, .card li { font-size: var(--fs-body); color: var(--text-2); line-height: 1.55; }
+        .card ul { padding-left: 1.2em; }
+        .card li { margin-top: 4px; }
+        .icon { font-size: clamp(28px, 5vw, 42px); margin-bottom: clamp(10px, 2vw, 16px); display: block; }
+
+        /* ── Grids ── */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+            gap: var(--gap);
+            width: 100%;
+        }
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+            gap: var(--gap);
+            width: 100%;
+        }
+        .grid-4 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+            gap: var(--gap);
+            width: 100%;
+        }
+
+        /* ── Code block ── */
+        .code {
+            background: var(--surface-1);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: clamp(14px, 2.5vw, 22px) clamp(18px, 3vw, 28px);
+            font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', 'Courier New', monospace;
+            font-size: var(--fs-code);
+            line-height: 1.7;
+            white-space: pre;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            width: 100%;
+        }
+        .tok-kw  { color: #FF7AB2; }
+        .tok-fn  { color: #6BDFFF; }
+        .tok-str { color: #FF8170; }
+        .tok-cm  { color: rgba(255,255,255,0.38); font-style: italic; }
+        .tok-nu  { color: #D9C97C; }
+        .tok-pn  { color: var(--text-2); }
+        .tok-at  { color: #FFA14F; }
+
+        /* ── Pill / badge ── */
+        .pill {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: clamp(10px, 1.3vw, 12px);
+            font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+            padding: 5px 14px;
+            border-radius: 999px;
+        }
+        .pill-green  { background: rgba(48,209,88,0.15);  border: 1px solid rgba(48,209,88,0.40);  color: var(--green);  }
+        .pill-cyan   { background: rgba(0,229,255,0.12);  border: 1px solid rgba(0,229,255,0.35);  color: var(--accent); }
+        .pill-purple { background: rgba(191,90,242,0.12); border: 1px solid rgba(191,90,242,0.35); color: var(--purple); }
+        .pill-orange { background: rgba(255,159,10,0.12); border: 1px solid rgba(255,159,10,0.35); color: var(--orange); }
+
+        /* ── Tag cloud ── */
+        .tags { display: flex; flex-wrap: wrap; gap: 10px; }
+        .tag {
+            font-size: clamp(11px, 1.6vw, 14px);
+            font-weight: 600;
+            padding: 6px 14px;
+            border-radius: 999px;
+            border: 1px solid var(--border-hi);
+            background: var(--surface-2);
+            color: var(--text-2);
+            white-space: nowrap;
+        }
+        .tag.hl { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+        /* ── Stack row ── */
+        .stack {
+            display: flex; align-items: center; gap: 14px;
+            padding: clamp(12px, 2vw, 18px) clamp(16px, 2.5vw, 24px);
+            border-radius: var(--radius);
+            background: var(--surface-1);
+            border: 1px solid var(--border);
+        }
+        .stack-num {
+            width: clamp(28px, 4vw, 36px); height: clamp(28px, 4vw, 36px);
+            border-radius: 50%;
+            background: var(--accent-dim);
+            border: 1px solid rgba(0,229,255,0.40);
+            color: var(--accent);
+            font-weight: 800;
+            font-size: clamp(12px, 1.8vw, 15px);
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        .stack-body { flex: 1; }
+        .stack-title { font-size: clamp(13px, 1.9vw, 16px); font-weight: 700; color: var(--text-1); }
+        .stack-desc  { font-size: clamp(11px, 1.6vw, 14px); color: var(--text-2); margin-top: 2px; }
+
+        /* ── Divider ── */
+        .divider { height: 1px; background: var(--border); width: 100%; margin: var(--gap) 0; }
+        .spacer  { flex: 1; }
+
+        /* ── Navigation ── */
+        #nav {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            display: flex; align-items: center; gap: 8px;
+            z-index: 200;
+        }
+        .dot {
+            width: 7px; height: 7px; border-radius: 50%;
+            background: rgba(255,255,255,0.25);
+            cursor: pointer; transition: all 0.25s;
+        }
+        .dot.active { width: 22px; border-radius: 4px; background: var(--accent); }
+
+        #counter {
+            position: fixed; bottom: 22px; right: var(--pad);
+            font-size: 11px; font-weight: 600; letter-spacing: 1px;
+            color: var(--text-3); z-index: 200;
+        }
+
+        /* ── Responsive ── */
+        @media (max-height: 500px) and (orientation: landscape) {
+            .slide { padding: 16px var(--pad) 60px; }
+            .slide.center { justify-content: flex-start; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .slide, .slide *, .dot { animation: none !important; transition: none !important; }
+        }
+
+        /* ── Glow line ── */
+        .glow-line {
+            width: clamp(48px, 8vw, 80px); height: 3px;
+            background: linear-gradient(90deg, var(--accent), transparent);
+            border-radius: 2px;
+            margin-bottom: clamp(14px, 3vw, 24px);
+        }
+
+        /* ── Stat cell ── */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
+            gap: var(--gap);
+            width: 100%;
+        }
+        .stat {
+            text-align: center;
+            background: var(--surface-1);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: clamp(16px, 3vw, 24px) clamp(12px, 2vw, 16px);
+        }
+        .stat-num  { font-size: var(--fs-num); font-weight: 800; letter-spacing: -0.04em; line-height: 1; color: var(--accent); }
+        .stat-label { font-size: clamp(11px, 1.5vw, 13px); font-weight: 600; color: var(--text-3); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 8px; }
+
+        /* ── File type row ── */
+        .ftype {
+            display: flex; align-items: center; gap: 14px;
+            padding: clamp(10px, 1.8vw, 14px) clamp(14px, 2.5vw, 22px);
+            background: var(--surface-1);
+            border: 1px solid var(--border);
+            border-radius: calc(var(--radius) - 4px);
+        }
+        .ftype-ext {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: clamp(10px, 1.4vw, 12px);
+            font-weight: 800;
+            letter-spacing: 1px;
+            color: var(--accent);
+            min-width: clamp(60px, 8vw, 88px);
+            background: var(--accent-dim);
+            border: 1px solid rgba(0,229,255,0.25);
+            border-radius: 6px;
+            padding: 3px 8px;
+            text-align: center;
+        }
+        .ftype-desc { font-size: var(--fs-body); color: var(--text-2); flex: 1; }
+        .ftype-badge { flex-shrink: 0; }
+
+        /* ── kbd ── */
+        kbd {
+            display: inline-block;
+            padding: 3px 8px;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 0.85em;
+            background: var(--surface-2);
+            border: 1px solid var(--border-hi);
+            border-bottom-width: 2px;
+            border-radius: 5px;
+            color: var(--text-1);
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+
+<!-- ═══════════════ SLIDE 1 — Title ═══════════════ -->
+<div class="slide active center bg-grid" id="s1">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:clamp(10px,2vw,18px);max-width:800px;">
+        <span class="pill pill-green">&#x25CF;&nbsp; Active Project</span>
+        <h1 class="hero" style="background:linear-gradient(135deg,#fff 40%,var(--accent) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">FileBrowser</h1>
+        <p class="subhead" style="max-width:560px;">A web-based file browser &amp; editor — FastAPI backend, Preact SPA front-end, no build step required.</p>
+        <div class="divider" style="max-width:320px;margin:8px 0;"></div>
+        <div class="tags" style="justify-content:center;">
+            <span class="tag hl">FastAPI</span>
+            <span class="tag hl">Preact</span>
+            <span class="tag">No Build Step</span>
+            <span class="tag">Multi-format Preview</span>
+            <span class="tag">Integrated Terminal</span>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════ SLIDE 2 — What It Is ═══════════════ -->
+<div class="slide bg-grad-tl" id="s2">
+    <div class="label">Architecture</div>
+    <h2 class="headline">Built to be simple.<br>Designed to be fast.</h2>
+    <p class="subhead" style="margin-bottom:var(--gap);">A single-process server that serves both the API and the SPA — no webpack, no npm build, no containers required to develop.</p>
+
+    <div class="grid-2" style="flex:1;align-content:start;">
+        <div class="card card-accent">
+            <span class="icon">⚡</span>
+            <h3>FastAPI Backend</h3>
+            <ul>
+                <li>Async Python, uvicorn ASGI server</li>
+                <li>Streams large files without buffering</li>
+                <li>PAM authentication (bypass-able via nginx header injection in test environments)</li>
+                <li>Pluggable auth middleware</li>
+            </ul>
+        </div>
+        <div class="card card-accent">
+            <span class="icon">🧩</span>
+            <h3>Preact SPA — No Build Step</h3>
+            <ul>
+                <li>HTM tagged templates render JSX at runtime</li>
+                <li>ES modules loaded directly from the browser</li>
+                <li>No webpack, Vite, or transpilation pipeline</li>
+                <li>Edit a <code style="color:var(--accent);font-family:monospace">.js</code> file, reload, see changes</li>
+            </ul>
+        </div>
+        <div class="card">
+            <span class="icon">🔀</span>
+            <h3>Unified Entry Point</h3>
+            <p>One <kbd>uvicorn main:app</kbd> command. Static assets, API routes, and WebSocket terminal all served from the same process on a single port.</p>
+        </div>
+        <div class="card">
+            <span class="icon">🐧</span>
+            <h3>Linux Native</h3>
+            <p>PAM login, POSIX paths, real terminal via <code style="color:var(--accent);font-family:monospace">pty</code> + WebSocket. Runs anywhere Python 3.11+ and a POSIX shell exist.</p>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════ SLIDE 3 — File Types ═══════════════ -->
+<div class="slide bg-grad-tr" id="s3">
+    <div class="label">File Support</div>
+    <h2 class="headline">Eight format families.<br>One interface.</h2>
+    <p class="subhead" style="margin-bottom:var(--gap);">The preview engine selects a renderer based on MIME type. Every format gets a dedicated experience.</p>
+
+    <div class="grid-2" style="flex:1;align-content:start;">
+        <div style="display:flex;flex-direction:column;gap:10px;">
+            <div class="ftype">
+                <span class="ftype-ext">.md</span>
+                <span class="ftype-desc">Markdown — live preview, WYSIWYG (Tiptap), raw source</span>
+                <span class="ftype-badge"><span class="pill pill-cyan">3 tabs</span></span>
+            </div>
+            <div class="ftype">
+                <span class="ftype-ext">code</span>
+                <span class="ftype-desc">Source files — syntax-highlighted via Prism.js (50+ languages)</span>
+                <span class="ftype-badge"><span class="pill pill-cyan">highlight</span></span>
+            </div>
+            <div class="ftype">
+                <span class="ftype-ext">.png .jpg</span>
+                <span class="ftype-desc">Images — inline preview, zoom, pan</span>
+                <span class="ftype-badge"><span class="pill pill-green">native</span></span>
+            </div>
+            <div class="ftype">
+                <span class="ftype-ext">.mp4 .mp3</span>
+                <span class="ftype-desc">Audio &amp; Video — HTML5 player, no transcoding</span>
+                <span class="ftype-badge"><span class="pill pill-green">native</span></span>
+            </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+            <div class="ftype">
+                <span class="ftype-ext">.pdf</span>
+                <span class="ftype-desc">PDF — embedded viewer via browser PDF engine</span>
+                <span class="ftype-badge"><span class="pill pill-green">native</span></span>
+            </div>
+            <div class="ftype">
+                <span class="ftype-ext">.dot</span>
+                <span class="ftype-desc">Graphviz DOT — interactive render via d3-graphviz + WASM</span>
+                <span class="ftype-badge"><span class="pill pill-purple">WASM</span></span>
+            </div>
+            <div class="ftype">
+                <span class="ftype-ext">.html</span>
+                <span class="ftype-desc">HTML — served as <code style="font-family:monospace;color:var(--orange)">text/plain</code> (source view only)</span>
+                <span class="ftype-badge"><span class="pill pill-orange">known gap</span></span>
+            </div>
+            <div class="ftype">
+                <span class="ftype-ext">terminal</span>
+                <span class="ftype-desc">Pseudo-terminal — full shell via WebSocket + xterm.js</span>
+                <span class="ftype-badge"><span class="pill pill-purple">WS</span></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════ SLIDE 4 — Key Features ═══════════════ -->
+<div class="slide bg-grad-bl" id="s4">
+    <div class="label">Key Features</div>
+    <h2 class="headline">Power where<br>you need it.</h2>
+    <div class="grid-2" style="flex:1;align-content:start;margin-top:var(--gap);">
+        <div class="card">
+            <span class="icon">📝</span>
+            <h3>Dual Markdown Editor</h3>
+            <p>Three tabs per file: <strong>Preview</strong> (rendered HTML), <strong>WYSIWYG</strong> (Tiptap rich text), <strong>Source</strong> (raw text). Switch without losing content.</p>
+            <p style="margin-top:8px;font-size:var(--fs-label);color:var(--orange);">⚠ WYSIWYG round-trips drop fenced code blocks &amp; GFM tables — known issue under active testing.</p>
+        </div>
+        <div class="card">
+            <span class="icon">🕸</span>
+            <h3>Interactive Graphviz</h3>
+            <p>DOT files render live in the browser. No server-side graphviz binary required — d3-graphviz compiles the layout engine to WebAssembly and runs it client-side.</p>
+        </div>
+        <div class="card">
+            <span class="icon">⌨️</span>
+            <h3>Command Palette <kbd>Ctrl+K</kbd></h3>
+            <p>Fuzzy search across all files in the browse root. Open, navigate, and switch files without touching the mouse. Keyboard-first design throughout.</p>
+        </div>
+        <div class="card">
+            <span class="icon">🖥</span>
+            <h3>Integrated Terminal</h3>
+            <p>Full xterm.js terminal connected to a real PTY via WebSocket. Session cookie bridge required — auth token must be pre-seeded before the WS handshake.</p>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════ SLIDE 5 — Code: stack snapshot ═══════════════ -->
+<div class="slide bg-grad-tl" id="s5">
+    <div class="label">Implementation</div>
+    <h2 class="headline" style="margin-bottom:var(--gap);">How the pieces fit.</h2>
+
+    <div class="grid-2" style="flex:1;align-content:start;gap:var(--gap);">
+        <div style="display:flex;flex-direction:column;gap:10px;">
+            <div class="label" style="margin-bottom:4px;font-size:11px;">Backend route: file preview</div>
+            <div class="code"><span class="tok-at">@router</span><span class="tok-pn">.</span><span class="tok-fn">get</span><span class="tok-pn">(</span><span class="tok-str">"/api/files/{path:path}"</span><span class="tok-pn">)</span>
+<span class="tok-kw">async def</span> <span class="tok-fn">get_file</span><span class="tok-pn">(</span>path<span class="tok-pn">:</span> str<span class="tok-pn">,</span>
+                   user<span class="tok-pn">:</span> User <span class="tok-pn">=</span> <span class="tok-fn">Depends</span><span class="tok-pn">(</span>auth<span class="tok-pn">)):</span>
+    mime<span class="tok-pn">,</span> _ <span class="tok-pn">=</span> mimetypes<span class="tok-pn">.</span><span class="tok-fn">guess_type</span><span class="tok-pn">(</span>path<span class="tok-pn">)</span>
+    <span class="tok-kw">return</span> <span class="tok-fn">FileResponse</span><span class="tok-pn">(</span>path<span class="tok-pn">,</span>
+        media_type<span class="tok-pn">=</span>mime <span class="tok-kw">or</span> <span class="tok-str">"text/plain"</span><span class="tok-pn">)</span>
+<span class="tok-cm"># .html → text/plain (known gap — source-only)</span></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+            <div class="label" style="margin-bottom:4px;font-size:11px;">Frontend: DOT renderer</div>
+            <div class="code"><span class="tok-kw">import</span> <span class="tok-pn">{</span> graphviz <span class="tok-pn">}</span> <span class="tok-kw">from</span> <span class="tok-str">"d3-graphviz"</span><span class="tok-pn">;</span>
+<span class="tok-cm">// WASM layout engine — no server binary needed</span>
+<span class="tok-kw">const</span> g <span class="tok-pn">=</span> <span class="tok-fn">graphviz</span><span class="tok-pn">(</span><span class="tok-str">"#graph"</span><span class="tok-pn">)</span>
+  <span class="tok-pn">.</span><span class="tok-fn">zoom</span><span class="tok-pn">(</span><span class="tok-nu">true</span><span class="tok-pn">)</span>
+  <span class="tok-pn">.</span><span class="tok-fn">renderDot</span><span class="tok-pn">(</span>dotSource<span class="tok-pn">);</span>
+<span class="tok-cm">// Interactive: pan, zoom, node hover</span></div>
+        </div>
+    </div>
+
+    <div style="margin-top:var(--gap);">
+        <div class="label" style="margin-bottom:10px;font-size:11px;">Selected file handlers</div>
+        <div class="tags">
+            <span class="tag hl">routes/files.py — list &amp; serve</span>
+            <span class="tag hl">static/js/components/preview.js — renderer dispatch</span>
+            <span class="tag">static/js/components/markdown-editor.js — Tiptap WYSIWYG</span>
+            <span class="tag">static/js/components/dot-viewer.js — d3-graphviz</span>
+            <span class="tag">static/js/components/terminal.js — xterm.js WS</span>
+            <span class="tag">static/js/api.js — fetch wrapper</span>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════ SLIDE 6 — Testing: DTU ═══════════════ -->
+<div class="slide bg-grad-br" id="s6">
+    <div class="label">Testing</div>
+    <h2 class="headline">Reality Check via<br>Digital Twin Universe.</h2>
+    <p class="subhead" style="margin-bottom:var(--gap);">The DTU profile provisions a containerised environment where browser-based reality check scenarios execute against real server state — not mocks.</p>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:100%;max-width:860px;">
+        <div class="stack">
+            <div class="stack-num">1</div>
+            <div class="stack-body">
+                <div class="stack-title">nginx front-door — auth bypass</div>
+                <div class="stack-desc">Injects <code style="font-family:monospace;color:var(--accent)">X-Authenticated-User: root</code> on every request. FastAPI reads the header first (<code style="font-family:monospace;color:var(--accent)">auth.py:46</code>) and skips PAM. RC lands straight in the browser — no login form.</div>
+            </div>
+            <span class="pill pill-green">active</span>
+        </div>
+        <div class="stack">
+            <div class="stack-num">2</div>
+            <div class="stack-body">
+                <div class="stack-title">WebSocket terminal — proxy headers</div>
+                <div class="stack-desc">nginx forwards <code style="font-family:monospace;color:var(--accent)">Upgrade</code> &amp; <code style="font-family:monospace;color:var(--accent)">Connection</code> headers with <code style="font-family:monospace;color:var(--accent)">proxy_http_version 1.1</code>. Terminal WS no longer returns 502.</div>
+            </div>
+            <span class="pill pill-green">fixed</span>
+        </div>
+        <div class="stack">
+            <div class="stack-num">3</div>
+            <div class="stack-body">
+                <div class="stack-title">Rich fixture library</div>
+                <div class="stack-desc">The browse root contains representative files for every supported type: <code style="font-family:monospace;color:var(--accent)">.md</code> with GFM tables + fenced code, Python/JS/YAML/Rust source, PNG/JPEG images, MP4 video, MP3 audio, PDF, DOT graph, and this HTML deck.</div>
+            </div>
+            <span class="pill pill-cyan">fixtures</span>
+        </div>
+        <div class="stack">
+            <div class="stack-num">4</div>
+            <div class="stack-body">
+                <div class="stack-title">Scoped RC scenarios</div>
+                <div class="stack-desc">Separate scenario YAMLs for file navigation, keyboard shortcuts (<kbd>Ctrl+K</kbd>, <kbd>←</kbd><kbd>→</kbd>), each preview type, WYSIWYG round-trip, and terminal — so a single file-type fix can be validated in isolation.</div>
+            </div>
+            <span class="pill pill-purple">planned</span>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════ SLIDE 7 — Stats ═══════════════ -->
+<div class="slide center" id="s7">
+    <div style="width:100%;max-width:860px;display:flex;flex-direction:column;align-items:center;gap:var(--gap);">
+        <div class="label">Scope</div>
+        <h2 class="headline" style="text-align:center;">By the numbers.</h2>
+        <div class="stat-grid" style="width:100%;">
+            <div class="stat">
+                <div class="stat-num">8</div>
+                <div class="stat-label">Format families</div>
+            </div>
+            <div class="stat">
+                <div class="stat-num">3</div>
+                <div class="stat-label">Markdown tabs</div>
+            </div>
+            <div class="stat">
+                <div class="stat-num" style="color:var(--green);">0</div>
+                <div class="stat-label">Build steps</div>
+            </div>
+            <div class="stat">
+                <div class="stat-num" style="color:var(--purple);">1</div>
+                <div class="stat-label">Process to run</div>
+            </div>
+        </div>
+        <div class="divider" style="max-width:500px;"></div>
+        <div class="tags" style="justify-content:center;">
+            <span class="tag hl">DTU profile: <code style="font-family:monospace">filebrowser.yaml</code></span>
+            <span class="tag">Auth bypass via nginx header</span>
+            <span class="tag">Reality check: per-type scenario YAMLs</span>
+            <span class="tag">WS terminal: fixed</span>
+        </div>
+        <p class="small" style="margin-top:4px;text-align:center;">This HTML file is itself a test fixture — open it in FileBrowser to verify <code style="font-family:monospace;color:var(--accent)">.html</code> preview behaviour.</p>
+    </div>
+</div>
+
+<!-- ═══════════════ SLIDE 8 — Closing ═══════════════ -->
+<div class="slide center bg-grid" id="s8">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:clamp(12px,2.5vw,22px);max-width:680px;">
+        <div class="glow-line"></div>
+        <h2 class="headline" style="text-align:center;background:linear-gradient(135deg,#fff 30%,var(--accent) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">
+            Browse. Preview.<br>Edit. Ship.
+        </h2>
+        <p class="subhead" style="text-align:center;">FileBrowser — because a file manager should feel like a native app, even when it's just a browser tab.</p>
+        <div class="divider" style="max-width:240px;"></div>
+        <div class="tags" style="justify-content:center;">
+            <span class="tag hl">FastAPI</span>
+            <span class="tag hl">Preact + HTM</span>
+            <span class="tag">Prism.js</span>
+            <span class="tag">Tiptap</span>
+            <span class="tag">d3-graphviz</span>
+            <span class="tag">xterm.js</span>
+            <span class="tag">DTU tested</span>
+        </div>
+        <p class="small" style="margin-top:8px;text-align:center;max-width:420px;">
+            Note: this file is served as <code style="font-family:monospace;color:var(--orange)">text/plain</code> in the current FileBrowser release — raw source renders instead of this deck. That's the bug this fixture is here to catch.
+        </p>
+    </div>
+</div>
+
+<!-- ═══════════════ Nav ═══════════════ -->
+<div id="nav"></div>
+<div id="counter"></div>
+
+<script>
+    const slides = document.querySelectorAll('.slide');
+    let cur = 0;
+
+    function show(n) {
+        slides[cur].classList.remove('active');
+        cur = ((n % slides.length) + slides.length) % slides.length;
+        slides[cur].classList.add('active');
+        render();
+    }
+
+    function render() {
+        const nav = document.getElementById('nav');
+        const ctr = document.getElementById('counter');
+        nav.innerHTML = '';
+        slides.forEach((_, i) => {
+            const d = document.createElement('div');
+            d.className = 'dot' + (i === cur ? ' active' : '');
+            d.addEventListener('click', e => { e.stopPropagation(); show(i); });
+            nav.appendChild(d);
+        });
+        ctr.textContent = (cur + 1) + ' / ' + slides.length;
+    }
+
+    // Keyboard
+    document.addEventListener('keydown', e => {
+        if (e.key === 'ArrowRight' || e.key === ' ')  { e.preventDefault(); show(cur + 1); }
+        if (e.key === 'ArrowLeft')                     { e.preventDefault(); show(cur - 1); }
+        if (e.key === 'Home')                          { e.preventDefault(); show(0); }
+        if (e.key === 'End')                           { e.preventDefault(); show(slides.length - 1); }
+    });
+
+    // Click (left/right half)
+    document.addEventListener('click', e => {
+        if (e.target.closest('#nav')) return;
+        if (e.clientX > window.innerWidth / 2) show(cur + 1);
+        else show(cur - 1);
+    });
+
+    // Touch swipe
+    let tx = 0;
+    document.addEventListener('touchstart', e => { tx = e.changedTouches[0].screenX; }, { passive: true });
+    document.addEventListener('touchend',   e => {
+        const dx = tx - e.changedTouches[0].screenX;
+        if (Math.abs(dx) > 50) show(cur + (dx > 0 ? 1 : -1));
+    }, { passive: true });
+
+    render();
+</script>
+</body>
+</html>

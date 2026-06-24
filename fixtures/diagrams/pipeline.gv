@@ -1,0 +1,105 @@
+// pipeline.gv — Graphviz fixture for GraphvizViewer testing (simpler diagram).
+// A left-to-right CI/CD pipeline — good for testing rankdir=LR and
+// verifying the editor can modify the graph and re-render.
+
+digraph CICDPipeline {
+    graph [
+        label    = "FileBrowser — CI/CD Pipeline"
+        labelloc = t
+        fontname = "Helvetica,Arial"
+        fontsize = 16
+        rankdir  = LR
+        splines  = curved
+        nodesep  = 0.5
+        ranksep  = 0.8
+        bgcolor  = "#0f1117"
+        fontcolor = "#e2e4f0"
+    ]
+    node [
+        fontname  = "Helvetica,Arial"
+        fontsize  = 12
+        fontcolor = "#e2e4f0"
+        style     = "filled,rounded"
+        shape     = box
+        width     = 1.5
+        height    = 0.6
+        penwidth  = 1.5
+    ]
+    edge [
+        fontname  = "Helvetica,Arial"
+        fontsize  = 10
+        fontcolor = "#7f8299"
+        color     = "#2e3148"
+        penwidth  = 1.5
+        arrowsize = 0.8
+    ]
+
+    // ---- Stages ----
+
+    commit [
+        label     = "1. Commit\n(git push)"
+        fillcolor = "#2e3148"
+        color     = "#7c6af7"
+    ]
+
+    lint [
+        label     = "2. Lint\n(ruff + pyright)"
+        fillcolor = "#2e3148"
+    ]
+
+    test [
+        label     = "3. Test\n(pytest)"
+        fillcolor = "#2e3148"
+    ]
+
+    build [
+        label     = "4. Build\n(docker build)"
+        fillcolor = "#2e3148"
+    ]
+
+    rc [
+        label     = "5. Reality Check\n(DTU + scenarios)"
+        fillcolor = "#2a2e1e"
+        color     = "#8bc34a"
+    ]
+
+    deploy [
+        label     = "6. Deploy\n(systemd / container)"
+        fillcolor = "#1a2e1a"
+        color     = "#4caf50"
+    ]
+
+    // ---- Happy path ----
+
+    commit -> lint  [label = "trigger"]
+    lint   -> test  [label = "pass"]
+    test   -> build [label = "pass"]
+    build  -> rc    [label = "image ready"]
+    rc     -> deploy [label = "all scenarios pass" color = "#8bc34a"]
+
+    // ---- Failure paths ----
+
+    lint -> commit [
+        label     = "fix & re-push"
+        style     = dashed
+        color     = "#ef5350"
+        fontcolor = "#ef5350"
+        constraint = false
+    ]
+
+    test -> commit [
+        label     = "fix & re-push"
+        style     = dashed
+        color     = "#ef5350"
+        fontcolor = "#ef5350"
+        constraint = false
+    ]
+
+    rc -> commit [
+        label     = "scenario failed"
+        style     = dashed
+        color     = "#ef5350"
+        fontcolor = "#ef5350"
+        constraint = false
+    ]
+}

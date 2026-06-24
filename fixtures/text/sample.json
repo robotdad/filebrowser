@@ -1,0 +1,59 @@
+{
+  "app": {
+    "name": "filebrowser",
+    "version": "1.4.0",
+    "debug": false,
+    "tags": ["files", "editor", "browser", "self-hosted"]
+  },
+  "server": {
+    "host": "0.0.0.0",
+    "port": 58080,
+    "workers": 4,
+    "timeout": 30
+  },
+  "auth": {
+    "enabled": true,
+    "bypass": false,
+    "session": {
+      "max_age": 86400,
+      "secure": true,
+      "samesite": "lax"
+    },
+    "pam": {
+      "service": "login",
+      "fallback_user": null
+    }
+  },
+  "storage": {
+    "root": "/srv/files",
+    "max_upload_mb": 50,
+    "hidden_patterns": [".*", "__pycache__", "*.pyc"],
+    "quota": null
+  },
+  "features": {
+    "terminal": {
+      "enabled": true,
+      "shell": "/bin/bash",
+      "timeout": 3600
+    },
+    "editor": {
+      "autosave": true,
+      "autosave_interval": 30,
+      "max_file_kb": 2048
+    }
+  },
+  "logging": {
+    "level": "INFO",
+    "format": "json",
+    "output": "/var/log/filebrowser.log",
+    "rotate": true,
+    "max_size_mb": 10,
+    "keep": 5
+  },
+  "meta": {
+    "created_at": "2024-01-15T08:00:00Z",
+    "schema_version": 3,
+    "compatible_from": 2,
+    "deprecated_fields": []
+  }
+}

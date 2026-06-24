@@ -1,0 +1,9 @@
+id,username,email,role,department,hire_date,salary,active
+1,alice.morgan,alice.morgan@example.com,engineer,platform,2020-03-15,115000,true
+2,bob.chen,bob.chen@example.com,designer,product,2021-07-01,98000,true
+3,carol.park,carol.park@example.com,manager,engineering,2018-11-20,145000,true
+4,david.osei,david.osei@example.com,engineer,data,2022-01-10,108000,true
+5,eve.kowalski,eve.kowalski@example.com,analyst,finance,2019-05-28,92000,true
+6,frank.lin,frank.lin@example.com,engineer,security,2020-09-14,122000,true
+7,grace.wu,grace.wu@example.com,director,product,2017-02-03,185000,true
+8,henry.soto,henry.soto@example.com,engineer,platform,2023-03-27,102000,false

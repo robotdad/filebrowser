@@ -45,8 +45,10 @@
 
 name: filebrowser
 description: >
-  FileBrowser markdown app under test. Serves the committed fixtures/ directory
-  as the browse root so existing table documents are openable in the editor.
+  FileBrowser — a web-based file browser and editor — under test. Browses and edits
+  many file types: markdown (live preview + WYSIWYG), syntax-highlighted code, images,
+  audio, video, PDF, DOT/Graphviz diagrams, HTML, and a WebSocket-backed terminal.
+  Serves the committed fixtures/ directory as the browse root.
   Deployed behind an nginx reverse proxy that injects X-Authenticated-User: root
   on every request — bypassing the PAM login flow entirely (frontdoor mode per
   filebrowser/auth.py:46).
@@ -94,6 +96,10 @@ provision:
           listen 58080;
           location / {
               proxy_pass http://127.0.0.1:58081;
+              # WebSocket upgrade support (required for WS /api/terminal)
+              proxy_http_version 1.1;
+              proxy_set_header Upgrade $http_upgrade;
+              proxy_set_header Connection "upgrade";
               # Frontdoor bypass header — trusted by filebrowser/auth.py:46
               proxy_set_header X-Authenticated-User "root";
               proxy_set_header Host $http_host;
@@ -116,9 +122,20 @@ provision:
         > /var/log/filebrowser.log 2>&1 &
       sleep 2
 
+    # Pre-seed the signed session cookie required by the WebSocket terminal (WS /api/terminal).
+    # filebrowser/routes/auth.py — GET /api/auth/me is the "cookie bridge": it issues a signed
+    # itsdangerous session ticket that the WS handshake checks.  Without it the terminal WS
+    # negotiation returns close code 4001.  Best-effort: provisioning continues if the app
+    # is not yet ready (|| true).
+    - curl -sf http://localhost:58080/api/auth/me -o /dev/null || true
+
 access:
   ports:
-    - host: 58080
+    # Host port intentionally remapped off 58080 to avoid colliding with a
+    # standalone host filebrowser that may already hold :58080. The container
+    # port stays 58080; reality-check / browser testers reach the app via the
+    # container IP + container port 58080, so this host remap does not affect tests.
+    - host: 38080
       container: 58080
       label: FileBrowser
       path: /

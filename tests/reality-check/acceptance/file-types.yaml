@@ -1,0 +1,116 @@
+summary: >
+  Opening representative fixture files of each supported type loads the correct
+  viewer/editor: markdown (3-tab), syntax-highlighted code, raster image, SVG,
+  PDF, Graphviz/DOT, audio, video, and plain/structured text.
+software_type: web_app
+
+entry_points:
+  - type: url
+    value: "http://<container_ip>:58080/"
+    label: "FileBrowser SPA (DTU, auth-bypassed)"
+
+tests:
+  - description: "Markdown renders in a View tab and offers Edit and Source tabs (README.md)."
+    type: browser
+    steps:
+      - action: "Open http://<container_ip>:58080/ and click README.md"
+        expect: >
+          A markdown viewer opens with rendered content (a heading
+          'FileBrowser Fixtures' and a bulleted list are visible as formatted
+          markdown, not raw '#' / '-' source).
+      - action: "Look at the tab controls for the open file"
+        expect: "Three tabs are present: View, Edit, and Source."
+      - action: "Click the 'Source' tab"
+        expect: "The raw markdown source (with '#', '|' table syntax, etc.) is shown in a CodeMirror editor."
+
+  - description: "Comprehensive markdown fixture renders rich elements (showcase.md)."
+    type: browser
+    steps:
+      - action: "Navigate into markdown/ and open showcase.md, ensure the View tab is selected"
+        expect: >
+          Rendered markdown shows headings, a GFM table, a fenced code block
+          (syntax-styled), and a task list — displayed as formatted HTML, not
+          raw markdown.
+
+  - description: "Code file opens in CodeMirror with Python syntax highlighting (hello.py)."
+    type: browser
+    steps:
+      - action: "Navigate into code/ and open hello.py"
+        expect: >
+          The file opens in a code editor showing the Python source. Syntax
+          highlighting is applied (keywords like 'class'/'def'/'import' are
+          visually styled distinctly from plain text).
+      - action: "Look at the tab controls"
+        expect: "View and Edit tabs are available for the code file."
+
+  - description: "Raster image opens in the image viewer with zoom/pan affordances (logo.png)."
+    type: browser
+    steps:
+      - action: "Navigate into images/ and open logo.png"
+        expect: "An image viewer displays the PNG image (an <img>/canvas rendering, not raw bytes or a download prompt)."
+      - action: "Look for zoom controls or zoom-on-scroll / pan affordance"
+        expect: "Zoom and/or pan controls are present in the image viewer."
+
+  - description: "SVG renders through the image viewer (sample.svg)."
+    type: browser
+    steps:
+      - action: "Navigate into web/ and open sample.svg"
+        expect: "The SVG is displayed as a rendered vector image in the image viewer, not as raw XML source."
+
+  - description: "PDF renders page 1 with page navigation (sample.pdf)."
+    type: browser
+    steps:
+      - action: "Navigate into documents/ and open sample.pdf"
+        expect: "A document/PDF viewer renders the first page of the PDF (page content is visible)."
+      - action: "Look for page navigation controls"
+        expect: "Page navigation (next/prev or page indicator) is present."
+
+  - description: "DOT/Graphviz file renders an SVG graph with Graph/Source/Edit tabs (architecture.dot)."
+    type: browser
+    steps:
+      - action: "Navigate into diagrams/ and open architecture.dot"
+        expect: >
+          A Graphviz viewer renders the diagram as an SVG graph (nodes and
+          edges are visible as drawn shapes, not raw DOT text).
+      - action: "Look at the tab controls"
+        expect: "Graph, Source, and Edit tabs are present."
+      - action: "Click the 'Source' tab"
+        expect: "The raw DOT source (e.g. 'digraph' and node definitions) is shown."
+
+  - description: "Audio file opens a native audio player control (tone.mp3)."
+    type: browser
+    steps:
+      - action: "Navigate into media/ and open tone.mp3"
+        expect: "A media viewer shows an audio player control with a play button / transport bar."
+
+  - description: "Video file opens a native video player control (clip.mp4)."
+    type: browser
+    steps:
+      - action: "Navigate into media/ and open clip.mp4"
+        expect: "A media viewer shows a video player element with playback controls (play button / transport bar)."
+
+  - description: "Structured/plain text files load their content (CSV / JSON / YAML)."
+    type: browser
+    steps:
+      - action: "Navigate into text/ and open data.csv"
+        expect: "A text viewer loads and displays the CSV content (rows of comma-separated values are visible)."
+      - action: "Open sample.json from the text/ directory"
+        expect: "The JSON content is displayed (object/array structure visible as text, ideally highlighted)."
+      - action: "Open config.yaml from the text/ directory"
+        expect: "The YAML content is displayed as text."
+
+metadata:
+  source_spec: "Parent session task brief; fixtures/README.md file-type inventory"
+  feature_area: "file-types"
+  tags: ["smoke", "viewers", "file-types"]
+  priorities:
+    "Markdown renders in a View tab": "high"
+    "Code file opens in CodeMirror": "high"
+    "Audio file opens a native audio player control": "medium"
+    "Video file opens a native video player control": "medium"
+
+assumptions:
+  - "Substitute the real DTU container IP for <container_ip>; not reachable on localhost."
+  - "Each named fixture exists in the browse root (verified present in fixtures/ at authoring time)."
+  - "Audio/video autoplay is not assumed; the test only asserts the player control renders, since validators cannot verify actual playback audio/visuals."
+  - "Image zoom/pan and PDF page-nav affordances are asserted by presence; exact control DOM was not inspected."

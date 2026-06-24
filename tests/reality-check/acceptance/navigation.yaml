@@ -1,0 +1,90 @@
+summary: >
+  FileBrowser loads directly into the file browser (no login) and supports
+  directory navigation, opening files, breadcrumb back-navigation, a directory
+  sidebar/tree, and Ctrl+click multi-select.
+software_type: web_app
+
+entry_points:
+  - type: url
+    value: "http://<container_ip>:58080/"
+    label: "FileBrowser SPA (DTU, auth-bypassed via nginx X-Authenticated-User header)"
+
+tests:
+  - description: >
+      App loads straight into the file browser with NO login form. This is the
+      only login-related check in the suite; the PAM/login UI is out of scope
+      because nginx injects X-Authenticated-User: root on every request.
+    type: browser
+    steps:
+      - action: "Open http://<container_ip>:58080/"
+        expect: >
+          The file browser UI loads directly. A file/directory listing of the
+          fixtures root is visible (entries such as README.md and the
+          code/, text/, markdown/ directories). No username/password login
+          form is shown.
+      - action: "Wait up to 15 seconds for the SPA to finish loading"
+        expect: "Directory entries remain visible; the page does not redirect to a login screen."
+
+  - description: "Root directory listing shows the seeded fixture directories and files."
+    type: browser
+    steps:
+      - action: "Open http://<container_ip>:58080/ and look at the listing"
+        expect: >
+          The listing includes the top-level fixture entries: README.md and the
+          directories code/, text/, markdown/, diagrams/, web/, images/, media/,
+          and documents/.
+
+  - description: "Navigate into a subdirectory (code/) and see its files."
+    type: browser
+    steps:
+      - action: "From the root listing, click the 'code' directory"
+        expect: "The listing updates to show the contents of code/ (e.g. hello.py, app.js, server.go)."
+      - action: "Observe the path indicator / breadcrumb"
+        expect: "The current path reflects the code/ directory."
+
+  - description: "Open a file from a subdirectory."
+    type: browser
+    steps:
+      - action: "Inside the code/ directory, click 'hello.py'"
+        expect: "A viewer/editor panel opens showing the contents of hello.py (Python source text is visible)."
+
+  - description: "Use the breadcrumb to navigate back to the parent/root directory."
+    type: browser
+    steps:
+      - action: "While inside the code/ directory, click the root/home segment of the breadcrumb"
+        expect: >
+          The listing returns to the fixtures root, again showing README.md and
+          the top-level directories.
+
+  - description: "A directory sidebar or tree shows directories for navigation."
+    type: browser
+    steps:
+      - action: "Open http://<container_ip>:58080/ and look for a sidebar or tree panel"
+        expect: >
+          A sidebar/tree region is present that lists directories (e.g. code,
+          text, markdown). Clicking a directory in the sidebar navigates into it.
+
+  - description: "Ctrl+click multi-select highlights more than one file in a directory."
+    type: browser
+    steps:
+      - action: "Navigate into the text/ directory"
+        expect: "The text/ files are listed (data.csv, config.yaml, sample.json, etc.)."
+      - action: "Click 'data.csv', then hold Ctrl and click 'sample.json'"
+        expect: >
+          Both 'data.csv' and 'sample.json' appear selected/highlighted at the
+          same time (multi-select), rather than the second click replacing the
+          first selection.
+
+metadata:
+  source_spec: "Parent session task brief; fixtures/README.md; filebrowser/main.py:22"
+  feature_area: "navigation"
+  tags: ["smoke", "navigation"]
+  priorities:
+    "App loads straight into the file browser": "high"
+    "Ctrl+click multi-select": "medium"
+
+assumptions:
+  - "Browser tester must substitute the actual DTU container IP for <container_ip>; the app is NOT reachable on localhost from the tester."
+  - "Port 58080 is the nginx-fronted port exposed to the tester (uvicorn is internal on 58081)."
+  - "The fixtures/ directory is the browse root (HOME=/root/filebrowser/fixtures per the DTU profile)."
+  - "Exact sidebar vs. tree affordance is asserted loosely because the precise DOM structure was not inspected in this pass."

@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- book.xml — XML fixture for CodeMirror syntax highlighting test.
+     Exercises: declaration, comments, nested elements, attributes,
+     CDATA section, namespace prefix, mixed content. -->
+
+<library xmlns="urn:example:library"
+         xmlns:dc="http://purl.org/dc/elements/1.1/"
+         version="2.1"
+         exported="2024-06-05T08:00:00Z">
+
+  <metadata>
+    <dc:title>FileBrowser Test Library</dc:title>
+    <dc:creator>Platform Team</dc:creator>
+    <dc:description>Sample XML document for viewer and editor testing.</dc:description>
+    <dc:date>2024-06-05</dc:date>
+  </metadata>
+
+  <!-- Fiction section -->
+  <section id="fiction" label="Fiction">
+
+    <book isbn="978-0-7432-7356-5" rating="5">
+      <title>The Road</title>
+      <author born="1933">Cormac McCarthy</author>
+      <year>2006</year>
+      <genre>Post-apocalyptic</genre>
+      <pages>287</pages>
+      <summary>
+        A father and his young son journey across a post-apocalyptic
+        America, struggling to survive and maintain their humanity.
+      </summary>
+      <tags>
+        <tag>classic</tag>
+        <tag>survival</tag>
+        <tag>Pulitzer</tag>
+      </tags>
+    </book>
+
+    <book isbn="978-0-14-028329-7" rating="5">
+      <title>Dune</title>
+      <author born="1920">Frank Herbert</author>
+      <year>1965</year>
+      <genre>Science Fiction</genre>
+      <pages>412</pages>
+      <summary>
+        Set in the far future, Dune follows young Paul Atreides as his
+        family accepts stewardship of the desert planet Arrakis, source
+        of the universe's most precious substance: spice melange.
+      </summary>
+      <tags>
+        <tag>sci-fi</tag>
+        <tag>classic</tag>
+        <tag>Hugo</tag>
+        <tag>Nebula</tag>
+      </tags>
+    </book>
+
+  </section>
+
+  <!-- Non-fiction section -->
+  <section id="nonfiction" label="Non-Fiction">
+
+    <book isbn="978-0-06-112008-4" rating="4">
+      <title>To Kill a Mockingbird</title>
+      <author born="1926">Harper Lee</author>
+      <year>1960</year>
+      <genre>Southern Gothic</genre>
+      <pages>281</pages>
+      <excerpt><![CDATA[
+        "You never really understand a person until you consider things
+        from his point of view... until you climb into his skin and walk
+        around in it." — Atticus Finch
+      ]]></excerpt>
+    </book>
+
+  </section>
+
+  <statistics total-books="3" sections="2" avg-rating="4.67"/>
+
+</library>

@@ -1,0 +1,5 @@
+{"id": 1, "event": "file.uploaded", "user": "alice", "path": "/docs/report.pdf", "size": 204800, "ts": "2024-06-01T09:12:34Z", "ok": true}
+{"id": 2, "event": "file.deleted", "user": "bob", "path": "/tmp/scratch.txt", "size": 512, "ts": "2024-06-01T09:14:02Z", "ok": true}
+{"id": 3, "event": "user.login", "user": "carol", "path": null, "size": null, "ts": "2024-06-01T09:15:47Z", "ok": true}
+{"id": 4, "event": "file.renamed", "user": "alice", "path": "/docs/report-v2.pdf", "old_path": "/docs/report.pdf", "size": 204800, "ts": "2024-06-01T09:22:19Z", "ok": true}
+{"id": 5, "event": "file.uploaded", "user": "david", "path": "/images/logo.png", "size": 8192, "ts": "2024-06-01T09:30:05Z", "ok": false, "error": "quota exceeded"}

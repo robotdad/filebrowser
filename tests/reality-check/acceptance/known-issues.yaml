@@ -1,0 +1,69 @@
+summary: >
+  Regression tests that encode the EXPECTED CORRECT behavior for two KNOWN
+  DEFECTS. These tests are INTENTIONALLY EXPECTED TO FAIL today — they document
+  bugs to fix. When they start passing, the bugs are fixed. Do NOT "fix" the
+  test to match current (buggy) behavior.
+software_type: web_app
+
+entry_points:
+  - type: url
+    value: "http://<container_ip>:58080/"
+    label: "FileBrowser SPA (DTU, auth-bypassed)"
+
+tests:
+  - description: >
+      EXPECTED TO FAIL (known bug). Opening fixtures/web/story-deck.html and
+      selecting the 'Preview' tab SHOULD visually render the HTML story-deck
+      slides (a rendered presentation), NOT raw HTML source text. Known cause:
+      the backend serves .html as text/plain (routes/files.py:108-144), so the
+      sandboxed iframe shows source instead of rendering. This test asserts the
+      CORRECT behavior (rendered slides) and is expected to fail until the
+      backend serves .html with a renderable content type. If it PASSES, the bug
+      is fixed.
+    type: browser
+    steps:
+      - action: "Open http://<container_ip>:58080/, navigate into web/, and open story-deck.html"
+        expect: "The HTML file opens in a viewer with a 'Preview' (or rendered) tab available."
+      - action: "Select the 'Preview' tab"
+        expect: >
+          The story-deck renders as a visual presentation slide (styled deck
+          content / a title slide is visibly rendered). Raw HTML markup such as
+          '<!DOCTYPE html>', '<div', or '<style>' tags is NOT shown as literal
+          text. (EXPECTED TO FAIL today: current behavior shows raw source.)
+
+  - description: >
+      EXPECTED TO FAIL (known bug). Editing fixtures/markdown/showcase.md in the
+      WYSIWYG 'Edit' (Tiptap) tab and saving SHOULD preserve fenced code blocks,
+      GFM tables, task lists, and images on round-trip. Known cause: the Tiptap
+      WYSIWYG editor strips these elements on save (wysiwyg-editor.js:38,48).
+      This test asserts the CORRECT behavior (content preserved) and is expected
+      to fail until the WYSIWYG round-trip is lossless. If it PASSES, the bug is
+      fixed.
+    type: browser
+    steps:
+      - action: "Open http://<container_ip>:58080/, navigate into markdown/, and open showcase.md"
+        expect: "showcase.md opens with View, Edit, and Source tabs."
+      - action: "Switch to the WYSIWYG 'Edit' tab, then save the file (Ctrl+S or the save control)"
+        expect: "The save completes (a saved indicator appears or the unsaved marker clears)."
+      - action: "Switch to the 'Source' tab and inspect the saved markdown"
+        expect: >
+          The source still contains a fenced code block (a line starting with
+          '```'), at least one GFM table (a line containing '|'), a task list
+          item (containing '- [ ]' or '- [x]'), and an image reference
+          (containing '![' ). (EXPECTED TO FAIL today: Tiptap strips these on
+          save, so one or more will be missing.)
+
+metadata:
+  source_spec: "Parent session investigation: routes/files.py:108-144 (HTML text/plain); wysiwyg-editor.js:38,48 (Tiptap strip)"
+  feature_area: "known-issues"
+  tags: ["known-issue", "regression", "expected-fail"]
+  expected_outcome: "fail-until-fixed"
+  note: >
+    These two tests are intentional failure markers. A passing result here means
+    the corresponding bug has been fixed, not that the test is broken.
+
+assumptions:
+  - "Substitute the real DTU container IP for <container_ip>; not reachable on localhost."
+  - "The 'Preview' tab label for HTML and the 'Edit' (WYSIWYG) tab label for markdown are taken from the parent-session investigation; if the UI labels differ slightly, match the rendered-HTML tab and the WYSIWYG tab respectively."
+  - "The WYSIWYG round-trip assertion relies on the Source tab reflecting the saved file content; if saving is blocked entirely, that is also a (different) failure worth surfacing."
+  - "Reality-check reporting is assumed to treat these as normal tests; the expected-fail intent is documented in descriptions/metadata since the schema has no native xfail flag."

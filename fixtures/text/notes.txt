@@ -1,0 +1,67 @@
+Meeting Notes — Platform Team Sprint Review
+Date: 2024-06-05
+Attendees: Alice, Bob, Carol, David, Eve
+
+------------------------------------------------------------------------
+AGENDA
+------------------------------------------------------------------------
+1. Sprint 12 retrospective
+2. FileBrowser feature review
+3. Upcoming work (Sprint 13)
+4. Action items
+
+------------------------------------------------------------------------
+SPRINT 12 RETROSPECTIVE
+------------------------------------------------------------------------
+What went well:
+  - File preview for images and PDFs shipped on time
+  - Terminal integration (xterm.js) passed QA with zero P1 bugs
+  - On-call rotation was smooth; only one minor incident (nginx config
+    drift on staging — resolved in < 30 min)
+
+What could improve:
+  - PR review latency crept back up to ~3 days. Proposal: adopt
+    reviewer assignment at PR creation time
+  - Test coverage for the WebSocket terminal path is still thin.
+    Bob to pair with Eve on an integration test harness next sprint.
+  - Design specs arrived late for the rename/copy workflow; caused
+    a re-work mid-sprint. Need design sign-off 1 sprint ahead.
+
+------------------------------------------------------------------------
+FILEBROWSER FEATURE REVIEW
+------------------------------------------------------------------------
+Shipped in Sprint 12:
+  * Markdown WYSIWYG editor (Tiptap v2)  — View / Edit / Source tabs
+  * Graphviz diagram viewer (d3-graphviz) — Graph / Source / Edit tabs
+  * Multi-file select with Ctrl+click
+  * Command palette (Ctrl+K)
+
+Known issues carried forward:
+  * Tiptap strips fenced code blocks and GFM tables on round-trip save
+    (tracked in issue #22 — P2, needs Tiptap ProseMirror schema fix)
+  * HTML preview shows raw source instead of rendered output (by-design
+    for security, but confusing UX — issue #23 for documentation)
+  * SVG dimensions > 2000px clip at container edge — CSS fix needed
+
+------------------------------------------------------------------------
+SPRINT 13 GOALS
+------------------------------------------------------------------------
+  P0  Fix Tiptap code-block / table strip bug (#22)
+  P0  Add reality-check automated test suite for all file type viewers
+  P1  Drag-and-drop file upload
+  P1  Breadcrumb navigation bar
+  P2  Keyboard shortcut customisation settings page
+  P2  Dark/light theme toggle
+
+------------------------------------------------------------------------
+ACTION ITEMS
+------------------------------------------------------------------------
+  [Alice]  File architecture doc for new upload pipeline by Fri Jun 7
+  [Bob]    Pair with Eve on WS terminal integration test — start Mon Jun 10
+  [Carol]  Schedule design review for rename/copy — by Mon Jun 10
+  [David]  Open ticket for SVG clip bug; estimate complexity by EOW
+  [Eve]    Draft reality-check scenario YAML for markdown / graphviz viewers
+
+------------------------------------------------------------------------
+NEXT MEETING: Sprint 13 planning — Monday June 10, 10:00 AM
+------------------------------------------------------------------------

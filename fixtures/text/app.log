@@ -1,0 +1,15 @@
+2024-06-05T08:00:01.123Z INFO  [filebrowser.main] Starting FileBrowser v1.4.0 on 0.0.0.0:58080
+2024-06-05T08:00:01.145Z INFO  [filebrowser.auth] Auth mode: PAM (service=login)
+2024-06-05T08:00:01.148Z INFO  [filebrowser.storage] Root directory: /srv/files (quota: unlimited)
+2024-06-05T08:00:01.201Z INFO  [uvicorn] Application startup complete.
+2024-06-05T09:12:30.402Z INFO  [filebrowser.auth] LOGIN user=alice ip=192.168.1.42 ua="Mozilla/5.0"
+2024-06-05T09:12:30.588Z INFO  [filebrowser.routes] GET /api/files/ user=alice 200 23ms
+2024-06-05T09:12:35.110Z INFO  [filebrowser.routes] GET /api/files/docs user=alice 200 4ms
+2024-06-05T09:12:40.774Z INFO  [filebrowser.routes] POST /api/files/docs/report.pdf user=alice 201 142ms size=204800
+2024-06-05T09:14:00.001Z WARN  [filebrowser.terminal] WebSocket upgrade missing on request, falling back to polling
+2024-06-05T09:14:02.998Z INFO  [filebrowser.routes] DELETE /api/files/tmp/scratch.txt user=bob 204 7ms
+2024-06-05T09:15:47.312Z INFO  [filebrowser.auth] LOGIN user=carol ip=10.0.0.5 ua="curl/8.2.0"
+2024-06-05T09:22:19.055Z INFO  [filebrowser.routes] POST /api/files/docs/report-v2.pdf?rename=%2Fdocs%2Freport.pdf user=alice 200 18ms
+2024-06-05T09:30:05.881Z ERROR [filebrowser.routes] POST /api/files/images/logo.png user=david 413 2ms error="upload size 8192 exceeds quota limit 0"
+2024-06-05T10:05:12.000Z WARN  [filebrowser.auth] Failed login attempt user=unknown ip=185.220.101.55 reason="PAM auth failure"
+2024-06-05T10:05:12.001Z WARN  [filebrowser.auth] Rate limiting active for ip=185.220.101.55 — 5 failures in 60s

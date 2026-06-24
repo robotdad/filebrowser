@@ -1,0 +1,67 @@
+# config.toml — TOML fixture for CodeMirror highlighting test.
+# Note: .toml has no CodeMirror language mode in this app — verifies
+# the backend plain-text code path (opens in code editor, no coloring).
+# Exercises: sections/tables, arrays, inline tables, typed values, comments.
+
+[app]
+name    = "filebrowser"
+version = "1.4.0"
+debug   = false
+port    = 58080
+
+[server]
+host              = "0.0.0.0"
+reload            = true
+workers           = 4
+timeout_keep_alive = 30
+
+[auth]
+enabled        = true
+bypass         = false
+session_max_age = 86400  # seconds
+
+[auth.session]
+secret_key    = "change-me-in-production"
+secure_cookie = true
+samesite      = "lax"
+
+[storage]
+root_dir     = "/srv/files"
+max_upload_mb = 50
+hidden_patterns = [".*", "__pycache__", "*.pyc"]
+
+[features.terminal]
+enabled       = true
+shell         = "/bin/bash"
+timeout       = 3600
+allowed_users = ["root", "admin"]
+
+[features.editor]
+autosave_interval = 30
+max_file_size_kb  = 2048
+
+# --- Arrays of tables ---
+
+[[integrations]]
+name    = "s3"
+bucket  = "filebrowser-backups"
+region  = "us-east-1"
+retries = 3
+timeout = 10
+
+[[integrations]]
+name    = "webhook"
+url     = "https://hooks.example.com/filebrowser"
+retries = 3
+timeout = 10
+events  = ["file.uploaded", "file.deleted", "user.login"]
+
+# --- Inline tables ---
+[ui]
+theme        = { name = "dark", accent = "#7c6af7" }
+sidebar_width = 240
+
+# --- Dates and floats ---
+[telemetry]
+sample_rate  = 0.05
+enabled_at   = 2024-01-15T08:00:00Z
