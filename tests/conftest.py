@@ -50,6 +50,10 @@ def tmp_home(tmp_path):
     (tmp_path / "malicious.html").write_text(
         '<html><body><script>alert(1)</script><img onerror="alert(2)" src=x></body></html>'
     )
+    # .htm alias — must get the same html handling as .html
+    (tmp_path / "page.htm").write_text(
+        "<!DOCTYPE html><html><body><h1>Hello HTM</h1></body></html>"
+    )
     return tmp_path
 
 

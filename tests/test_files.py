@@ -147,13 +147,34 @@ class TestFileContent:
         assert "allow-scripts" not in csp
         assert "allow-same-origin" not in csp
     
-    def test_html_body_is_rendered(self, client):
-        """HTML files should render as HTML, not as plain text."""
+    def test_html_served_as_html_not_plain_text(self, client):
+        """HTML files must be served as text/html so the browser renders them.
+
+        Regression guard for issue #7: previously .html was in the "code" category and
+        served as text/plain, so the Preview iframe showed raw source instead of a rendered
+        page. Asserting the body merely "contains tags" is not enough (a text/plain response
+        contains them too) -- the meaningful assertion is that the content-type is NOT
+        text/plain.
+        """
         response = client.get("/api/files/content", params={"path": "page.html"})
         assert response.status_code == 200
-        # Verify the response contains HTML tags (rendering, not source text)
-        assert "<html>" in response.text or "<HTML>" in response.text
-        assert "<h1>" in response.text
+        content_type = response.headers.get("content-type", "")
+        assert content_type.startswith("text/html"), content_type
+        assert "text/plain" not in content_type
+        assert "<h1>Hello HTML</h1>" in response.text
+
+    def test_htm_extension_served_as_html_with_security_headers(self, client):
+        """The .htm alias must get identical handling to .html (content-type + CSP sandbox)."""
+        response = client.get("/api/files/content", params={"path": "page.htm"})
+        assert response.status_code == 200
+        assert response.headers.get("content-type") == "text/html; charset=utf-8"
+        assert response.headers.get("x-content-type-options") == "nosniff"
+        csp = response.headers.get("content-security-policy")
+        assert csp is not None
+        assert "default-src 'none'" in csp
+        assert "sandbox" in csp
+        assert "allow-scripts" not in csp
+        assert "allow-same-origin" not in csp
     
     @pytest.mark.parametrize("path,description", [
         ("hello.txt", "text files"),
