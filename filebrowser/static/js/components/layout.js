@@ -111,7 +111,11 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
         saveFavorites(next);
     };
 
-    const refresh = () => setRefreshKey((k) => k + 1);
+    // Must be memoized: checkFileChanges depends on `refresh`, and the file-change
+    // polling effect depends on checkFileChanges. An unmemoized refresh changes identity
+    // every render, recreating checkFileChanges, re-running the poll effect, which calls
+    // checkFileChanges() immediately -> setState -> re-render -> infinite /api/files/info loop.
+    const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
 
 
     // ── File change polling ───────────────────────────────────────────────────────────────
