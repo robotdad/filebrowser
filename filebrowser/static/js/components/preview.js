@@ -153,7 +153,7 @@ function ImageViewer({ contentUrl, filePath }) {
     `;
 }
 
-function HtmlViewer({ text, path, contentUrl, onSave, onDirtyChange }) {
+function HtmlViewer({ text, path, contentUrl, onSave, onDirtyChange, confirmOverwrite = false }) {
     const [mode, setMode] = useState('preview'); // 'preview' | 'source' | 'edit'
     const [editText, setEditText] = useState(text);
     const [dirty, setDirty] = useState(false);
@@ -176,6 +176,7 @@ function HtmlViewer({ text, path, contentUrl, onSave, onDirtyChange }) {
 
     const handleSave = useCallback(async () => {
         if (!dirty || saving) return;
+        if (confirmOverwrite && !confirm('This file changed on disk since you kept your version. Overwrite the on-disk changes?')) return;
         setSaving(true);
         try {
             const response = await api.put('/api/files/content', { path, content: editText });
@@ -186,7 +187,7 @@ function HtmlViewer({ text, path, contentUrl, onSave, onDirtyChange }) {
         } finally {
             setSaving(false);
         }
-    }, [dirty, saving, path, editText, onSave]);
+    }, [dirty, saving, path, editText, onSave, confirmOverwrite]);
 
     const handleUndo = useCallback(() => { if (viewRef.current) undo(viewRef.current); }, []);
     const handleRedo = useCallback(() => { if (viewRef.current) redo(viewRef.current); }, []);
@@ -251,7 +252,7 @@ function getAffectedElements(graphvizSvg, selectedElements, direction) {
     return result;
 }
 
-function GraphvizViewer({ text, path, onSave, onDirtyChange }) {
+function GraphvizViewer({ text, path, onSave, onDirtyChange, confirmOverwrite = false }) {
     const [activeTab, setActiveTab] = useState('graph');
     const [engine, setEngine] = useState('dot');
     const [darkCanvas, setDarkCanvas] = useState(
@@ -490,6 +491,7 @@ function GraphvizViewer({ text, path, onSave, onDirtyChange }) {
     const saveRef = useRef(null);
     saveRef.current = async () => {
         if (!dirty || saving) return;
+        if (confirmOverwrite && !confirm('This file changed on disk since you kept your version. Overwrite the on-disk changes?')) return;
         setSaving(true);
         try {
             const response = await api.put('/api/files/content', { path, content: editText });
@@ -746,9 +748,9 @@ function PdfViewer({ contentUrl, filePath }) {
 }
 
 // Animated wrapper — remounts (via key) on each new filePath to retrigger animation
-function AnimatedContent({ filePath, children }) {
+function AnimatedContent({ filePath, children, scrollRef }) {
     return html`
-        <div key=${filePath} class="preview-content-animate">
+        <div key=${filePath} class="preview-content-animate" ref=${scrollRef}>
             ${children}
         </div>
     `;
@@ -761,6 +763,9 @@ export function PreviewPane({ filePath, onDirtyChange, diskChangeInfo, onFileSav
     const prevPath = useRef(null);
     const [pendingSaveConflict, setPendingSaveConflict] = useState(false);
     const scrollPosRef = useRef(0);
+    const dirtyRef = useRef(false);
+    const contentScrollerRef = useRef(null);
+    const reloadTokenRef = useRef(null);
 
     // Helper: fetch text content and set state (shared by normal + force-load paths)
     const loadTextContent = useCallback((path, type) => {
@@ -772,6 +777,8 @@ export function PreviewPane({ filePath, onDirtyChange, diskChangeInfo, onFileSav
                 }
             });
     }, []);
+
+    const handleDirtyChange = useCallback((d) => { dirtyRef.current = d; if (onDirtyChange) onDirtyChange(d); }, [onDirtyChange]);
 
     // Force-load handler for the large-file gate
     const handleForceLoad = useCallback(() => {
@@ -787,6 +794,18 @@ export function PreviewPane({ filePath, onDirtyChange, diskChangeInfo, onFileSav
             })
             .finally(() => { if (prevPath.current === path) setLoading(false); });
     }, [content, loadTextContent]);
+
+    // Restore scroll position after content loads (best-effort; CodeMirror-based
+    // editors keep their own internal scroller, so this only applies to viewers
+    // that actually scroll the preview-content-animate container).
+    useEffect(() => {
+        if (scrollPosRef.current && contentScrollerRef.current) {
+            const el = contentScrollerRef.current;
+            const top = scrollPosRef.current;
+            scrollPosRef.current = 0;
+            requestAnimationFrame(() => { el.scrollTop = top; });
+        }
+    }, [content]);
 
     useEffect(() => {
         if (!filePath) {
@@ -860,26 +879,23 @@ export function PreviewPane({ filePath, onDirtyChange, diskChangeInfo, onFileSav
         if (!diskChangeInfo || !filePath || !content) return;
 
         if (diskChangeInfo.gone) {
-            // File deleted/renamed while open - show loud gone state
-            setContent({ type: 'gone', filePath });
+            if (content.type !== 'gone') setContent({ type: 'gone', filePath });
             return;
         }
 
-        if (diskChangeInfo.changed && content.text != null) {
-            // File changed on disk - reload if clean, show banner if dirty
-            // (dirty check is handled by Layout, so if we're here it's clean OR conflict)
-            log.info('disk change detected: path=%s', filePath);
-            // Re-fetch content for clean reload
+        if (diskChangeInfo.reload && content.text != null) {
+            // Backstop: never auto-reload over unsaved edits, even if layout's
+            // dirty snapshot lagged (F1/F6). Dirty -> the banner path handles it.
+            if (dirtyRef.current) return;
+            // One-shot guard: don't re-fire for the same on-disk version (F2 loop).
+            const token = `${diskChangeInfo.modified}|${diskChangeInfo.size}`;
+            if (reloadTokenRef.current === token) return;
+            reloadTokenRef.current = token;
+            const scroller = contentScrollerRef.current;
+            scrollPosRef.current = scroller ? scroller.scrollTop : 0;
             const type = content.type;
             setLoading(true);
-            loadTextContent(filePath, type)
-                .then(() => {
-                    log.debug('clean reload complete: path=%s', filePath);
-                })
-                .catch(() => {
-                    log.warn('reload failed: path=%s', filePath);
-                })
-                .finally(() => setLoading(false));
+            loadTextContent(filePath, type).finally(() => setLoading(false));
         }
     }, [diskChangeInfo, filePath, content, loadTextContent]);
 
@@ -940,16 +956,16 @@ export function PreviewPane({ filePath, onDirtyChange, diskChangeInfo, onFileSav
         case 'text':
         case 'code':
             inner = html`<${EditableViewer} text=${content.text} path=${filePath}
-                                             onSave=${handleContentSave} onDirtyChange=${onDirtyChange} />`;
+                                             onSave=${handleContentSave} onDirtyChange=${handleDirtyChange} confirmOverwrite=${confirmOverwrite} />`;
             break;
         case 'markdown':
-            inner = html`<${MarkdownEditor} text=${content.text} path=${filePath} onSave=${handleContentSave} onDirtyChange=${onDirtyChange} />`;
+            inner = html`<${MarkdownEditor} text=${content.text} path=${filePath} onSave=${handleContentSave} onDirtyChange=${handleDirtyChange} confirmOverwrite=${confirmOverwrite} />`;
             break;
         case 'html':
-            inner = html`<${HtmlViewer} text=${content.text} path=${filePath} contentUrl=${contentUrl} onSave=${handleContentSave} onDirtyChange=${onDirtyChange} />`;
+            inner = html`<${HtmlViewer} text=${content.text} path=${filePath} contentUrl=${contentUrl} onSave=${handleContentSave} onDirtyChange=${handleDirtyChange} confirmOverwrite=${confirmOverwrite} />`;
             break;
         case 'graphviz':
-            inner = html`<${GraphvizViewer} text=${content.text} path=${filePath} onSave=${handleContentSave} onDirtyChange=${onDirtyChange} />`;
+            inner = html`<${GraphvizViewer} text=${content.text} path=${filePath} onSave=${handleContentSave} onDirtyChange=${handleDirtyChange} />`;
             break;
         case 'image':
             inner = html`<${ImageViewer} contentUrl=${versionedUrl} filePath=${filePath} />`;
@@ -974,30 +990,34 @@ export function PreviewPane({ filePath, onDirtyChange, diskChangeInfo, onFileSav
             `;
     }
 
+    // confirmOverwrite: gate child save handlers to warn before overwriting a disk change kept by user.
+    const confirmOverwrite = pendingSaveConflict;
+
     // Handlers for conflict banner actions
     const handleReload = useCallback(() => {
-        if (diskChangeInfo?.changed && content.text != null) {
+        if ((diskChangeInfo?.conflict || pendingSaveConflict) && content?.text != null) {
             const type = content.type;
             setLoading(true);
             loadTextContent(filePath, type)
                 .then(() => {
                     log.debug('manual reload complete: path=%s', filePath);
+                    setPendingSaveConflict(false);
                 })
                 .catch(() => {
                     log.warn('reload failed: path=%s', filePath);
                 })
                 .finally(() => setLoading(false));
         }
-    }, [diskChangeInfo, content, filePath, loadTextContent]);
+    }, [diskChangeInfo, pendingSaveConflict, content, filePath, loadTextContent]);
 
     const handleKeepMine = useCallback(() => {
-        if (diskChangeInfo?.changed) {
+        if (diskChangeInfo?.conflict) {
             setPendingSaveConflict(true);
         }
     }, [diskChangeInfo]);
 
-    // Conflict banner: show when disk changed and file is dirty OR pending save conflict
-    const showConflictBanner = diskChangeInfo?.changed && (pendingSaveConflict || content?.text != null);
+    // Conflict banner: show when dirty file has a disk conflict OR user chose keep-mine
+    const showConflictBanner = !!(diskChangeInfo?.conflict || pendingSaveConflict);
 
     // AnimatedContent uses filePath as key — forces remount + animation on every file switch
     return html`
@@ -1012,6 +1032,6 @@ export function PreviewPane({ filePath, onDirtyChange, diskChangeInfo, onFileSav
                 </div>
             </div>
         `}
-        <${AnimatedContent} filePath=${filePath}>${inner}</${AnimatedContent}>
+        <${AnimatedContent} filePath=${filePath} scrollRef=${contentScrollerRef}>${inner}</${AnimatedContent}>
     `;
 }

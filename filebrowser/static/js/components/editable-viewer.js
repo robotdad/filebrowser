@@ -23,7 +23,7 @@ const log = createLogger('EditableViewer');
  *   path     — file path (for save API and language detection)
  *   onSave   — optional callback after successful save, receives new text
  */
-export function EditableViewer({ text, path, onSave: onSaveCallback, onDirtyChange }) {
+export function EditableViewer({ text, path, onSave: onSaveCallback, onDirtyChange, confirmOverwrite = false }) {
     const [editing, setEditing] = useState(false);
     const [editText, setEditText] = useState(text);
     const [dirty, setDirty] = useState(false);
@@ -54,6 +54,7 @@ export function EditableViewer({ text, path, onSave: onSaveCallback, onDirtyChan
 
     const handleSave = useCallback(async () => {
         if (!dirty || saving) return;
+        if (confirmOverwrite && !confirm('This file changed on disk since you kept your version. Overwrite the on-disk changes?')) return;
         setSaving(true);
         try {
             log.info('save: path=%s', path);
@@ -65,7 +66,7 @@ export function EditableViewer({ text, path, onSave: onSaveCallback, onDirtyChan
         } finally {
             setSaving(false);
         }
-    }, [dirty, saving, path, editText, onSaveCallback]);
+    }, [dirty, saving, path, editText, onSaveCallback, confirmOverwrite]);
 
     const handleUndo = useCallback(() => {
         if (viewRef.current) undo(viewRef.current);

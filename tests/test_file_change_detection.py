@@ -1,10 +1,13 @@
 """Tests for Phase 1: On-disk file change detection.
 
 Tests both backend and frontend implementation:
-- Backend: PUT /api/files/content returns mtime
-- Frontend: Polling logic, (mtime, size) != detection, conflict handling
+- Backend: PUT /api/files/content returns mtime + size
+- Frontend: Pure change-detector.js module (hasChanged / classifyDiskState) executed in Node
 """
+import json
 import os
+import shutil
+import subprocess
 import time
 from pathlib import Path
 
@@ -16,6 +19,57 @@ from filebrowser.auth import require_auth
 from filebrowser.routes.files import get_fs
 from filebrowser.services.filesystem import FilesystemService
 
+
+# ─── Node helpers ────────────────────────────────────────────────────────────
+
+STATIC_DIR = Path(__file__).parent.parent / "filebrowser" / "static"
+CHANGE_DETECTOR_JS = STATIC_DIR / "js" / "lib" / "change-detector.js"
+
+NODE = shutil.which("node")
+
+requires_node = pytest.mark.skipif(
+    NODE is None, reason="node is required to execute the JS change-detector module"
+)
+
+
+def _run_js(script: str) -> str:
+    """Execute ESM JS in Node and return stdout."""
+    assert NODE is not None  # guarded by requires_node
+    result = subprocess.run(
+        [NODE, "--input-type=module", "-e", script],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout
+
+
+def _has_changed(known, current) -> bool:
+    """Call hasChanged() from change-detector.js in Node."""
+    module_url = CHANGE_DETECTOR_JS.resolve().as_uri()
+    script = (
+        f"import {{ hasChanged }} from {json.dumps(module_url)};\n"
+        f"const known = {json.dumps(known)};\n"
+        f"const current = {json.dumps(current)};\n"
+        f"process.stdout.write(String(hasChanged(known, current)));"
+    )
+    return _run_js(script) == "true"
+
+
+def _classify(gone: bool, changed: bool, dirty: bool) -> dict:
+    """Call classifyDiskState() from change-detector.js in Node."""
+    module_url = CHANGE_DETECTOR_JS.resolve().as_uri()
+    script = (
+        f"import {{ classifyDiskState }} from {json.dumps(module_url)};\n"
+        f"const result = classifyDiskState({{ gone: {json.dumps(gone)}, "
+        f"changed: {json.dumps(changed)}, dirty: {json.dumps(dirty)} }});\n"
+        f"process.stdout.write(JSON.stringify(result));"
+    )
+    raw = _run_js(script)
+    return json.loads(raw)
+
+
+# ─── Backend tests ───────────────────────────────────────────────────────────
 
 class TestBackendFileChangeDetection:
     """Backend tests for file change detection support."""
@@ -78,7 +132,7 @@ class TestBackendFileChangeDetection:
     def test_identical_mtime_content_change_detectable_via_size(self, tmp_home):
         """
         Acceptance criterion: Identical-mtime content change IS detected (via size).
-        
+
         When a tool preserves mtime but changes bytes, size will differ.
         """
         file_path = tmp_home / "test.txt"
@@ -105,7 +159,7 @@ class TestBackendFileChangeDetection:
     def test_mtime_rollback_detected(self, tmp_home):
         """
         Acceptance criterion: mtime rollback (older timestamp) IS detected (!= comparison).
-        
+
         Using != instead of > catches mtime rollbacks (restoring an older version).
         """
         file_path = tmp_home / "test.txt"
@@ -134,222 +188,102 @@ class TestBackendFileChangeDetection:
         # Frontend's != comparison catches this (mtime3 != mtime2)
 
 
-class TestFrontendFileChangeDetection:
-    """Frontend JavaScript code tests (static analysis)."""
+# ─── Frontend behavioral tests (Node) ────────────────────────────────────────
 
-    def test_layout_has_polling_hook(self):
-        """Layout.js should have file change polling hook."""
-        layout_path = Path("filebrowser/static/js/components/layout.js")
-        content = layout_path.read_text()
+@requires_node
+class TestChangeDetectorModule:
+    """Verify the change-detector.js module exists and exports the expected functions."""
 
-        # Check for polling state
-        assert "diskChangeInfo" in content
-        assert "lastKnownState" in content
-        assert "pollTimerRef" in content
-        assert "focusDebounceRef" in content
+    def test_module_file_exists(self):
+        assert CHANGE_DETECTOR_JS.exists(), (
+            f"change-detector.js not found at {CHANGE_DETECTOR_JS}"
+        )
 
-        # Check for polling logic
-        assert "checkFileChanges" in content
-        assert "/api/files/info" in content
-
-        # Check for (mtime, size) comparison
-        assert "modified" in content
-        assert "size" in content
-
-    def test_polling_uses_mtime_and_size_comparison(self):
-        """Polling should use (mtime, size) != comparison for change detection."""
-        layout_path = Path("filebrowser/static/js/components/layout.js")
-        content = layout_path.read_text()
-
-        # Check for != comparison on both mtime and size
-        # The code should have: known.modified !== current.modified || known.size !== current.size
-        assert "modified" in content
-        assert "!==" in content
-        assert "size" in content
-        # Check for OR condition that checks both
-        assert "||" in content
-
-    def test_polling_interval_is_modest(self):
-        """Polling should use a modest interval (not < 3s for multi-tab)."""
-        layout_path = Path("filebrowser/static/js/components/layout.js")
-        content = layout_path.read_text()
-
-        # Should have setInterval with a reasonable delay (looking for 8000ms or similar)
-        assert "setInterval" in content
-        assert "8000" in content  # 8 seconds
-
-    def test_focus_polling_is_debounced(self):
-        """
-        Acceptance criterion: Focus polling is debounced.
-        
-        Rapid focus/blur should not cause stat flood.
-        """
-        layout_path = Path("filebrowser/static/js/components/layout.js")
-        content = layout_path.read_text()
-
-        # Check for debounce on focus
-        assert "focusDebounceRef" in content
-        assert "setTimeout" in content
-        assert "500" in content  # 500ms debounce
-
-    def test_listing_refresh_on_change_detected(self):
-        """When changes detected, should call refresh() to update listing."""
-        layout_path = Path("filebrowser/static/js/components/layout.js")
-        content = layout_path.read_text()
-
-        # Should call refresh() when anyChange is true
-        assert "refresh()" in content
-        assert "anyChange" in content
-
-    def test_previewpane_accepts_disk_change_props(self):
-        """PreviewPane should accept diskChangeInfo and onFileSaved props."""
-        preview_path = Path("filebrowser/static/js/components/preview.js")
-        content = preview_path.read_text()
-
-        # Check function signature includes new props
-        assert "diskChangeInfo" in content
-        assert "onFileSaved" in content
-
-    def test_previewpane_handles_gone_state(self):
-        """
-        Acceptance criterion: Delete/rename while open → loud gone-state.
-        
-        PreviewPane should show 'File no longer exists' when diskChangeInfo.gone is true.
-        """
-        preview_path = Path("filebrowser/static/js/components/preview.js")
-        content = preview_path.read_text()
-
-        # Check for gone state rendering
-        assert "case 'gone':" in content
-        assert "File no longer exists" in content
-
-    def test_previewpane_shows_conflict_banner(self):
-        """PreviewPane should show conflict banner when dirty file changed on disk."""
-        preview_path = Path("filebrowser/static/js/components/preview.js")
-        content = preview_path.read_text()
-
-        # Check for conflict banner
-        assert "preview-disk-change-banner" in content
-        assert "File changed on disk" in content
-        assert "Reload" in content
-        assert "Keep mine" in content
-
-    def test_save_handlers_pass_response_to_callback(self):
-        """Save handlers should pass PUT response to callback for mtime seeding."""
-        # Check EditableViewer
-        editable_path = Path("filebrowser/static/js/components/editable-viewer.js")
-        editable_content = editable_path.read_text()
-        assert "const response = await api.put('/api/files/content'" in editable_content
-        assert "onSaveCallback(editText, response)" in editable_content
-
-        # Check HtmlViewer in preview.js
-        preview_path = Path("filebrowser/static/js/components/preview.js")
-        preview_content = preview_path.read_text()
-        # HtmlViewer save handler
-        assert "const response = await api.put('/api/files/content'" in preview_content
-        assert "onSave(editText, response)" in preview_content
-
-        # Check MarkdownEditor
-        markdown_path = Path("filebrowser/static/js/components/markdown-editor.js")
-        markdown_content = markdown_path.read_text()
-        assert "const response = await api.put('/api/files/content'" in markdown_content
-        assert "onSave(editText, response)" in markdown_content
-
-    def test_editableviewer_resets_on_text_prop_change(self):
-        """
-        Acceptance criterion: Clean in-place reload preserves scroll position.
-        
-        First part: EditableViewer must reset when text prop changes.
-        """
-        editable_path = Path("filebrowser/static/js/components/editable-viewer.js")
-        content = editable_path.read_text()
-
-        # Should have useEffect that resets editText when text changes
-        assert "useEffect(() => {" in content
-        assert "setEditText(text)" in content
-        assert "setDirty(false)" in content
-        assert "[text]" in content  # dependency array
-
-    def test_htmlviewer_resets_on_text_prop_change(self):
-        """HtmlViewer must also reset when text prop changes."""
-        preview_path = Path("filebrowser/static/js/components/preview.js")
-        content = preview_path.read_text()
-
-        # HtmlViewer should have the same reset pattern
-        # Look for the reset useEffect in HtmlViewer function
-        assert "function HtmlViewer" in content
-        # The useEffect should be in HtmlViewer
-        html_viewer_section = content[content.index("function HtmlViewer"):content.index("function GraphvizViewer")]
-        assert "useEffect(() => {" in html_viewer_section
-        assert "setEditText(text)" in html_viewer_section
-        assert "[text]" in html_viewer_section
-
-    def test_manual_refresh_button_still_works(self):
-        """
-        Acceptance criterion: Manual Refresh button still works.
-        
-        Refresh button should still call refresh() function.
-        """
-        layout_path = Path("filebrowser/static/js/components/layout.js")
-        content = layout_path.read_text()
-
-        # Refresh button should still exist and call refresh
-        assert "refresh-btn" in content or "onRefresh=${refresh}" in content
-        assert "onClick=${refresh}" in content or "onRefresh=${refresh}" in content
-
-    def test_save_external_write_race_handling(self):
-        """
-        Acceptance criterion: Save → external write race handling.
-        
-        Seeding last-known from PUT response should not fire spurious "changed on disk"
-        nor swallow a real external write.
-        """
-        preview_path = Path("filebrowser/static/js/components/preview.js")
-        content = preview_path.read_text()
-
-        # handleContentSave should call onFileSaved with response data
-        assert "onFileSaved" in content
-        assert "response?.modified" in content
-        assert "response?.size" in content
-
-        layout_path = Path("filebrowser/static/js/components/layout.js")
-        layout_content = layout_path.read_text()
-
-        # handleFileSaved should update lastKnownState
-        assert "handleFileSaved" in layout_content
-        assert "lastKnownState.current.set" in layout_content
+    def test_module_exports_both_functions(self):
+        """Both hasChanged and classifyDiskState must be importable."""
+        module_url = CHANGE_DETECTOR_JS.resolve().as_uri()
+        script = (
+            f"import {{ hasChanged, classifyDiskState }} from {json.dumps(module_url)};\n"
+            f"process.stdout.write(typeof hasChanged + ',' + typeof classifyDiskState);"
+        )
+        output = _run_js(script)
+        assert output == "function,function", f"Unexpected export types: {output!r}"
 
 
-class TestConflictHandling:
-    """Tests for conflict handling logic."""
+@requires_node
+class TestHasChanged:
+    """Behavioral tests for hasChanged()."""
 
-    def test_clean_file_auto_reloads_on_disk_change(self):
-        """Clean files (no unsaved edits) should auto-reload when changed on disk."""
-        preview_path = Path("filebrowser/static/js/components/preview.js")
-        content = preview_path.read_text()
+    def test_identical_values_no_change(self):
+        known = {"modified": "2024-01-01T10:00:00", "size": 100}
+        current = {"modified": "2024-01-01T10:00:00", "size": 100}
+        assert _has_changed(known, current) is False
 
-        # Should have logic to reload when diskChangeInfo.changed and clean
-        assert "diskChangeInfo.changed" in content
-        assert "loadTextContent" in content
+    def test_different_size_same_mtime_detected(self):
+        """Identical-mtime, different-size write is caught (AC1)."""
+        known = {"modified": "2024-01-01T10:00:00", "size": 100}
+        current = {"modified": "2024-01-01T10:00:00", "size": 200}
+        assert _has_changed(known, current) is True
 
-    def test_dirty_file_shows_conflict_banner(self):
-        """Dirty files (unsaved edits) should show conflict banner, not auto-reload."""
-        layout_path = Path("filebrowser/static/js/components/layout.js")
-        content = layout_path.read_text()
+    def test_mtime_rollback_detected(self):
+        """Older timestamp is detected — != catches rollbacks that > would miss (AC2)."""
+        known = {"modified": "2024-01-01T10:05:00", "size": 100}
+        current = {"modified": "2024-01-01T10:00:00", "size": 100}
+        assert _has_changed(known, current) is True
 
-        # Should check tab.dirty before setting changed flag
-        assert "tab.dirty" in content
-        assert "pendingSave" in content or "conflict" in content.lower()
+    def test_newer_mtime_same_size_detected(self):
+        known = {"modified": "2024-01-01T10:00:00", "size": 100}
+        current = {"modified": "2024-01-01T10:05:00", "size": 100}
+        assert _has_changed(known, current) is True
 
-    def test_keep_mine_sets_pending_save_flag(self):
-        """
-        Acceptance criterion: keep-mine → save re-warns.
-        
-        Keeping local version should set a flag so save warns before overwriting.
-        """
-        preview_path = Path("filebrowser/static/js/components/preview.js")
-        content = preview_path.read_text()
+    def test_known_null_returns_false(self):
+        """No known state → no change (first-time seed path)."""
+        assert _has_changed(None, {"modified": "2024-01-01T10:00:00", "size": 100}) is False
 
-        # handleKeepMine should set pendingSaveConflict
-        assert "handleKeepMine" in content
-        assert "setPendingSaveConflict" in content
+    def test_current_null_returns_false(self):
+        assert _has_changed({"modified": "2024-01-01T10:00:00", "size": 100}, None) is False
+
+
+@requires_node
+class TestClassifyDiskState:
+    """Behavioral tests for classifyDiskState()."""
+
+    def test_gone_file(self):
+        """Gone file → {gone:true, reload:false, conflict:false}."""
+        result = _classify(gone=True, changed=False, dirty=False)
+        assert result == {"gone": True, "reload": False, "conflict": False}
+
+    def test_gone_overrides_changed(self):
+        """gone:true always wins regardless of changed/dirty."""
+        result = _classify(gone=True, changed=True, dirty=True)
+        assert result == {"gone": True, "reload": False, "conflict": False}
+
+    def test_changed_clean_tab_auto_reload(self):
+        """Changed on disk, clean tab → auto-reload (F1 fix)."""
+        result = _classify(gone=False, changed=True, dirty=False)
+        assert result == {"gone": False, "reload": True, "conflict": False}
+
+    def test_changed_dirty_tab_conflict(self):
+        """Changed on disk, dirty tab → conflict banner (F1 fix: no auto-reload over edits)."""
+        result = _classify(gone=False, changed=True, dirty=True)
+        assert result == {"gone": False, "reload": False, "conflict": True}
+
+    def test_no_change_neutral(self):
+        """No change → all false."""
+        result = _classify(gone=False, changed=False, dirty=False)
+        assert result == {"gone": False, "reload": False, "conflict": False}
+
+    def test_no_change_dirty_tab_neutral(self):
+        """No change even when dirty → neutral (tab is dirty but disk hasn't changed)."""
+        result = _classify(gone=False, changed=False, dirty=True)
+        assert result == {"gone": False, "reload": False, "conflict": False}
+
+    def test_default_args_neutral(self):
+        """classifyDiskState() with no args → neutral."""
+        module_url = CHANGE_DETECTOR_JS.resolve().as_uri()
+        script = (
+            f"import {{ classifyDiskState }} from {json.dumps(module_url)};\n"
+            f"process.stdout.write(JSON.stringify(classifyDiskState()));"
+        )
+        result = json.loads(_run_js(script))
+        assert result == {"gone": False, "reload": False, "conflict": False}
