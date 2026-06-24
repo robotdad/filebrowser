@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
 import { html } from '../html.js';
 import { api } from '../api.js';
 import { getFileCategory, formatSize, formatDate } from '../file-utils.js';
+import { computeFitScale as fitImageScale } from '../lib/fit-scale.js';
 import { EditableViewer } from './editable-viewer.js';
 import { MarkdownEditor } from './markdown-editor.js';
 import { CodeEditor } from './code-editor.js';
@@ -64,16 +65,16 @@ function ImageViewer({ contentUrl, filePath }) {
     const computeFitScale = () => {
         const canvas = canvasRef.current;
         const img = imgRef.current;
-        // Guard against zero or missing natural dimensions (SVGs with pt units can report 0)
-        if (!canvas || !img || !img.naturalWidth || !img.naturalHeight) return 1;
-        // Guard against zero canvas dimensions (flex layout may not be complete yet)
-        if (!canvas.clientWidth || !canvas.clientHeight) return 1;
-        const scale = Math.min(
-            canvas.clientWidth / img.naturalWidth,
-            canvas.clientHeight / img.naturalHeight,
-            1  // never upscale small images
+        if (!canvas || !img) return 1;
+        // Math lives in lib/fit-scale.js (pure, unit-tested). It guards against
+        // zero natural dimensions (pt-unit SVGs) and zero canvas dimensions
+        // (incomplete flex layout), never upscales, and clamps to [0.1, 20].
+        return fitImageScale(
+            canvas.clientWidth,
+            canvas.clientHeight,
+            img.naturalWidth,
+            img.naturalHeight,
         );
-        return clampZoom(scale);
     };
 
     const handleImageLoad = () => {
