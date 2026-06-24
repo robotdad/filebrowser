@@ -22,10 +22,16 @@ def tmp_home(tmp_path):
     (tmp_path / ".config" / "settings.json").write_text("{}")
     # Binary files
     (tmp_path / "images" / "photo.jpg").write_bytes(b"\xff\xd8\xff\xe0fake-jpg")
-    # SVG file
+    # SVG file (square, pixel dimensions)
     (tmp_path / "images" / "logo.svg").write_text(
         '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">'
         '<circle cx="50" cy="50" r="40" fill="blue"/>'
+        '</svg>'
+    )
+    # Tall SVG file (extreme aspect ratio, pt dimensions - regression test for viewer bug)
+    (tmp_path / "images" / "tall.svg").write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="100pt" height="175pt" viewBox="0 0 100 175">'
+        '<rect x="10" y="10" width="80" height="155" fill="green"/>'
         '</svg>'
     )
     # Extension-less text files
