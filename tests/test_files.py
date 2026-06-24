@@ -121,11 +121,67 @@ class TestFileContent:
         cd = response.headers.get("content-disposition", "")
         assert "attachment" not in cd
     
+    def test_html_has_correct_content_type(self, client):
+        """HTML files must be served with text/html for browser rendering."""
+        response = client.get("/api/files/content", params={"path": "page.html"})
+        assert response.status_code == 200
+        assert response.headers.get("content-type") == "text/html; charset=utf-8"
+        assert "<h1>Hello HTML</h1>" in response.text
+    
+    def test_html_has_security_headers(self, client):
+        """HTML files must have XSS prevention headers to block embedded scripts and data exfiltration."""
+        response = client.get("/api/files/content", params={"path": "malicious.html"})
+        assert response.status_code == 200
+        # Verify X-Content-Type-Options header prevents MIME sniffing
+        assert response.headers.get("x-content-type-options") == "nosniff"
+        # Verify CSP sandboxes the HTML and blocks script execution + external resource loading
+        csp = response.headers.get("content-security-policy")
+        assert csp is not None
+        # Must include default-src 'none' to block external resource loading (data exfiltration)
+        assert "default-src 'none'" in csp
+        # Must include style-src 'unsafe-inline' to allow inline styles
+        assert "style-src 'unsafe-inline'" in csp
+        # Must include sandbox to create opaque origin
+        assert "sandbox" in csp
+        # Ensure CSP does NOT contain allow-scripts or allow-same-origin
+        assert "allow-scripts" not in csp
+        assert "allow-same-origin" not in csp
+    
+    def test_html_served_as_html_not_plain_text(self, client):
+        """HTML files must be served as text/html so the browser renders them.
+
+        Regression guard for issue #7: previously .html was in the "code" category and
+        served as text/plain, so the Preview iframe showed raw source instead of a rendered
+        page. Asserting the body merely "contains tags" is not enough (a text/plain response
+        contains them too) -- the meaningful assertion is that the content-type is NOT
+        text/plain.
+        """
+        response = client.get("/api/files/content", params={"path": "page.html"})
+        assert response.status_code == 200
+        content_type = response.headers.get("content-type", "")
+        assert content_type.startswith("text/html"), content_type
+        assert "text/plain" not in content_type
+        assert "<h1>Hello HTML</h1>" in response.text
+
+    def test_htm_extension_served_as_html_with_security_headers(self, client):
+        """The .htm alias must get identical handling to .html (content-type + CSP sandbox)."""
+        response = client.get("/api/files/content", params={"path": "page.htm"})
+        assert response.status_code == 200
+        assert response.headers.get("content-type") == "text/html; charset=utf-8"
+        assert response.headers.get("x-content-type-options") == "nosniff"
+        csp = response.headers.get("content-security-policy")
+        assert csp is not None
+        assert "default-src 'none'" in csp
+        assert "sandbox" in csp
+        assert "allow-scripts" not in csp
+        assert "allow-same-origin" not in csp
+    
     @pytest.mark.parametrize("path,description", [
         ("hello.txt", "text files"),
         ("images/logo.svg", "SVG images"),
         ("images/photo.jpg", "JPEG images"),
         ("sample.pdf", "PDF files"),
+        ("page.html", "HTML files"),
     ])
     def test_content_has_cache_control_no_cache(self, client, path, description):
         """All content endpoints must set Cache-Control: no-cache to prevent stale content.
