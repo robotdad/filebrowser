@@ -49,6 +49,17 @@ def tmp_home(tmp_path):
         b"xref\n0 4\n0000000000 65535 f \n"
         b"trailer<</Size 4/Root 1 0 R>>\nstartxref\n0\n%%EOF"
     )
+    # HTML files
+    (tmp_path / "page.html").write_text(
+        "<!DOCTYPE html><html><body><h1>Hello HTML</h1></body></html>"
+    )
+    (tmp_path / "malicious.html").write_text(
+        '<html><body><script>alert(1)</script><img onerror="alert(2)" src=x></body></html>'
+    )
+    # .htm alias — must get the same html handling as .html
+    (tmp_path / "page.htm").write_text(
+        "<!DOCTYPE html><html><body><h1>Hello HTM</h1></body></html>"
+    )
     return tmp_path
 
 
