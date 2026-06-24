@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
 import { html } from '../html.js';
 import { api } from '../api.js';
 import { getFileCategory, formatSize, formatDate } from '../file-utils.js';
+import { preprocessDot } from '../lib/preprocess-dot.js';
 import { computeFitScale as fitImageScale } from '../lib/fit-scale.js';
 import { EditableViewer } from './editable-viewer.js';
 import { MarkdownEditor } from './markdown-editor.js';
@@ -317,7 +318,7 @@ function GraphvizViewer({ text, path, onSave, onDirtyChange }) {
                 });
 
             rendererRef.current = renderer;
-            renderer.renderDot(text);
+            renderer.renderDot(preprocessDot(text));
         } catch (e) {
             if (!cancelled) {
                 setError(e.message || String(e));
@@ -346,7 +347,7 @@ function GraphvizViewer({ text, path, onSave, onDirtyChange }) {
         let cancelled = false;
         const doRender = () => {
             if (cancelled) return;
-            hpccGraphviz.layout(editText, 'svg', engine, GRAPHVIZ_WASM_OPTS)
+            hpccGraphviz.layout(preprocessDot(editText), 'svg', engine, GRAPHVIZ_WASM_OPTS)
                 .then(svg => {
                     if (!cancelled) { setPreviewSvg(svg); setPreviewError(null); }
                 })
