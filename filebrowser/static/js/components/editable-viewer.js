@@ -41,6 +41,12 @@ export function EditableViewer({ text, path, onSave: onSaveCallback, onDirtyChan
         log.debug('mount: path=%s editing=%s', path, editing);
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // Reset editText when text prop changes (clean reload from disk)
+    useEffect(() => {
+        setEditText(text);
+        setDirty(false);
+    }, [text]);
+
     const handleDocChange = useCallback((newDoc) => {
         setEditText(newDoc);
         setDirty(newDoc !== text);
@@ -51,9 +57,9 @@ export function EditableViewer({ text, path, onSave: onSaveCallback, onDirtyChan
         setSaving(true);
         try {
             log.info('save: path=%s', path);
-            await api.put('/api/files/content', { path, content: editText });
+            const response = await api.put('/api/files/content', { path, content: editText });
             setDirty(false);
-            if (onSaveCallback) onSaveCallback(editText);
+            if (onSaveCallback) onSaveCallback(editText, response);
         } catch (e) {
             log.error('save failed', e);
         } finally {

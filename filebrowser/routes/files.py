@@ -1,5 +1,6 @@
 import logging
 import mimetypes
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
@@ -280,10 +281,15 @@ async def write_content(
             detail={"error": "Is a directory", "code": "IS_DIRECTORY"},
         )
     file_path.write_text(body.content, encoding="utf-8")
+    stat = file_path.stat()
     logger.info(
-        "Write: user=%s path=%s size=%d", username, body.path, file_path.stat().st_size
+        "Write: user=%s path=%s size=%d", username, body.path, stat.st_size
     )
-    return {"ok": True, "size": file_path.stat().st_size}
+    return {
+        "ok": True,
+        "size": stat.st_size,
+        "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+    }
 
 
 class RenameRequest(BaseModel):

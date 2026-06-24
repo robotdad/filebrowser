@@ -89,10 +89,10 @@ export function MarkdownEditor({ text, path, onSave, onDirtyChange }) {
         setSaving(true);
         try {
             log.debug('save: path=%s size=%d', path, editText.length);
-            await api.put('/api/files/content', { path, content: editText });
+            const response = await api.put('/api/files/content', { path, content: editText });
             setDirty(false);
             log.info('saved: path=%s', path);
-            if (onSave) onSave(editText);
+            if (onSave) onSave(editText, response);
         } catch (e) {
             log.error('save failed', e);
         } finally {

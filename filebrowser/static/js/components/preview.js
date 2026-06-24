@@ -150,6 +150,12 @@ function HtmlViewer({ text, path, contentUrl, onSave, onDirtyChange }) {
     const [dirty, setDirty] = useState(false);
 
     useEffect(() => { if (onDirtyChange) onDirtyChange(dirty); }, [dirty, onDirtyChange]);
+
+    // Reset editText when text prop changes (clean reload from disk)
+    useEffect(() => {
+        setEditText(text);
+        setDirty(false);
+    }, [text]);
     const [saving, setSaving] = useState(false);
     const [cursor, setCursor] = useState(null);
     const viewRef = useRef(null);
@@ -163,9 +169,9 @@ function HtmlViewer({ text, path, contentUrl, onSave, onDirtyChange }) {
         if (!dirty || saving) return;
         setSaving(true);
         try {
-            await api.put('/api/files/content', { path, content: editText });
+            const response = await api.put('/api/files/content', { path, content: editText });
             setDirty(false);
-            if (onSave) onSave(editText);
+            if (onSave) onSave(editText, response);
         } catch (e) {
             // error toast handled by api client
         } finally {
@@ -477,9 +483,9 @@ function GraphvizViewer({ text, path, onSave, onDirtyChange }) {
         if (!dirty || saving) return;
         setSaving(true);
         try {
-            await api.put('/api/files/content', { path, content: editText });
+            const response = await api.put('/api/files/content', { path, content: editText });
             setDirty(false);
-            if (onSave) onSave(editText);
+            if (onSave) onSave(editText, response);
         } catch (e) {
             // error toast handled by api client
         } finally {
@@ -739,11 +745,13 @@ function AnimatedContent({ filePath, children }) {
     `;
 }
 
-export function PreviewPane({ filePath, onDirtyChange }) {
+export function PreviewPane({ filePath, onDirtyChange, diskChangeInfo, onFileSaved }) {
     const [content, setContent] = useState(null);
     const [loading, setLoading] = useState(false);
     // Track previous filePath to detect actual changes
     const prevPath = useRef(null);
+    const [pendingSaveConflict, setPendingSaveConflict] = useState(false);
+    const scrollPosRef = useRef(0);
 
     // Helper: fetch text content and set state (shared by normal + force-load paths)
     const loadTextContent = useCallback((path, type) => {
@@ -838,10 +846,43 @@ export function PreviewPane({ filePath, onDirtyChange }) {
         }
     }, [filePath, loadTextContent]);
 
+    // Auto-reload content when disk change detected
+    useEffect(() => {
+        if (!diskChangeInfo || !filePath || !content) return;
+
+        if (diskChangeInfo.gone) {
+            // File deleted/renamed while open - show loud gone state
+            setContent({ type: 'gone', filePath });
+            return;
+        }
+
+        if (diskChangeInfo.changed && content.text != null) {
+            // File changed on disk - reload if clean, show banner if dirty
+            // (dirty check is handled by Layout, so if we're here it's clean OR conflict)
+            log.info('disk change detected: path=%s', filePath);
+            // Re-fetch content for clean reload
+            const type = content.type;
+            setLoading(true);
+            loadTextContent(filePath, type)
+                .then(() => {
+                    log.debug('clean reload complete: path=%s', filePath);
+                })
+                .catch(() => {
+                    log.warn('reload failed: path=%s', filePath);
+                })
+                .finally(() => setLoading(false));
+        }
+    }, [diskChangeInfo, filePath, content, loadTextContent]);
+
     // Callback to update content after saving edits (shared by all editable viewers)
-    const handleContentSave = useCallback((newText) => {
+    const handleContentSave = useCallback((newText, response) => {
         setContent(prev => prev ? { ...prev, text: newText } : prev);
-    }, []);
+        // Seed last-known state with mtime/size from PUT response
+        if (response?.modified != null && response?.size != null && onFileSaved) {
+            onFileSaved(filePath, response.modified, response.size);
+        }
+        setPendingSaveConflict(false);
+    }, [filePath, onFileSaved]);
 
     if (!filePath) return html`<div class="preview-empty">Select a file to preview</div>`;
 
@@ -862,6 +903,16 @@ export function PreviewPane({ filePath, onDirtyChange }) {
 
     let inner;
     switch (content.type) {
+        case 'gone':
+            inner = html`
+                <div class=\"preview-gone\">
+                    <i class=\"ph ph-warning\" style=\"font-size: 48px; color: var(--error-color, #dc2626);\"></i>
+                    <h3 style=\"color: var(--error-color, #dc2626);\">File no longer exists</h3>
+                    <p>${filePath.split('/').pop()} was deleted or renamed while open.</p>
+                    <p style=\"font-size: 13px; color: var(--text-secondary);\">Close this tab or navigate to a different file.</p>
+                </div>
+            `;
+            break;
         case 'large-text':
             inner = html`
                 <div class="preview-large-file">
@@ -914,9 +965,44 @@ export function PreviewPane({ filePath, onDirtyChange }) {
             `;
     }
 
+    // Handlers for conflict banner actions
+    const handleReload = useCallback(() => {
+        if (diskChangeInfo?.changed && content.text != null) {
+            const type = content.type;
+            setLoading(true);
+            loadTextContent(filePath, type)
+                .then(() => {
+                    log.debug('manual reload complete: path=%s', filePath);
+                })
+                .catch(() => {
+                    log.warn('reload failed: path=%s', filePath);
+                })
+                .finally(() => setLoading(false));
+        }
+    }, [diskChangeInfo, content, filePath, loadTextContent]);
+
+    const handleKeepMine = useCallback(() => {
+        if (diskChangeInfo?.changed) {
+            setPendingSaveConflict(true);
+        }
+    }, [diskChangeInfo]);
+
+    // Conflict banner: show when disk changed and file is dirty OR pending save conflict
+    const showConflictBanner = diskChangeInfo?.changed && (pendingSaveConflict || content?.text != null);
+
     // AnimatedContent uses filePath as key — forces remount + animation on every file switch
     return html`
         <${FileInfoBar} filePath=${filePath} />
+        ${showConflictBanner && html`
+            <div class="preview-disk-change-banner">
+                <i class="ph ph-warning-circle" style="color: var(--warning-color, #f59e0b);"></i>
+                <span>File changed on disk</span>
+                <div class="preview-disk-change-actions">
+                    <button class="btn btn-secondary btn-sm" onClick=${handleReload}>Reload</button>
+                    <button class="btn btn-secondary btn-sm" onClick=${handleKeepMine}>Keep mine</button>
+                </div>
+            </div>
+        `}
         <${AnimatedContent} filePath=${filePath}>${inner}</${AnimatedContent}>
     `;
 }
