@@ -91,6 +91,17 @@ async def get_content(
         raise HTTPException(
             status_code=400, detail={"error": "Is a directory", "code": "IS_DIRECTORY"}
         )
+    
+    # Fail loud if file cannot be statted (prevents serving stale content)
+    try:
+        file_path.stat()
+    except OSError as e:
+        logger.error("Stat failed: user=%s path=%s error=%s", username, path, e)
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "Unable to read file metadata", "code": "STAT_FAILED"}
+        )
+    
     logger.info("Read: user=%s path=%s", username, path)
     
     # Determine the appropriate media type based on file category
@@ -108,21 +119,29 @@ async def get_content(
         # SVG files can contain JavaScript via <script> tags, creating an XSS
         # vulnerability if served inline without protection. Add security headers
         # to prevent script execution while still allowing inline display.
+        # Cache-Control: no-cache forces browser revalidation on every request
+        # (but allows cheap 304 responses via ETag/Last-Modified).
         if media_type == "image/svg+xml":
             headers = {
                 "X-Content-Type-Options": "nosniff",
-                "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+                "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+                "Cache-Control": "no-cache"
             }
             return FileResponse(file_path, media_type=media_type, headers=headers)
     elif file_category == "pdf":
         # PDF files must be served with application/pdf for browser rendering.
         # No Content-Disposition header (unlike /download endpoint) - we want
         # the browser to display PDFs inline, not download them.
+        # Cache-Control: no-cache forces revalidation to prevent stale content.
         media_type = "application/pdf"
+        headers = {"Cache-Control": "no-cache"}
+        return FileResponse(file_path, media_type=media_type, headers=headers)
     else:
         media_type = "text/plain; charset=utf-8"
     
-    return FileResponse(file_path, media_type=media_type)
+    # Cache-Control: no-cache forces revalidation to prevent stale content.
+    headers = {"Cache-Control": "no-cache"}
+    return FileResponse(file_path, media_type=media_type, headers=headers)
 
 
 @router.get("/download")

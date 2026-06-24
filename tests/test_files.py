@@ -120,6 +120,25 @@ class TestFileContent:
         assert response.status_code == 200
         cd = response.headers.get("content-disposition", "")
         assert "attachment" not in cd
+    
+    @pytest.mark.parametrize("path,description", [
+        ("hello.txt", "text files"),
+        ("images/logo.svg", "SVG images"),
+        ("images/photo.jpg", "JPEG images"),
+        ("sample.pdf", "PDF files"),
+    ])
+    def test_content_has_cache_control_no_cache(self, client, path, description):
+        """All content endpoints must set Cache-Control: no-cache to prevent stale content.
+        
+        This forces browser revalidation on every request while still allowing cheap 304
+        responses via ETag/Last-Modified headers. Prevents the browser from serving stale
+        file content from disk cache after on-disk file changes.
+        """
+        response = client.get("/api/files/content", params={"path": path})
+        assert response.status_code == 200
+        cache_control = response.headers.get("cache-control")
+        assert cache_control is not None, f"{description} must have Cache-Control header"
+        assert "no-cache" in cache_control, f"{description} must have Cache-Control: no-cache"
 
 
 class TestDownload:
