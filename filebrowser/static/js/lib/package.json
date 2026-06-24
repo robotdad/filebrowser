@@ -1,0 +1,5 @@
+{
+  "type": "module",
+  "private": true,
+  "description": "Marks the .js files in this directory as ESM so Node can import them directly in unit tests. The browser ignores this file; it only fetches modules it imports."
+}
