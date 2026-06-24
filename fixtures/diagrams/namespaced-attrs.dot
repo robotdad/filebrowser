@@ -1,0 +1,8 @@
+digraph demo {
+  graph [ label="demo", rankdir=LR, param.owner="Owner:required", param.count="Count:required" ];
+  Start [shape=Mdiamond, label="Start"];
+  Work  [shape=box,      label="Work"];
+  End   [shape=Msquare,  label="End"];
+  Start -> Work;
+  Work  -> End [ context.route="ok" ];
+}

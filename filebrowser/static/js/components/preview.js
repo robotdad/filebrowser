@@ -26,6 +26,24 @@ const LARGE_FILE_THRESHOLD = 5 * 1024 * 1024; // 5 MB
 // Set WASM path before d3-graphviz tries to load it
 wasmFolder('https://cdn.jsdelivr.net/npm/@hpcc-js/wasm@1.16.6/dist');
 
+/**
+ * Preprocess DOT source to quote unquoted attribute keys containing dots.
+ * Graphviz DOT grammar only allows unquoted IDs matching [a-zA-Z_][a-zA-Z0-9_]*.
+ * Namespaced attributes (param.owner, context.route) are common in tools but
+ * invalid as unquoted keys. This function quotes such keys to make them parse.
+ * @param {string} src - DOT source
+ * @returns {string} - DOT source with dotted attribute keys quoted
+ */
+function preprocessDot(src) {
+    // Match: unquoted dotted key immediately followed by = (attribute assignment)
+    // Example: param.owner= becomes "param.owner"=
+    // Lookbehind ensures we don't match keys already inside quotes or mid-word
+    return src.replace(
+        /(?<!["\w])([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)+)(?=\s*=)/g,
+        '"$1"'
+    );
+}
+
 function FileInfoBar({ filePath }) {
     const [info, setInfo] = useState(null);
 
@@ -309,7 +327,7 @@ function GraphvizViewer({ text, path, onSave, onDirtyChange }) {
                 });
 
             rendererRef.current = renderer;
-            renderer.renderDot(text);
+            renderer.renderDot(preprocessDot(text));
         } catch (e) {
             if (!cancelled) {
                 setError(e.message || String(e));
@@ -338,7 +356,7 @@ function GraphvizViewer({ text, path, onSave, onDirtyChange }) {
         let cancelled = false;
         const doRender = () => {
             if (cancelled) return;
-            hpccGraphviz.layout(editText, 'svg', engine, GRAPHVIZ_WASM_OPTS)
+            hpccGraphviz.layout(preprocessDot(editText), 'svg', engine, GRAPHVIZ_WASM_OPTS)
                 .then(svg => {
                     if (!cancelled) { setPreviewSvg(svg); setPreviewError(null); }
                 })
