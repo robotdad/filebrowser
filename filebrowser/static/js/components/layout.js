@@ -10,6 +10,10 @@ import { ContextMenu } from './context-menu.js';
 import { TerminalPanel } from './terminal.js';
 import { useTabManager } from '../hooks/use-tab-manager.js';
 import { TabBar } from './tab-bar.js';
+import { hasChanged, classifyDiskState } from '../lib/change-detector.js';
+import { createLogger } from '../logger.js';
+
+const log = createLogger('Layout');
 
 export function Layout({ username, authSource, terminalEnabled, homeDir, onLogout }) {
     // ── Core state ────────────────────────────────────────────────────────────
@@ -109,6 +113,135 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
 
     const refresh = () => setRefreshKey((k) => k + 1);
 
+
+    // ── File change polling ───────────────────────────────────────────────────────────────
+    // Track last-known (mtime, size) for each open tab to detect on-disk changes.
+    // diskChangeInfo: Map<tabId, {gone: bool, reload: bool, conflict: bool, modified?, size?}>
+    const [diskChangeInfo, setDiskChangeInfo] = useState(new Map());
+    const lastKnownState = useRef(new Map()); // Map<filePath, {modified: string, size: number}>
+    const pollTimerRef = useRef(null);
+    const focusDebounceRef = useRef(null);
+
+    const checkFileChanges = useCallback(async () => {
+        if (tabManager.tabs.length === 0) return;
+
+        // Stable snapshot of tabs at call time; avoids stale-array race in the
+        // setDiskChangeInfo updater (which runs asynchronously, after awaits).
+        const tabsSnapshot = tabManager.tabs;
+
+        const checks = tabsSnapshot.map(async (tab) => {
+            try {
+                const info = await api.get(`/api/files/info?path=${encodeURIComponent(tab.filePath)}`);
+                const current = { modified: info.modified, size: info.size };
+                const known = lastKnownState.current.get(tab.filePath);
+
+                // File exists on disk
+                if (!known) {
+                    // First time seeing this file - seed last-known state
+                    lastKnownState.current.set(tab.filePath, current);
+                    return { tabId: tab.id, filePath: tab.filePath, changed: false, gone: false };
+                }
+
+                // Detect change using pure hasChanged() helper (catches mtime rollbacks too)
+                const changed = hasChanged(known, current);
+
+                return { tabId: tab.id, filePath: tab.filePath, changed, gone: false, current };
+            } catch (err) {
+                // 404 = file deleted/renamed while open
+                if (err.status === 404) {
+                    return { tabId: tab.id, filePath: tab.filePath, changed: false, gone: true };
+                }
+                // Other errors (permission denied, server down) - log and skip
+                log.warn('file-change poll failed: path=%s status=%s', tab.filePath, err.status);
+                return null;
+            }
+        });
+
+        const results = (await Promise.all(checks)).filter(r => r !== null);
+
+        // Update diskChangeInfo
+        setDiskChangeInfo((prev) => {
+            const next = new Map(prev);
+            let anyChange = false;
+
+            results.forEach(({ tabId, filePath, changed, gone, current }) => {
+                const tab = tabsSnapshot.find(t => t.id === tabId);
+                if (!tab) return;
+
+                const prevInfo = prev.get(tabId) || { gone: false, reload: false, conflict: false };
+                const state = classifyDiskState({ gone, changed, dirty: tab.dirty });
+
+                if (state.gone || state.reload || state.conflict) {
+                    next.set(tabId, { ...state, modified: current?.modified, size: current?.size });
+                    // Trigger listing refresh only on transition into a new state.
+                    if (!prevInfo.gone && !prevInfo.reload && !prevInfo.conflict) anyChange = true;
+                    // For a CLEAN reload, advance last-known so next poll is neutral.
+                    // For a CONFLICT, keep re-detecting until user resolves it.
+                    if (state.reload && current) lastKnownState.current.set(filePath, current);
+                } else {
+                    // No outstanding change: clear to neutral (preserve nothing stale).
+                    next.set(tabId, { gone: false, reload: false, conflict: false });
+                }
+            });
+
+            if (anyChange) {
+                refresh(); // Trigger listing refresh
+            }
+
+            return next;
+        });
+    }, [tabManager.tabs, refresh]);
+
+    // Poll on interval (8 seconds)
+    useEffect(() => {
+        if (tabManager.tabs.length === 0) return;
+
+        checkFileChanges(); // Check immediately on tabs change
+        pollTimerRef.current = setInterval(checkFileChanges, 8000);
+
+        return () => {
+            if (pollTimerRef.current) {
+                clearInterval(pollTimerRef.current);
+                pollTimerRef.current = null;
+            }
+        };
+    }, [tabManager.tabs, checkFileChanges]);
+
+    // Poll on debounced window focus
+    useEffect(() => {
+        const handleFocus = () => {
+            // Debounce focus events (500ms) to avoid stat flood on rapid focus/blur
+            if (focusDebounceRef.current) clearTimeout(focusDebounceRef.current);
+            focusDebounceRef.current = setTimeout(() => {
+                checkFileChanges();
+            }, 500);
+        };
+
+        window.addEventListener('focus', handleFocus);
+        document.addEventListener('visibilitychange', handleFocus);
+
+        return () => {
+            window.removeEventListener('focus', handleFocus);
+            document.removeEventListener('visibilitychange', handleFocus);
+            if (focusDebounceRef.current) clearTimeout(focusDebounceRef.current);
+        };
+    }, [checkFileChanges]);
+
+    // Callback for PreviewPane to seed last-known state after save
+    const handleFileSaved = useCallback((filePath, modified, size) => {
+        lastKnownState.current.set(filePath, { modified, size });
+        // Clear any pending change flags for this file
+        setDiskChangeInfo(prev => {
+            const next = new Map(prev);
+            for (const [tabId, info] of next.entries()) {
+                const tab = tabManager.tabs.find(t => t.id === tabId);
+                if (tab && tab.filePath === filePath) {
+                    next.set(tabId, { gone: false, reload: false, conflict: false });
+                }
+            }
+            return next;
+        });
+    }, [tabManager.tabs]);
     // ── Terminal helpers ──────────────────────────────────────────────────────
     const openTerminal = (path) => {
         setTerminalCwd(path || currentPath);
@@ -486,7 +619,7 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
                         onPin=${tabManager.pin}
                         onClose=${tabManager.close}
                     />
-                    <${PreviewPane} filePath=${selectedFile} onDirtyChange=${handleDirtyChange} />
+                    <${PreviewPane} filePath=${selectedFile} onDirtyChange=${handleDirtyChange} diskChangeInfo=${diskChangeInfo.get(tabManager.activeTabId)} onFileSaved=${handleFileSaved} />
                 </main>
 
                 ${terminalOpen && html`

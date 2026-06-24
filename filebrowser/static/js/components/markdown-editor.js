@@ -33,7 +33,7 @@ function renderMarkdown(text) {
  *   path    — file path (for save API and language detection)
  *   onSave  — callback after successful save, receives new text
  */
-export function MarkdownEditor({ text, path, onSave, onDirtyChange }) {
+export function MarkdownEditor({ text, path, onSave, onDirtyChange, confirmOverwrite = false }) {
     const [activeTab, setActiveTab] = useState('view');
     const [editText, setEditText] = useState(text);
     const [dirty, setDirty] = useState(false);
@@ -86,13 +86,14 @@ export function MarkdownEditor({ text, path, onSave, onDirtyChange }) {
     const saveRef = useRef(null);
     saveRef.current = async () => {
         if (!dirty || saving) return;
+        if (confirmOverwrite && !confirm('This file changed on disk since you kept your version. Overwrite the on-disk changes?')) return;
         setSaving(true);
         try {
             log.debug('save: path=%s size=%d', path, editText.length);
-            await api.put('/api/files/content', { path, content: editText });
+            const response = await api.put('/api/files/content', { path, content: editText });
             setDirty(false);
             log.info('saved: path=%s', path);
-            if (onSave) onSave(editText);
+            if (onSave) onSave(editText, response);
         } catch (e) {
             log.error('save failed', e);
         } finally {

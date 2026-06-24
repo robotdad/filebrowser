@@ -728,23 +728,20 @@ class TestPreviewPaneDirtyIntegration:
         )
 
     def test_on_dirty_change_passed_to_editable_viewer(self):
-        """PreviewPane must pass onDirtyChange to EditableViewer."""
+        """PreviewPane must pass onDirtyChange to EditableViewer (via wrapper callback)."""
         src = read_preview()
-        assert (
-            re.search(
-                r"EditableViewer[^`]*onDirtyChange=\$\{onDirtyChange\}", src, re.DOTALL
-            )
-            or "onDirtyChange=${onDirtyChange}" in src
-        ), "onDirtyChange not passed to EditableViewer in preview.js"
+        # onDirtyChange is passed via handleDirtyChange wrapper so dirtyRef stays current.
+        assert re.search(
+            r"EditableViewer[^`]*onDirtyChange=\$\{handleDirtyChange\}", src, re.DOTALL
+        ), "onDirtyChange (via handleDirtyChange) not passed to EditableViewer in preview.js"
 
     def test_on_dirty_change_passed_to_markdown_editor(self):
-        """PreviewPane must pass onDirtyChange to MarkdownEditor."""
+        """PreviewPane must pass onDirtyChange to MarkdownEditor (via wrapper callback)."""
         src = read_preview()
+        # onDirtyChange is passed via handleDirtyChange wrapper so dirtyRef stays current.
         assert re.search(
-            r"MarkdownEditor[^`]*onDirtyChange=\$\{onDirtyChange\}", src, re.DOTALL
-        ) or re.search(
-            r"onDirtyChange=\$\{onDirtyChange\}.*MarkdownEditor", src, re.DOTALL
-        ), "onDirtyChange not passed to MarkdownEditor in preview.js"
+            r"MarkdownEditor[^`]*onDirtyChange=\$\{handleDirtyChange\}", src, re.DOTALL
+        ), "onDirtyChange (via handleDirtyChange) not passed to MarkdownEditor in preview.js"
 
     def test_editable_viewer_accepts_on_dirty_change(self):
         """EditableViewer function signature must include onDirtyChange parameter."""
