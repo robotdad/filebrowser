@@ -766,6 +766,8 @@ export function PreviewPane({ filePath, onDirtyChange, diskChangeInfo, onFileSav
     const dirtyRef = useRef(false);
     const contentScrollerRef = useRef(null);
     const reloadTokenRef = useRef(null);
+    // Declared before the render switch below, which passes it to child viewers.
+    const confirmOverwrite = pendingSaveConflict;
 
     // Helper: fetch text content and set state (shared by normal + force-load paths)
     const loadTextContent = useCallback((path, type) => {
@@ -990,8 +992,6 @@ export function PreviewPane({ filePath, onDirtyChange, diskChangeInfo, onFileSav
             `;
     }
 
-    // confirmOverwrite: gate child save handlers to warn before overwriting a disk change kept by user.
-    const confirmOverwrite = pendingSaveConflict;
 
     // Handlers for conflict banner actions
     const handleReload = useCallback(() => {
