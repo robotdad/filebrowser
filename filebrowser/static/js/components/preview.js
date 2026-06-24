@@ -747,7 +747,7 @@ export function PreviewPane({ filePath, onDirtyChange }) {
 
     // Helper: fetch text content and set state (shared by normal + force-load paths)
     const loadTextContent = useCallback((path, type) => {
-        return api.get(`/api/files/content?path=${encodeURIComponent(path)}`)
+        return api.get(`/api/files/content?path=${encodeURIComponent(path)}`, { cache: 'no-store' })
             .then((text) => {
                 if (prevPath.current === path) {
                     setContent({ type, text });
@@ -853,6 +853,12 @@ export function PreviewPane({ filePath, onDirtyChange }) {
 
     const contentUrl  = `/api/files/content?path=${encodeURIComponent(filePath)}`;
     const downloadUrl = `/api/files/download?path=${encodeURIComponent(filePath)}`;
+    // Cache-buster for media content: prevents stale image/PDF from browser media cache
+    // after on-disk file changes. Text content uses cache: 'no-store' in fetch instead.
+    const mtime = content.info?.modified;
+    const versionedUrl = mtime
+        ? `${contentUrl}&v=${encodeURIComponent(mtime)}`
+        : contentUrl;
 
     let inner;
     switch (content.type) {
@@ -886,7 +892,7 @@ export function PreviewPane({ filePath, onDirtyChange }) {
             inner = html`<${GraphvizViewer} text=${content.text} path=${filePath} onSave=${handleContentSave} onDirtyChange=${onDirtyChange} />`;
             break;
         case 'image':
-            inner = html`<${ImageViewer} contentUrl=${contentUrl} filePath=${filePath} />`;
+            inner = html`<${ImageViewer} contentUrl=${versionedUrl} filePath=${filePath} />`;
             break;
         case 'audio':
             inner = html`<div class="preview-audio"><audio controls src=${contentUrl}></audio></div>`;
@@ -895,7 +901,7 @@ export function PreviewPane({ filePath, onDirtyChange }) {
             inner = html`<div class="preview-video"><video controls src=${contentUrl}></video></div>`;
             break;
         case 'pdf':
-            inner = html`<${PdfViewer} contentUrl=${contentUrl} filePath=${filePath} />`;
+            inner = html`<${PdfViewer} contentUrl=${versionedUrl} filePath=${filePath} />`;
             break;
         default:
             inner = html`

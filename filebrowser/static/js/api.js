@@ -23,8 +23,8 @@ class ApiClient {
         return response.text();
     }
 
-    get(url) {
-        return this.request(url);
+    get(url, options = {}) {
+        return this.request(url, options);
     }
 
     post(url, body) {
