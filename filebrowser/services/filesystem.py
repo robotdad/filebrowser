@@ -45,7 +45,6 @@ FILE_CATEGORIES = {
         ".java",
         ".sh",
         ".sql",
-        ".html",
         ".css",
     },
     "markdown": {".md"},
@@ -53,6 +52,7 @@ FILE_CATEGORIES = {
     "audio": {".mp3", ".wav", ".ogg", ".flac", ".aac", ".m4a"},
     "video": {".mp4", ".webm", ".mkv", ".mov", ".avi"},
     "pdf": {".pdf"},
+    "html": {".html", ".htm"},
     "graphviz": {".dot", ".gv"},
 }
 

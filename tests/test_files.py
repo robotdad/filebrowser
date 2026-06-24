@@ -121,11 +121,46 @@ class TestFileContent:
         cd = response.headers.get("content-disposition", "")
         assert "attachment" not in cd
     
+    def test_html_has_correct_content_type(self, client):
+        """HTML files must be served with text/html for browser rendering."""
+        response = client.get("/api/files/content", params={"path": "page.html"})
+        assert response.status_code == 200
+        assert response.headers.get("content-type") == "text/html; charset=utf-8"
+        assert "<h1>Hello HTML</h1>" in response.text
+    
+    def test_html_has_security_headers(self, client):
+        """HTML files must have XSS prevention headers to block embedded scripts and data exfiltration."""
+        response = client.get("/api/files/content", params={"path": "malicious.html"})
+        assert response.status_code == 200
+        # Verify X-Content-Type-Options header prevents MIME sniffing
+        assert response.headers.get("x-content-type-options") == "nosniff"
+        # Verify CSP sandboxes the HTML and blocks script execution + external resource loading
+        csp = response.headers.get("content-security-policy")
+        assert csp is not None
+        # Must include default-src 'none' to block external resource loading (data exfiltration)
+        assert "default-src 'none'" in csp
+        # Must include style-src 'unsafe-inline' to allow inline styles
+        assert "style-src 'unsafe-inline'" in csp
+        # Must include sandbox to create opaque origin
+        assert "sandbox" in csp
+        # Ensure CSP does NOT contain allow-scripts or allow-same-origin
+        assert "allow-scripts" not in csp
+        assert "allow-same-origin" not in csp
+    
+    def test_html_body_is_rendered(self, client):
+        """HTML files should render as HTML, not as plain text."""
+        response = client.get("/api/files/content", params={"path": "page.html"})
+        assert response.status_code == 200
+        # Verify the response contains HTML tags (rendering, not source text)
+        assert "<html>" in response.text or "<HTML>" in response.text
+        assert "<h1>" in response.text
+    
     @pytest.mark.parametrize("path,description", [
         ("hello.txt", "text files"),
         ("images/logo.svg", "SVG images"),
         ("images/photo.jpg", "JPEG images"),
         ("sample.pdf", "PDF files"),
+        ("page.html", "HTML files"),
     ])
     def test_content_has_cache_control_no_cache(self, client, path, description):
         """All content endpoints must set Cache-Control: no-cache to prevent stale content.
