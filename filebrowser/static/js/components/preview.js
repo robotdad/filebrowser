@@ -216,7 +216,7 @@ function HtmlViewer({ text, path, contentUrl, onSave, onDirtyChange, confirmOver
                             onUndo=${handleUndo} onRedo=${handleRedo} />
             `}
             ${mode === 'preview'
-                ? html`<iframe class="html-preview-frame" src=${contentUrl} sandbox=""></iframe>`
+                ? html`<iframe class="html-preview-frame" srcdoc=${text} sandbox="allow-scripts"></iframe>`
                 : html`<${CodeEditor}
                     doc=${mode === 'edit' ? editText : text}
                     path=${path}
