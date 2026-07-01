@@ -1,6 +1,20 @@
 #!/bin/bash
 set -euo pipefail
 
+cat <<'EOF'
+=== File Browser Installer (DEPRECATED) ===
+
+This legacy installer is deprecated. Use the modern uv tool installation instead:
+
+    uv tool install git+https://github.com/robotdad/filebrowser
+    filebrowser service install --user
+    filebrowser service start
+
+To continue with the legacy installation, press Enter.
+To abort, press Ctrl+C.
+EOF
+read -r
+
 echo "=== File Browser Installer ==="
 
 # --- Detect environment ---

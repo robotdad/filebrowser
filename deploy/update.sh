@@ -1,6 +1,18 @@
 #!/bin/bash
 set -euo pipefail
 
+cat <<'EOF'
+=== File Browser Update (DEPRECATED) ===
+
+This legacy updater is deprecated. If you installed via uv tool, use:
+
+    filebrowser upgrade
+
+To continue with the legacy update, press Enter.
+To abort, press Ctrl+C.
+EOF
+read -r
+
 echo "=== File Browser Update ==="
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
