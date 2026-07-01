@@ -17,12 +17,22 @@ import { WysiwygEditor } from './wysiwyg-editor.js';
 import { WysiwygBar } from './wysiwyg-bar.js';
 import { undo, redo } from '@codemirror/commands';
 import { createLogger } from '../logger.js';
+import { stripFrontmatter, transformWikilinks, renderFrontmatter } from '../lib/preprocess-markdown.js';
 
 const log = createLogger('MarkdownEditor');
 
 /** Render markdown text to sanitized HTML. */
 function renderMarkdown(text) {
-    return DOMPurify.sanitize(marked.parse(text || ''));
+    // Strip YAML frontmatter and transform Obsidian wikilinks before parsing
+    const { frontmatter, body } = stripFrontmatter(text || '');
+    const processedBody = transformWikilinks(body);
+    
+    // Render frontmatter panel (if any) and markdown body
+    const frontmatterHtml = renderFrontmatter(frontmatter);
+    const bodyHtml = marked.parse(processedBody);
+    
+    // Sanitize the combined HTML (frontmatter panel + body)
+    return DOMPurify.sanitize(frontmatterHtml + bodyHtml);
 }
 
 /**
