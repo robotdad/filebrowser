@@ -657,6 +657,34 @@ body {
     line-height: 1.5;
 }
 
+/* Frontmatter metadata panel */
+.frontmatter-panel {
+    background: var(--bg-secondary);
+    border: 0.5px solid var(--border-color);
+    border-radius: var(--radius-md);
+    margin: 0 0 1.5em 0;
+    overflow: hidden;
+}
+.frontmatter-header {
+    background: var(--fill);
+    padding: var(--space-sm) var(--space-md);
+    font-size: 0.85em;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.frontmatter-content {
+    padding: var(--space-md);
+    margin: 0;
+    font-size: 0.9em;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    font-family: 'JetBrains Mono', "SF Mono", "Fira Code", "Consolas", monospace;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
 /* === Markdown Editor (tri-mode: View / Edit / Source) === */
 .markdown-editor {
     display: flex;
