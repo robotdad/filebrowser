@@ -98,31 +98,60 @@ pytest
 
 Target machines: headless Linux boxes on a Tailscale network (tested on DGX Spark and Raspberry Pi 4).
 
+### Modern deployment (uv tool)
+
 ```bash
-git clone https://github.com/robotdad/filebrowser.git /tmp/filebrowser
-sudo /tmp/filebrowser/deploy/install.sh
+# Install filebrowser as a uv tool
+uv tool install git+https://github.com/robotdad/filebrowser
+
+# Install systemd service and Caddy config
+filebrowser service install --user
+
+# Start the service
+filebrowser service start
 ```
 
-`install.sh` does the following:
+The `service install` command:
 
 1. Detects the Tailscale FQDN via `tailscale status --json`
-2. Adds your user to the `shadow` group (required for PAM auth)
-3. Copies the project to `/opt/filebrowser`
-4. Creates a virtualenv and installs dependencies
-5. Attempts Tailscale/Let's Encrypt TLS certificate generation (requires paid Tailscale plan)
-6. Installs Caddy (if not present) and writes the Caddyfile
-7. Writes, enables, and **restarts** both `filebrowser` and `caddy` systemd services
+2. Generates and persists a secret key to `~/.config/filebrowser/secret_key`
+3. Writes a systemd user service to `~/.config/systemd/user/filebrowser.service`
+4. Writes the Caddy config snippet to `/etc/caddy/conf.d/filebrowser.caddy` (requires sudo)
+5. Enables the service to start on boot
 
-If TLS cert generation fails (free Tailscale plan), the script falls back to plain HTTP on port 80. Tailscale's WireGuard tunnel already encrypts traffic between your devices, so HTTP inside your tailnet is safe.
+**PAM requires read access to `/etc/shadow`.** Add your user to the `shadow` group:
 
-After install, browse to `http://<hostname>/` (or `https://` if you have a paid plan) from any device on the tailnet.
+```bash
+sudo usermod -aG shadow $(whoami)
+```
+
+Log out and back in for the group change to take effect.
 
 Check status:
 
 ```bash
-sudo systemctl status filebrowser
-sudo systemctl status caddy
+filebrowser service status
+filebrowser service logs
 ```
+
+Update to the latest version:
+
+```bash
+filebrowser upgrade
+```
+
+This stops the service, runs `uv tool upgrade filebrowser`, regenerates the service file, and restarts.
+
+### Legacy deployment (deprecated)
+
+The old `/opt/filebrowser` deployment via `deploy/install.sh` is still supported but deprecated. To migrate:
+
+1. Install via `uv tool install` as above
+2. Run `filebrowser service install --user`
+3. Stop the old service: `sudo systemctl stop filebrowser && sudo systemctl disable filebrowser`
+4. Remove `/opt/filebrowser` and `/etc/systemd/system/filebrowser.service`
+
+The new deployment uses a user systemd service (no sudo needed for start/stop/restart) and stores config in `~/.config/filebrowser/`.
 
 ## Project structure
 
@@ -182,14 +211,16 @@ Settings are in `filebrowser/config.py`. Override via environment variables or b
 
 | Setting | Default | Description |
 |---|---|---|
-| `FILEBROWSER_SECRET_KEY` | Random (generated) | Signing key for session cookies. The install script persists one to `/opt/filebrowser/.secret_key`. |
+| `FILEBROWSER_SECRET_KEY` | Random (generated) | Signing key for session cookies. The service installer persists one to `~/.config/filebrowser/secret_key`. |
+| `FILEBROWSER_SECRET_KEY_FILE` | `~/.config/filebrowser/secret_key` | Path to file containing secret key (alternative to env var) |
+| `FILEBROWSER_DATA_DIR` | `~/.config/filebrowser` | Directory for config and state |
 | `session_timeout` | `2592000` (30 days) | Session cookie lifetime in seconds |
 | `upload_max_size` | `1073741824` (1GB) | Maximum upload file size in bytes |
 | `home_dir` | `Path.home()` | Root directory for file browsing |
 | `FILEBROWSER_TERMINAL_ENABLED` | `true` | Enable/disable the terminal feature |
 | `FILEBROWSER_LOG_LEVEL` | `info` | Log verbosity: debug, info, warning, error |
 
-The Caddy reverse proxy terminates HTTPS on port 443 using Tailscale certs stored in `/etc/ssl/tailscale/` and forwards to uvicorn on a random high port (assigned at install time, persisted in `/opt/filebrowser/.port`).
+The Caddy reverse proxy terminates HTTPS on port 8447 using Tailscale certs stored in `/etc/ssl/tailscale/` and forwards to uvicorn on port 58080 (configurable via `--port` flag to `filebrowser service install`).
 
 ## Frontdoor integration
 
