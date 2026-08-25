@@ -1,0 +1,44 @@
+digraph FeatureWorkspaceShim {
+    // Workspace-resident shim for the FEATURE specify stage.
+    // Mirrors shim-specify.dot, with two differences:
+    //   (1) it materializes a SECOND file -- criteria_file from criteria_b64 --
+    //       because feature-capsule.dot's criteria_gate reads a real, readable
+    //       criteria_file path (its check is `[ -s "$CF" ]`; an /api/uploads
+    //       handle fails that, the same reason the issue is passed as base64);
+    //   (2) RunWorkspaceGraph runs the repo-resident feature-capsule.dot.
+    // Both files are written OUTSIDE /project/workspace so they cannot dirty
+    // the tree the graph's dirty-tree preflight checks. Then Export copies the
+    // .ai findings/postmortem into capsule_out so one data fetch retrieves them.
+    graph [
+        label="feature specify — materialize issue + criteria, run feature-capsule.dot, export findings",
+        rankdir="LR"
+    ];
+    Start [shape=Mdiamond, label="Start"];
+    WriteIssue [
+        shape=parallelogram,
+        label="materialize issue_file from issue_b64",
+        tool_command="mkdir -p /project/.resolve/data; printf %s \"$issue_b64\" | base64 -d > /project/.resolve/data/issue.md; printf wrote-issue"
+    ];
+    WriteCriteria [
+        shape=parallelogram,
+        label="materialize criteria_file from criteria_b64",
+        tool_command="mkdir -p /project/.resolve/data; printf %s \"$criteria_b64\" | base64 -d > /project/.resolve/data/criteria.md; printf wrote-criteria"
+    ];
+    RunWorkspaceGraph [
+        shape=folder,
+        label="Run the repo-resident feature-capsule.dot",
+        dot_file=".github/capsule-pipeline/feature-capsule.dot",
+        continue_on_fail="true"
+    ];
+    Export [
+        shape=parallelogram,
+        label="export .ai findings to capsule_out",
+        tool_command="mkdir -p \"$capsule_out/ai/findings\" \"$capsule_out/ai/postmortem\"; cp .ai/findings/*.md \"$capsule_out/ai/findings/\" 2>/dev/null; cp .ai/postmortem/report.md \"$capsule_out/ai/postmortem/\" 2>/dev/null; printf exported"
+    ];
+    Exit [shape=Msquare, label="Exit"];
+    Start -> WriteIssue;
+    WriteIssue -> WriteCriteria;
+    WriteCriteria -> RunWorkspaceGraph;
+    RunWorkspaceGraph -> Export;
+    Export -> Exit;
+}

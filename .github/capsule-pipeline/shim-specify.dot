@@ -1,0 +1,35 @@
+digraph WorkspaceShim {
+    // Workspace-resident shim for the SPECIFY stage.
+    // capsule.dot requires issue_file to be a real, readable path (its preflight
+    // does `[ -f "$issue_file" ]`) — an /api/uploads handle fails that. So we
+    // pass the dynamic GitHub issue as a base64 param (issue_b64) and decode it
+    // to a file OUTSIDE /project/workspace (so it can't dirty the tree the
+    // preflight checks) BEFORE running capsule.dot. Then Export copies the .ai
+    // findings/postmortem into capsule_out so one data fetch retrieves them.
+    graph [
+        label="capsule specify — materialize issue, run capsule.dot, export findings",
+        rankdir="LR"
+    ];
+    Start [shape=Mdiamond, label="Start"];
+    WriteIssue [
+        shape=parallelogram,
+        label="materialize issue_file from issue_b64",
+        tool_command="mkdir -p /project/.resolve/data; printf %s \"$issue_b64\" | base64 -d > /project/.resolve/data/issue.md; printf wrote-issue"
+    ];
+    RunWorkspaceGraph [
+        shape=folder,
+        label="Run the repo-resident capsule.dot",
+        dot_file=".github/capsule-pipeline/capsule.dot",
+        continue_on_fail="true"
+    ];
+    Export [
+        shape=parallelogram,
+        label="export .ai findings to capsule_out",
+        tool_command="mkdir -p \"$capsule_out/ai/findings\" \"$capsule_out/ai/postmortem\"; cp .ai/findings/*.md \"$capsule_out/ai/findings/\" 2>/dev/null; cp .ai/postmortem/report.md \"$capsule_out/ai/postmortem/\" 2>/dev/null; printf exported"
+    ];
+    Exit [shape=Msquare, label="Exit"];
+    Start -> WriteIssue;
+    WriteIssue -> RunWorkspaceGraph;
+    RunWorkspaceGraph -> Export;
+    Export -> Exit;
+}

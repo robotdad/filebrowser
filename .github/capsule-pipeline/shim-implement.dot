@@ -1,0 +1,29 @@
+digraph WorkspaceShim {
+    // Workspace-resident shim for the IMPLEMENT stage. task-runner.dot writes
+    // real code and commits to a local task/<id> branch INSIDE the backend
+    // clone; it does NOT push (push/PR is the GitHub-Actions job's work). So the
+    // Export node captures the change as a diff to capsule_out; the workflow
+    // re-applies that diff into its own checkout and runs its existing
+    // "Push fix branch and open PR" step unchanged.
+    graph [
+        label="capsule implement + export fix diff to capsule_out",
+        goal="Run the repo-resident task-runner.dot, then export the shipped fix (diff, SHIPPED, critiques) to capsule_out for retrieval.",
+        rankdir="LR"
+    ];
+    Start [shape=Mdiamond, label="Start"];
+    RunWorkspaceGraph [
+        shape=folder,
+        label="Run the repo-resident task-runner.dot",
+        dot_file=".github/capsule-pipeline/task-runner.dot",
+        continue_on_fail="true"
+    ];
+    Export [
+        shape=parallelogram,
+        label="export fix to capsule_out",
+        tool_command="mkdir -p \"$capsule_out\"; git branch -a > \"$capsule_out/branches.txt\" 2>&1; git log --oneline -12 --all > \"$capsule_out/log.txt\" 2>&1; TB=\"$(git for-each-ref --format='%(refname:short)' refs/heads/ | grep '^task/' | head -1)\"; REF=\"${TB:-HEAD}\"; git --no-pager diff \"$base_sha\" \"${REF}\" > \"$capsule_out/fix.diff\" 2>&1; git --no-pager show \"${REF}\" --stat > \"$capsule_out/fix-stat.txt\" 2>&1; cp .ai/SHIPPED.md \"$capsule_out/SHIPPED.md\" 2>/dev/null; cp .ai/critique.md \"$capsule_out/critique.md\" 2>/dev/null; cp .ai/critique-b.md \"$capsule_out/critique-b.md\" 2>/dev/null; cp .ai/verify.log \"$capsule_out/verify.log\" 2>/dev/null; printf exported"
+    ];
+    Exit [shape=Msquare, label="Exit"];
+    Start -> RunWorkspaceGraph;
+    RunWorkspaceGraph -> Export;
+    Export -> Exit;
+}

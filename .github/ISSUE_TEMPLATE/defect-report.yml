@@ -1,0 +1,68 @@
+name: Defect report
+description: Report a defect in a form the autonomous pipeline can work with. Describe what the software does, not what the fix should be.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This repo runs an autonomous pipeline that can take a well-specified defect report to a
+        proposed fix. Whether it converges depends almost entirely on the quality of this report.
+
+        Three rules that measurably decide the outcome.
+
+        1. Describe what the software does, not what the fix should be. The pipeline verifies
+           against behavior, and a prescribed fix narrows and biases its verification gate.
+        2. Be self-contained. Everything needed to understand the defect belongs here, in plain
+           English. The pipeline reads this text, not your browser tabs.
+        3. Quote real output. Paste the actual bytes the commands produced, not a paraphrase.
+
+        The measured guidance is the canonical repo's
+        https://github.com/microsoft/amplifier-bundle-attractor/blob/main/docs/ISSUE_PIPELINE.md.
+  - type: textarea
+    id: what-happens
+    attributes:
+      label: What happens
+      description: The observable behavior, in plain English. What does the software actually do? Stick to observations, no diagnosis, no proposed fix.
+      placeholder: Previewing a Markdown file that contains a fenced ```dot block shows the raw DOT text instead of rendering the diagram.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Exact reproduction
+      description: The exact commands you ran and the actual output they produced, quoted verbatim. This is the single most important field. The pipeline builds an executable gate from observable behavior, and a reproduction it can run is the strongest possible input.
+      render: shell
+      placeholder: |
+        $ uv run pytest tests/test_graphviz_dot_preprocess.py -q
+        ... quoted actual failing output ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you expected instead, stated plainly. Expected vs actual is what makes a defect checkable. Saying what should happen is not a fix prescription. Saying how to change the code is.
+      placeholder: A fenced ```dot block should be rendered as a Graphviz diagram in the preview, the same way a ```mermaid block is.
+    validations:
+      required: true
+  - type: input
+    id: observed-on
+    attributes:
+      label: Commit SHA or branch observed on
+      description: The SHA (preferred) or branch where you observed the behavior. The pipeline pins its verification to a base commit, so knowing where you saw it matters.
+      placeholder: "e.g. 325c889, or main as of 2026-08-25"
+    validations:
+      required: true
+  - type: input
+    id: affected-area
+    attributes:
+      label: Affected area or module (optional)
+      description: If you know roughly where the behavior lives (a module, a file, a function), name it. Leave blank if unsure, a wrong guess is worse than no guess.
+      placeholder: "e.g. filebrowser/routes/files.py, or the Markdown preview component"
+    validations:
+      required: false
+  - type: markdown
+    attributes:
+      value: |
+        What happens next. A maintainer reviews this report and, if it is pipeline-ready, applies
+        the ready:spec label to hand it to the pipeline. That label is deliberately
+        maintainer-applied, never automatic.

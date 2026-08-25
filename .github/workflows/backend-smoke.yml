@@ -1,0 +1,59 @@
+# Minimal connectivity + token smoke test for the hosted compute backend.
+# Mirrors the canonical submit snippet from the backend owner. Run this FIRST,
+# the moment COMPUTE_URL / COMPUTE_TOKEN are set, to confirm the token works —
+# before exercising the full capsule flow.
+#
+# NOTE on names: this repo uses COMPUTE_URL and COMPUTE_TOKEN as secrets
+# so the public workflow YAML doesn't carry the backend's product name. Put the
+# backend base URL into the COMPUTE_URL variable and the bearer token into the
+# COMPUTE_TOKEN secret — the values are exactly what the backend owner provides.
+name: Backend smoke (verify token)
+
+on:
+  workflow_dispatch:
+    inputs:
+      goal:
+        description: "Goal text to submit as a trivial run"
+        required: false
+        default: "ping from capsule-pipeline-hosted-compute smoke test"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Auth precheck (GET — creates no run)
+        env:
+          COMPUTE_URL: ${{ secrets.COMPUTE_URL }}
+          COMPUTE_TOKEN: ${{ secrets.COMPUTE_TOKEN }}
+        run: |
+          set -uo pipefail
+          if [ -z "${COMPUTE_URL:-}" ] || [ -z "${COMPUTE_TOKEN:-}" ]; then
+            echo "::error::Set the COMPUTE_URL variable and COMPUTE_TOKEN secret first."
+            exit 1
+          fi
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $COMPUTE_TOKEN" "$COMPUTE_URL/api/instances")
+          echo "GET /api/instances -> HTTP $code"
+          if [ "$code" != "200" ]; then
+            echo "::error::Auth/endpoint check failed (HTTP $code). Check COMPUTE_URL and COMPUTE_TOKEN (a 401 means the token is stale/expired/wrong audience)."
+            exit 1
+          fi
+          echo "Token accepted."
+
+      - name: Trigger a run (canonical submit)
+        id: submit
+        env:
+          COMPUTE_URL: ${{ secrets.COMPUTE_URL }}
+          COMPUTE_TOKEN: ${{ secrets.COMPUTE_TOKEN }}
+          GOAL: ${{ inputs.goal }}
+        run: |
+          set -euo pipefail
+          curl -sf -X POST "$COMPUTE_URL/api/instances" \
+            -H "Authorization: Bearer $COMPUTE_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n --arg resolver dot-graph --arg goal "$GOAL" \
+                   '{resolver: $resolver, input: {goal: $goal}}')" \
+            | tee response.json
+          iid=$(jq -r '.instance_id // .id' response.json)
+          echo "instance_id=$iid" >> "$GITHUB_OUTPUT"
+          echo "Submitted instance: $iid"

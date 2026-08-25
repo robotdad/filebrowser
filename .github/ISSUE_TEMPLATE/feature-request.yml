@@ -1,0 +1,35 @@
+name: Feature request
+description: Request a new capability. The issue body is background. The binding definition of done is a maintainer's acceptance-criteria comment.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A feature runs on a different lane from a defect, and it has a stricter entry requirement.
+        The body you write here is background, and it is never trusted as the spec. The binding
+        definition of done is a maintainer's acceptance-criteria comment posted after this issue
+        exists. Anyone can describe the feature. Only a maintainer's comment binds it.
+
+        The exact comment format, and the label that starts the run, are in
+        docs/HOSTED-COMPUTE.md.
+  - type: textarea
+    id: capability
+    attributes:
+      label: The capability you want
+      description: What should the software be able to do that it cannot today? Describe the behavior through a public surface, in plain English.
+      placeholder: A keyboard shortcut that toggles the terminal panel, so pressing Ctrl+` opens and closes it.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it matters
+      description: The use case. What are you trying to do that this unblocks?
+      placeholder: I navigate by keyboard, and reaching for the mouse to open the terminal breaks my flow.
+    validations:
+      required: false
+  - type: markdown
+    attributes:
+      value: |
+        What happens next. A maintainer turns this into binding acceptance criteria, posts them as
+        an authenticated comment, and applies the ready:feature-spec label. Merging the resulting
+        capsule PR is the go-build signal.
