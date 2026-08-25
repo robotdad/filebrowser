@@ -115,6 +115,19 @@ jobs:
       - name: Set up uv (lets pytest-based capsule gates self-provision)
         uses: astral-sh/setup-uv@v6
 
+      # Same reasoning as uv above, for the other stack this repo's gates use:
+      # a capsule whose verify.sh asserts JS behaviour runs it with `node`
+      # (this repo already unit-tests its JS helpers via Node, e.g.
+      # tests/test_markdown_preprocess.py). Unlike Python (which self-provisions
+      # via `uv run --with pytest`), Node cannot bootstrap itself, so the
+      # runner's shipped-gate re-exec needs it on PATH. Backend workers already
+      # have Node, so the capsule is produced fine there; this only closes the
+      # runner-side re-exec gap.
+      - name: Set up Node (lets JS/Node-based capsule gates re-exec on the runner)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Record base SHA and issue metadata
         id: base
         run: |
