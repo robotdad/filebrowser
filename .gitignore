@@ -15,3 +15,7 @@ dist/
 
 # Amplifier
 .discovery/
+# Capsule-pipeline scratch: the attractor graphs exclude .ai/ inside the worker
+# (via .git/info/exclude), but the GitHub runner's checkout needs it ignored too
+# or the pre-publication clean-tree fence refuses to open the capsule PR.
+.ai/
