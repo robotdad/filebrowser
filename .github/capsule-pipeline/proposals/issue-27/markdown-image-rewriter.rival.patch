@@ -1,0 +1,70 @@
+diff --git a/filebrowser/static/js/lib/rewrite-image-src.js b/filebrowser/static/js/lib/rewrite-image-src.js
+new file mode 100644
+index 0000000..6553f79
+--- /dev/null
++++ b/filebrowser/static/js/lib/rewrite-image-src.js
+@@ -0,0 +1,64 @@
++// Pure image source rewriter: transform relative markdown image paths to /api/files/content URLs.
++//
++// Relative image sources (./img.png, ../assets/img.png, img.png) are resolved against the
++// current markdown file's directory and rewritten to /api/files/content?path=<encoded-path>.
++// Absolute URLs (http://, https://, //, data:) pass through unchanged.
++//
++// Extracted to a pure module so it can be unit-tested without a DOM, exactly like
++// preprocess-markdown.js.
++
++/**
++ * Rewrite a markdown image source to use the /api/files/content endpoint.
++ * 
++ * Relative paths are resolved against the current file's directory and rewritten
++ * to /api/files/content?path=<url-encoded-path>. Absolute URLs pass through unchanged.
++ * 
++ * @param {string} src - Image source from markdown (e.g., "./img.png", "http://example.com/img.png")
++ * @param {string} currentFilePath - Path to the current markdown file (e.g., "docs/page.md")
++ * @returns {string} - Rewritten source (/api/files/content?path=... or original absolute URL)
++ */
++export function rewriteImageSrc(src, currentFilePath) {
++    // AC-2: Absolute URLs pass through unchanged
++    if (src.startsWith('http://') || 
++        src.startsWith('https://') || 
++        src.startsWith('//') || 
++        src.startsWith('data:')) {
++        return src;
++    }
++    
++    // Relative path - resolve against current file's directory
++    // Get directory of current file (everything before the last /)
++    const lastSlash = currentFilePath.lastIndexOf('/');
++    const currentDir = lastSlash >= 0 ? currentFilePath.slice(0, lastSlash) : '';
++    
++    // Join current directory with image source
++    let resolvedPath;
++    if (currentDir === '') {
++        // Current file is at root
++        resolvedPath = src;
++    } else {
++        resolvedPath = currentDir + '/' + src;
++    }
++    
++    // AC-3: Normalize to remove ".." and "." segments
++    const segments = resolvedPath.split('/');
++    const normalized = [];
++    
++    for (const segment of segments) {
++        if (segment === '..') {
++            // Parent directory - pop the last segment (if any)
++            if (normalized.length > 0) {
++                normalized.pop();
++            }
++        } else if (segment !== '.' && segment !== '') {
++            // Regular segment - add it
++            normalized.push(segment);
++        }
++        // Skip empty segments and "." (current directory)
++    }
++    
++    const normalizedPath = normalized.join('/');
++    
++    // AC-1: Build /api/files/content URL with encoded path
++    return `/api/files/content?path=${encodeURIComponent(normalizedPath)}`;
++}

@@ -1,0 +1,57 @@
+diff --git a/filebrowser/static/js/lib/rewrite-image-src.js b/filebrowser/static/js/lib/rewrite-image-src.js
+new file mode 100644
+index 0000000..164d534
+--- /dev/null
++++ b/filebrowser/static/js/lib/rewrite-image-src.js
+@@ -0,0 +1,51 @@
++// Pure image source rewriter: convert relative markdown image paths to authenticated API URLs.
++//
++// Markdown files with relative image references (e.g., ![alt](../assets/logo.png)) need those
++// paths rewritten to /api/files/content?path=<encoded-path> so the browser can fetch them
++// through the authenticated file-content API.
++//
++// This module provides path resolution (handling ./ and ../ segments) and URL construction
++// for use in the markdown viewer. It's a pure function with no DOM or bundler dependencies,
++// so it can be unit-tested under Node.js.
++
++import { dirname, join, normalize } from 'path';
++
++/**
++ * Rewrite a markdown image source to an authenticated API URL.
++ *
++ * Relative paths are resolved against the current file's directory and rewritten to
++ * /api/files/content?path=<url-encoded-repo-relative-path>. Absolute URLs (http://,
++ * https://, //, data:) pass through unchanged.
++ *
++ * @param {string} currentFile - Current markdown file path (repo-relative, e.g., "docs/page.md")
++ * @param {string} imageSrc - Image source from markdown (e.g., "img/x.png" or "http://example.com/img.jpg")
++ * @returns {string} - Rewritten URL or original URL if absolute
++ *
++ * @example
++ * rewriteImageSrc('docs/page.md', 'img/x.png')
++ * // => '/api/files/content?path=docs%2Fimg%2Fx.png'
++ *
++ * @example
++ * rewriteImageSrc('docs/page.md', '../assets/logo.png')
++ * // => '/api/files/content?path=assets%2Flogo.png'
++ *
++ * @example
++ * rewriteImageSrc('any/file.md', 'https://example.com/img.jpg')
++ * // => 'https://example.com/img.jpg' (unchanged)
++ */
++export function rewriteImageSrc(currentFile, imageSrc) {
++    // Pass through absolute URLs unchanged
++    if (imageSrc.startsWith('http://') ||
++        imageSrc.startsWith('https://') ||
++        imageSrc.startsWith('//') ||
++        imageSrc.startsWith('data:')) {
++        return imageSrc;
++    }
++
++    // Resolve relative path against current file's directory
++    const currentDir = dirname(currentFile);
++    const resolvedPath = normalize(join(currentDir, imageSrc));
++
++    // Construct API URL with encoded path
++    return `/api/files/content?path=${encodeURIComponent(resolvedPath)}`;
++}
