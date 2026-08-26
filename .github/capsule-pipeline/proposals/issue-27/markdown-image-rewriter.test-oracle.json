@@ -1,0 +1,163 @@
+[
+  {
+    "description": "Criteria example 1: simple relative path",
+    "currentFile": "docs/page.md",
+    "imageSource": "img/x.png",
+    "expected": "/api/files/content?path=docs%2Fimg%2Fx.png",
+    "ac": "AC-1"
+  },
+  {
+    "description": "Criteria example 2: ./ prefix",
+    "currentFile": "docs/page.md",
+    "imageSource": "./img/x.png",
+    "expected": "/api/files/content?path=docs%2Fimg%2Fx.png",
+    "ac": "AC-1"
+  },
+  {
+    "description": "Real repo path from README",
+    "currentFile": "README.md",
+    "imageSource": "assets/branding/icons/filebrowser-icon-128.png",
+    "expected": "/api/files/content?path=assets%2Fbranding%2Ficons%2Ffilebrowser-icon-128.png",
+    "ac": "AC-1"
+  },
+  {
+    "description": "Subdirectory reference",
+    "currentFile": "docs/guide.md",
+    "imageSource": "screenshots/layout.png",
+    "expected": "/api/files/content?path=docs%2Fscreenshots%2Flayout.png",
+    "ac": "AC-1"
+  },
+  {
+    "description": "Deeply nested subdirectories",
+    "currentFile": "a/b/c/d/file.md",
+    "imageSource": "e/f/g/image.png",
+    "expected": "/api/files/content?path=a%2Fb%2Fc%2Fd%2Fe%2Ff%2Fg%2Fimage.png",
+    "ac": "AC-1"
+  },
+  {
+    "description": "Special characters: space in filename",
+    "currentFile": "docs/page.md",
+    "imageSource": "img/test image.png",
+    "expected": "/api/files/content?path=docs%2Fimg%2Ftest%20image.png",
+    "ac": "AC-1"
+  },
+  {
+    "description": "Special characters: hyphen and underscore",
+    "currentFile": "docs/api.md",
+    "imageSource": "img/test-image_v2.png",
+    "expected": "/api/files/content?path=docs%2Fimg%2Ftest-image_v2.png",
+    "ac": "AC-1"
+  },
+  {
+    "description": "Root-level file with relative path",
+    "currentFile": "README.md",
+    "imageSource": "logo.png",
+    "expected": "/api/files/content?path=logo.png",
+    "ac": "AC-1"
+  },
+  {
+    "description": "Root-level file with subdirectory",
+    "currentFile": "CHANGELOG.md",
+    "imageSource": "docs/img.png",
+    "expected": "/api/files/content?path=docs%2Fimg.png",
+    "ac": "AC-1"
+  },
+  {
+    "description": "HTTP URL unchanged",
+    "currentFile": "any/file.md",
+    "imageSource": "http://example.com/image.png",
+    "expected": "http://example.com/image.png",
+    "ac": "AC-2"
+  },
+  {
+    "description": "HTTPS URL unchanged",
+    "currentFile": "any/file.md",
+    "imageSource": "https://cdn.example.com/img.jpg",
+    "expected": "https://cdn.example.com/img.jpg",
+    "ac": "AC-2"
+  },
+  {
+    "description": "Protocol-relative URL unchanged",
+    "currentFile": "any/file.md",
+    "imageSource": "//cdn.example.com/img.jpg",
+    "expected": "//cdn.example.com/img.jpg",
+    "ac": "AC-2"
+  },
+  {
+    "description": "Data URI unchanged",
+    "currentFile": "any/file.md",
+    "imageSource": "data:image/png;base64,iVBORw0KGgo=",
+    "expected": "data:image/png;base64,iVBORw0KGgo=",
+    "ac": "AC-2"
+  },
+  {
+    "description": "Long data URI with SVG",
+    "currentFile": "any/file.md",
+    "imageSource": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3C%2Fsvg%3E",
+    "expected": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3C%2Fsvg%3E",
+    "ac": "AC-2"
+  },
+  {
+    "description": "HTTPS URL with query params and fragment",
+    "currentFile": "any/file.md",
+    "imageSource": "https://example.com/path/to/image.png?v=123&size=large#anchor",
+    "expected": "https://example.com/path/to/image.png?v=123&size=large#anchor",
+    "ac": "AC-2"
+  },
+  {
+    "description": "HTTP URL with port",
+    "currentFile": "docs/test.md",
+    "imageSource": "http://localhost:8080/image.png",
+    "expected": "http://localhost:8080/image.png",
+    "ac": "AC-2"
+  },
+  {
+    "description": "Criteria example: single parent segment",
+    "currentFile": "docs/page.md",
+    "imageSource": "../assets/y.png",
+    "expected": "/api/files/content?path=assets%2Fy.png",
+    "ac": "AC-3"
+  },
+  {
+    "description": "Multiple parent segments",
+    "currentFile": "docs/sub/deep.md",
+    "imageSource": "../../assets/logo.png",
+    "expected": "/api/files/content?path=assets%2Flogo.png",
+    "ac": "AC-3"
+  },
+  {
+    "description": "Mixed relative with ./ and ../",
+    "currentFile": "docs/page.md",
+    "imageSource": "./../assets/y.png",
+    "expected": "/api/files/content?path=assets%2Fy.png",
+    "ac": "AC-3"
+  },
+  {
+    "description": "Parent then child navigation",
+    "currentFile": "a/b/c.md",
+    "imageSource": "../d/e.png",
+    "expected": "/api/files/content?path=a%2Fd%2Fe.png",
+    "ac": "AC-3"
+  },
+  {
+    "description": "Complex path with multiple .. segments",
+    "currentFile": "a/b/c/d/e.md",
+    "imageSource": "../../f/../g/h.png",
+    "expected": "/api/files/content?path=a%2Fb%2Fg%2Fh.png",
+    "ac": "AC-3"
+  },
+  {
+    "description": "Parent segments with trailing components",
+    "currentFile": "x/y/z/w.md",
+    "imageSource": "../../../a/b/c.png",
+    "expected": "/api/files/content?path=a%2Fb%2Fc.png",
+    "ac": "AC-3"
+  },
+  {
+    "description": "Interleaved .. and regular segments",
+    "currentFile": "p/q/r.md",
+    "imageSource": "../s/../t/u.png",
+    "expected": "/api/files/content?path=p%2Ft%2Fu.png",
+    "ac": "AC-3"
+  }
+]

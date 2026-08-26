@@ -1,0 +1,57 @@
+=== Markdown Image Rewriter Gate ===
+Base SHA: aa9e640e5bfc7712f417bd3266d4032692c9de2e
+Repo root: /project/workspace
+
+--- AC-4: Guard - existing preprocess-markdown.js unchanged ---
+Running tests/test_markdown_preprocess.py...
+PASS AC-4: preprocess-markdown.js tests: 34 passed, 3 failed (expected baseline)
+
+--- AC-1, AC-2, AC-3: Helper module tests ---
+Testing module: rewrite-image-src
+Found function 'rewriteImageSrc' with parameter order (imageSource, currentFile) - wrapped for normalized calling
+
+=== Oracle-based tests ===
+PASS: Criteria example 1: simple relative path
+PASS: Criteria example 2: ./ prefix
+PASS: Real repo path from README
+PASS: Subdirectory reference
+PASS: Deeply nested subdirectories
+PASS: Special characters: space in filename
+PASS: Special characters: hyphen and underscore
+PASS: Root-level file with relative path
+PASS: Root-level file with subdirectory
+PASS: HTTP URL unchanged
+PASS: HTTPS URL unchanged
+PASS: Protocol-relative URL unchanged
+PASS: Data URI unchanged
+PASS: Long data URI with SVG
+PASS: HTTPS URL with query params and fragment
+PASS: HTTP URL with port
+PASS: Criteria example: single parent segment
+PASS: Multiple parent segments
+PASS: Mixed relative with ./ and ../
+PASS: Parent then child navigation
+PASS: Complex path with multiple .. segments
+PASS: Parent segments with trailing components
+PASS: Interleaved .. and regular segments
+
+=== Runtime-generated tests ===
+PASS: AC-1 runtime: fb34632ca501/ebf8457bd4f9.md + 97403110ae04/78fa6d21c6f9.png
+PASS: AC-2 runtime: random URL https://a1d5bc8e5247.example.com/569b0fab8f62.jpg
+PASS: AC-3 runtime: no '..' in output for 69195bc8/69195bc8/69195bc8/69195bc8/file.md + ../../../c38aec02.png
+
+=== Negative-space probes ===
+PASS: absolute URL unaffected by current file path
+PASS: protocol-relative URL unchanged
+PASS: long data URI unchanged
+Helper module 'rewrite-image-src' passes all tests
+PASS AC-1: helper correctly rewrites relative paths to API URLs
+PASS AC-2: helper passes through absolute URLs unchanged
+PASS AC-3: helper resolves parent segments with no '..' in output
+
+=== Gate Summary ===
+AC-1: MET
+AC-2: MET
+AC-3: MET
+AC-4: MET
+Result: ALL ACCEPTANCE CRITERIA MET

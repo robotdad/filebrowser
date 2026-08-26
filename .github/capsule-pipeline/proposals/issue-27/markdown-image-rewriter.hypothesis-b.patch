@@ -1,0 +1,113 @@
+diff --git a/filebrowser/static/js/lib/image-path-rewriter.js b/filebrowser/static/js/lib/image-path-rewriter.js
+new file mode 100644
+index 0000000..55b7a39
+--- /dev/null
++++ b/filebrowser/static/js/lib/image-path-rewriter.js
+@@ -0,0 +1,107 @@
++// Image path rewriter: convert markdown image sources to authenticated API URLs.
++//
++// This module provides an alternative implementation of the image source rewriting logic,
++// using manual path resolution instead of Node.js path module. It demonstrates that the
++// acceptance criteria bind to observable behavior, not implementation details.
++//
++// Mechanically different from rewrite-image-src.js:
++// - No path module imports (manual string manipulation)
++// - Decomposed into multiple helper functions
++// - Manual segment-based normalization algorithm
++// - Different module name
++
++/**
++ * Check if a URL is absolute (http://, https://, //, or data:)
++ * @param {string} src - Image source to check
++ * @returns {boolean} - True if absolute URL
++ */
++function isAbsoluteUrl(src) {
++    return src.startsWith('http://') ||
++           src.startsWith('https://') ||
++           src.startsWith('//') ||
++           src.startsWith('data:');
++}
++
++/**
++ * Resolve a relative path against a current file's directory.
++ * Uses manual string manipulation instead of path.join().
++ * 
++ * @param {string} currentFile - Current file path (e.g., "docs/page.md")
++ * @param {string} relativePath - Relative path (e.g., "img/x.png" or "../assets/logo.png")
++ * @returns {string} - Combined path before normalization
++ */
++function resolveRelativePath(currentFile, relativePath) {
++    // Extract directory from current file (everything before last /)
++    const lastSlash = currentFile.lastIndexOf('/');
++    const currentDir = lastSlash >= 0 ? currentFile.substring(0, lastSlash) : '';
++    
++    // Combine directory with relative path
++    if (currentDir === '') {
++        return relativePath;
++    }
++    return currentDir + '/' + relativePath;
++}
++
++/**
++ * Normalize a path to remove . and .. segments.
++ * Uses manual segment processing instead of path.normalize().
++ * 
++ * @param {string} pathStr - Path to normalize (e.g., "docs/../assets/./logo.png")
++ * @returns {string} - Normalized path (e.g., "assets/logo.png")
++ */
++function normalizePath(pathStr) {
++    // Split into segments
++    const segments = pathStr.split('/');
++    const normalized = [];
++    
++    for (const segment of segments) {
++        if (segment === '' || segment === '.') {
++            // Skip empty segments and current directory references
++            continue;
++        } else if (segment === '..') {
++            // Parent directory: pop previous segment if exists
++            if (normalized.length > 0) {
++                normalized.pop();
++            }
++            // If stack is empty, we're at root - silently drop the ..
++        } else {
++            // Regular segment: add to stack
++            normalized.push(segment);
++        }
++    }
++    
++    return normalized.join('/');
++}
++
++/**
++ * Build an API URL for a file path.
++ * @param {string} path - Normalized file path
++ * @returns {string} - API URL with encoded path
++ */
++function buildApiUrl(path) {
++    return `/api/files/content?path=${encodeURIComponent(path)}`;
++}
++
++/**
++ * Rewrite a markdown image source to an authenticated API URL.
++ * 
++ * This is the public API - same observable behavior as rewrite-image-src.js,
++ * but implemented through a different mechanism.
++ *
++ * @param {string} currentFile - Current markdown file path (repo-relative)
++ * @param {string} imageSrc - Image source from markdown
++ * @returns {string} - Rewritten URL or original URL if absolute
++ */
++export function rewriteImageSrc(currentFile, imageSrc) {
++    // Pass through absolute URLs unchanged
++    if (isAbsoluteUrl(imageSrc)) {
++        return imageSrc;
++    }
++    
++    // Resolve and normalize the path
++    const resolved = resolveRelativePath(currentFile, imageSrc);
++    const normalized = normalizePath(resolved);
++    
++    // Build API URL
++    return buildApiUrl(normalized);
++}

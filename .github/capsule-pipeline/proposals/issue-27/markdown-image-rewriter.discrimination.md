@@ -1,0 +1,1 @@
+DISCRIMINATION: RED confirmed at unrelated later commit 312a636b3d849ba9c394a3f96a265494ba5ef13a (rc=1) -- the gate does not pass on unrelated code (a later unrelated commit also lacks the feature, so GREEN there would mean an over-broad gate). The census at the later commit is RECORDED (.ai/census-later), not adjudicated: the rc contract alone rules here.
