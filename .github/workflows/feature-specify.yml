@@ -141,8 +141,8 @@ jobs:
     # GitHub's 360-minute hard cap for hosted runners with 110 to spare.
     #
     # On the hosted-compute variant the submit step's own --timeout is what
-    # actually bounds the run (see that step below, 12600s). The 250-minute
-    # job wall leaves 40 minutes for export/extraction, scrubbing,
+    # actually bounds the run (see that step below, 14400s). The 250-minute
+    # job wall leaves 10 minutes for export/extraction, scrubbing,
     # classification, comments, and artifact upload.
     timeout-minutes: 250
     steps:
@@ -582,7 +582,7 @@ jobs:
           # remote .ai and data trees plus metadata. capsule_out is also copied
           # to $OUT so the established PR path and byte fence stay unchanged.
           # Timeout kept under this job's 250-minute wall (see the FUSE
-          # ARITHMETIC comment on this job): 12600s = 210 minutes, leaving 40
+          # ARITHMETIC comment on this job): 14400s = 240 minutes, leaving 10
           # minutes for export/extraction, scrubbing, classification, comments,
           # and upload after the client's own wall.
           set +e
@@ -594,7 +594,7 @@ jobs:
             --logs-dir "$RUNNER_TEMP/capsule-run/logs" \
             --meta-dir "$EVIDENCE/metadata" \
             --data-subpath capsule \
-            --timeout 12600
+            --timeout 14400
           rc=$?
           set -e
           echo "client_exit=$rc" >> "$GITHUB_OUTPUT"
