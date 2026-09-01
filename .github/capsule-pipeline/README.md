@@ -12,7 +12,7 @@ Full design + first-run risks: `../../docs/designs/gh-actions-hosted-compute.md`
 |------|------|
 | `capsule-specify.yml` | Adapted specify workflow. Trigger: issue labelled `ready:spec`. Runs `capsule.dot` on the backend, opens a capsule PR. |
 | `capsule-implement.yml` | Adapted implement workflow. Trigger: a capsule PR merged to `main`. Runs `task-runner.dot` on the backend, applies the fix locally, opens a fix PR. |
-| `submit_compute.py` | Self-contained, stdlib-only submit client (bearer auth). Uploads → submits → polls → auto-answers human gates → fetches results + events. |
+| `submit_compute.py` | Self-contained, stdlib-only submit client (bearer auth). Uploads → submits → polls → auto-answers human gates → safely extracts raw events/logs/data/optional workspace `.resolve` from `/export`, then retrieves every exposed workspace `.ai` file through the workspace APIs while preserving historical runner paths. |
 | `shim-specify.dot` | Workspace-resident shim: runs the repo's `capsule.dot`, exports `.ai/` findings into the results dir. |
 | `shim-implement.dot` | Workspace-resident shim: runs the repo's `task-runner.dot`, exports the fix diff into the results dir. |
 
@@ -25,10 +25,16 @@ step replaced by a call to `submit_compute.py`. Everything else — issue materi
 secret scrubbing, capsule PR / fix PR creation, issue comments, evidence upload — is
 **preserved verbatim**.
 
-- **specify** submits `capsule.dot`; results are fetched back to the exact runner paths
-  the unchanged `Classify` / PR / comment steps read.
+- **specify** submits `capsule.dot`; the export and workspace evidence is mirrored before
+  results are placed at the exact runner paths the unchanged `Classify` / PR / comment steps
+  read. Retrieval is independent of convergence and graph packaging. Export roots
+  `events.jsonl`, `pipeline_logs/`, and `artifacts/data/` are required; every `.ai` path returned
+  by workspace enumeration must fetch successfully. Missing, omitted, or failed material blocks
+  publication. Optional `workspace_resolve/` material is preserved whenever present.
 - **implement** submits `task-runner.dot`; the fix is exported as `fix.diff`, re-applied
-  into the runner checkout, then the unchanged push/PR step pushes it.
+  into the runner checkout, then the unchanged push/PR step pushes it. Its complete exposed
+  run evidence is mirrored under the uploaded run directory as well. Operational output is
+  read-only scanned and fenced separately from scrubbed evidence.
 
 ## Deploying into a target repo
 

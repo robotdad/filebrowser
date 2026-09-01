@@ -141,9 +141,9 @@ jobs:
     # GitHub's 360-minute hard cap for hosted runners with 110 to spare.
     #
     # On the hosted-compute variant the submit step's own --timeout is what
-    # actually bounds the run (see that step below, 14400s); this job wall
-    # still needs to clear that plus setup/PR-creation time, and 250 keeps a
-    # comfortable margin over both.
+    # actually bounds the run (see that step below, 12600s). The 250-minute
+    # job wall leaves 40 minutes for export/extraction, scrubbing,
+    # classification, comments, and artifact upload.
     timeout-minutes: 250
     steps:
       - name: Checkout
@@ -539,7 +539,8 @@ jobs:
         run: |
           set -uo pipefail
           OUT="$RUNNER_TEMP/capsule-run/out"
-          mkdir -p "$OUT" "$RUNNER_TEMP/capsule-run/logs" "$RUNNER_TEMP/capsule-submit"
+          EVIDENCE="$RUNNER_TEMP/capsule-run/evidence"
+          mkdir -p "$OUT" "$EVIDENCE" "$RUNNER_TEMP/capsule-run/logs" "$RUNNER_TEMP/capsule-submit"
 
           # Build the dot-graph "custom" input params. The shim (dot_content) runs
           # the repo-resident feature-capsule.dot inside the backend clone at
@@ -577,30 +578,31 @@ jobs:
               later_commit: $later
             }' > "$RUNNER_TEMP/capsule-submit/params.json"
 
-          # Submit -> poll -> auto-answer gates -> fetch capsule_out + events.
+          # Submit -> poll -> auto-answer gates -> losslessly mirror the complete
+          # remote .ai and data trees plus metadata. capsule_out is also copied
+          # to $OUT so the established PR path and byte fence stay unchanged.
           # Timeout kept under this job's 250-minute wall (see the FUSE
-          # ARITHMETIC comment on this job): 14400s = 240 minutes, leaving 10
-          # minutes for checkout/uv-setup/classify/PR/comment/scrub/upload --
-          # comfortably above the seconds-scale non-engine overhead measured
-          # in this lane's own history.
+          # ARITHMETIC comment on this job): 12600s = 210 minutes, leaving 40
+          # minutes for export/extraction, scrubbing, classification, comments,
+          # and upload after the client's own wall.
+          set +e
           python3 .github/capsule-pipeline/submit_compute.py \
             --params-file "$RUNNER_TEMP/capsule-submit/params.json" \
             --out "$OUT" \
-            --meta-dir "$RUNNER_TEMP/capsule-submit/meta" \
+            --evidence-dir "$EVIDENCE" \
+            --workspace-ai-dir "$GITHUB_WORKSPACE/.ai" \
+            --logs-dir "$RUNNER_TEMP/capsule-run/logs" \
+            --meta-dir "$EVIDENCE/metadata" \
             --data-subpath capsule \
-            --timeout 14400
+            --timeout 12600
           rc=$?
-
-          # Land results where the unchanged downstream steps read them:
-          #   $OUT  = capsule_out  (Classify reads $OUT/*.verify.sh, questions-blocking.md, etc.)
-          #   $GITHUB_WORKSPACE/.ai/{findings,postmortem}  (Classify + comment read these)
-          if [ -d "$OUT/ai" ]; then
-            mkdir -p "$GITHUB_WORKSPACE/.ai/findings" "$GITHUB_WORKSPACE/.ai/postmortem"
-            cp -r "$OUT/ai/findings/." "$GITHUB_WORKSPACE/.ai/findings/" 2>/dev/null || true
-            cp -r "$OUT/ai/postmortem/." "$GITHUB_WORKSPACE/.ai/postmortem/" 2>/dev/null || true
-            rm -rf "$OUT/ai"
-          fi
-          echo "attractor_exit=$rc" >> "$GITHUB_OUTPUT"
+          set -e
+          echo "client_exit=$rc" >> "$GITHUB_OUTPUT"
+          attractor_exit="$(cat "$EVIDENCE/metadata/run-exit-code.txt" 2>/dev/null || echo "$rc")"
+          echo "attractor_exit=$attractor_exit" >> "$GITHUB_OUTPUT"
+          retrieval_complete="$(cat "$EVIDENCE/metadata/retrieval-complete.txt" 2>/dev/null || echo false)"
+          [ "$retrieval_complete" = true ] || retrieval_complete=false
+          echo "retrieval_complete=$retrieval_complete" >> "$GITHUB_OUTPUT"
 
       - name: "Fence the capsule pair: record sha256 of every capsule_out file"
         # INCIDENT, 2026-08-13 (PR #205 -- this lane's own output): the
@@ -703,9 +705,25 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          python3 .github/capsule-pipeline/scrub_secrets.py scrub \
-            "$RUNNER_TEMP/capsule-run/logs" \
+          ROOTS=(
+            "$RUNNER_TEMP/capsule-run/logs"
+            "$RUNNER_TEMP/capsule-run/evidence/metadata"
+            "$RUNNER_TEMP/capsule-run/evidence/events.jsonl"
+            "$RUNNER_TEMP/capsule-run/evidence/pipeline_logs"
+            "$RUNNER_TEMP/capsule-run/evidence/workspace_ai"
+            "$RUNNER_TEMP/capsule-run/evidence/workspace_resolve"
             "$GITHUB_WORKSPACE/.ai"
+          )
+          if [ -d "$RUNNER_TEMP/capsule-run/evidence/artifacts/data" ]; then
+            while IFS= read -r -d '' path; do ROOTS+=("$path"); done < <(
+              find "$RUNNER_TEMP/capsule-run/evidence/artifacts/data" -mindepth 1 -maxdepth 1 \
+                ! -name capsule -print0
+            )
+          fi
+          if [ -d "$RUNNER_TEMP/capsule-run/evidence/artifacts/data/capsule/ai" ]; then
+            ROOTS+=("$RUNNER_TEMP/capsule-run/evidence/artifacts/data/capsule/ai")
+          fi
+          python3 .github/capsule-pipeline/scrub_secrets.py scrub "${ROOTS[@]}"
 
       - name: Classify the result
         id: classify
@@ -750,6 +768,10 @@ jobs:
           elif [ -f "$GITHUB_WORKSPACE/.ai/findings/cant-write-gate.md" ]; then
             kind="cant_gate"
           fi
+          if [ "${{ steps.run.outputs.retrieval_complete }}" != "true" ]; then
+            kind="failure"
+            id=""
+          fi
           echo "kind=$kind" >> "$GITHUB_OUTPUT"
           echo "id=$id" >> "$GITHUB_OUTPUT"
           echo "Classified as: kind=$kind id=$id"
@@ -785,7 +807,7 @@ jobs:
         #
         # Failure means no PR -- an unverifiable capsule is worse than no
         # capsule, because it consumes a reviewer's trust.
-        if: always() && steps.idem.outputs.skip != 'true' && steps.classify.outputs.kind == 'capsule' && steps.capsule_secret_gate.outputs.capsule_clean == 'true'
+        if: always() && steps.idem.outputs.skip != 'true' && steps.run.outputs.retrieval_complete == 'true' && steps.classify.outputs.kind == 'capsule' && steps.capsule_secret_gate.outputs.capsule_clean == 'true'
         run: |
           set -euo pipefail
           echo "gate_ok=false" >> "$GITHUB_OUTPUT"
@@ -805,7 +827,7 @@ jobs:
         # `if: always()` steps still run after an earlier step fails, so
         # each new gate is required by NAME here -- otherwise a blocked
         # capsule would sail straight into a PR behind a red job.
-        if: always() && steps.idem.outputs.skip != 'true' && steps.classify.outputs.kind == 'capsule' && steps.capsule_secret_gate.outputs.capsule_clean == 'true' && steps.gate_exec.outputs.gate_ok == 'true'
+        if: always() && steps.idem.outputs.skip != 'true' && steps.run.outputs.retrieval_complete == 'true' && steps.classify.outputs.kind == 'capsule' && steps.capsule_secret_gate.outputs.capsule_clean == 'true' && steps.gate_exec.outputs.gate_ok == 'true'
         # KNOWN LIMITATION, confirmed empirically by the defect lane (workflow
         # run 31099116800): `gh pr create` fails with "GraphQL: GitHub Actions
         # is not permitted to create or approve pull requests" when the
@@ -1377,8 +1399,17 @@ jobs:
         run: |
           set -euo pipefail
           echo "upload_ok=false" >> "$GITHUB_OUTPUT"
+          FENCES=(--never-redact "$RUNNER_TEMP/capsule-run/out")
+          if [ -d "$RUNNER_TEMP/capsule-run/evidence/artifacts/data/capsule" ]; then
+            while IFS= read -r -d '' path; do
+              FENCES+=(--never-redact "$path")
+            done < <(
+              find "$RUNNER_TEMP/capsule-run/evidence/artifacts/data/capsule" \
+                -mindepth 1 -maxdepth 1 ! -name ai -print0
+            )
+          fi
           if python3 .github/capsule-pipeline/scrub_secrets.py gate \
-              --never-redact "$RUNNER_TEMP/capsule-run/out" \
+              "${FENCES[@]}" \
               "$RUNNER_TEMP/capsule-run" \
               "$GITHUB_WORKSPACE/.ai"; then
             echo "upload_ok=true" >> "$GITHUB_OUTPUT"
@@ -1387,7 +1418,7 @@ jobs:
             exit 1
           fi
 
-      - name: Upload run evidence (logs, .ai state, capsule_out)
+      - name: Upload run evidence (logs, complete remote mirror, capsule_out)
         # Gated: uploads ONLY when the residual secret gate above
         # affirmatively passed. If the gate found something, failed, or never
         # ran, upload_ok != 'true' and this step is skipped -- fail-closed by
@@ -1399,6 +1430,7 @@ jobs:
           path: |
             ${{ runner.temp }}/capsule-run/logs
             ${{ runner.temp }}/capsule-run/out
+            ${{ runner.temp }}/capsule-run/evidence
             ${{ github.workspace }}/.ai
           if-no-files-found: warn
 
@@ -1412,6 +1444,10 @@ jobs:
         run: |
           set -euo pipefail
           KIND="${{ steps.classify.outputs.kind }}"
+          if [ "${{ steps.run.outputs.retrieval_complete }}" != "true" ]; then
+            echo "::error::Run evidence retrieval was incomplete. Preserved evidence may be uploaded after secret gating, but no capsule was published as successful."
+            exit 1
+          fi
           if [ "$KIND" = "failure" ]; then
             echo "::error::feature-capsule.dot did not converge (no capsule, no recorded finding) -- see the postmortem comment posted on the issue and the uploaded run evidence."
             exit 1

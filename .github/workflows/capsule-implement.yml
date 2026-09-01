@@ -134,6 +134,8 @@ jobs:
     # while staying comfortably under GitHub Actions' 6h hard cap for
     # hosted runners -- same ratio-of-buffer reasoning as
     # capsule-specify.yml's 90min-over-a-60min-engine-wall.
+    # The client timeout is 17400s (290 min), leaving 40 minutes for export,
+    # extraction, scrubbing, classification, comments, and artifact upload.
     timeout-minutes: 330
     steps:
       - name: Checkout
@@ -259,7 +261,8 @@ jobs:
         run: |
           set -uo pipefail
           OUT="$RUNNER_TEMP/capsule-implement/out"
-          mkdir -p "$OUT" "$RUNNER_TEMP/capsule-implement/logs" "$RUNNER_TEMP/capsule-implement-submit"
+          EVIDENCE="$RUNNER_TEMP/capsule-implement/evidence"
+          mkdir -p "$OUT" "$EVIDENCE" "$RUNNER_TEMP/capsule-implement/logs" "$RUNNER_TEMP/capsule-implement-submit"
           BASE_SHA="$(git rev-parse HEAD)"
 
           SHIM=".github/capsule-pipeline/shim-implement.dot"
@@ -278,69 +281,44 @@ jobs:
               max_iterations: "6"
             }' > "$RUNNER_TEMP/capsule-implement-submit/params.json"
 
+          set +e
           python3 .github/capsule-pipeline/submit_compute.py \
             --params-file "$RUNNER_TEMP/capsule-implement-submit/params.json" \
             --out "$OUT" \
-            --meta-dir "$RUNNER_TEMP/capsule-implement-submit/meta" \
+            --evidence-dir "$EVIDENCE" \
+            --workspace-ai-dir "$GITHUB_WORKSPACE/.ai" \
+            --logs-dir "$RUNNER_TEMP/capsule-implement/logs" \
+            --meta-dir "$EVIDENCE/metadata" \
             --data-subpath capsule \
             --gate-answer A \
-            --timeout 21600
+            --timeout 17400
           rc=$?
-
-          # Classify (next step) reads logs/checkpoint.json context.outcome. task-runner.dot
-          # uses outcome=success/fail; synthesize it from the retrieved SHIPPED.md so the
-          # existing exit-code-vs-recorded-outcome cross-check works unchanged.
-          if [ -s "$OUT/SHIPPED.md" ]; then OUTCOME=success; else OUTCOME=fail; fi
-          python3 - "$RUNNER_TEMP/capsule-implement/logs/checkpoint.json" "$OUTCOME" <<'PY'
-          import json, os, sys
-          p, outcome = sys.argv[1], sys.argv[2]
-          os.makedirs(os.path.dirname(p), exist_ok=True)
-          json.dump({"context": {"outcome": outcome}}, open(p, "w"))
-          PY
-          echo "attractor_exit=$rc" >> "$GITHUB_OUTPUT"
+          set -e
+          echo "client_exit=$rc" >> "$GITHUB_OUTPUT"
+          attractor_exit="$(cat "$EVIDENCE/metadata/run-exit-code.txt" 2>/dev/null || echo "$rc")"
+          echo "attractor_exit=$attractor_exit" >> "$GITHUB_OUTPUT"
+          retrieval_complete="$(cat "$EVIDENCE/metadata/retrieval-complete.txt" 2>/dev/null || echo false)"
+          [ "$retrieval_complete" = true ] || retrieval_complete=false
+          echo "retrieval_complete=$retrieval_complete" >> "$GITHUB_OUTPUT"
 
       - name: "Classify the run: exit code AND the pipeline's own recorded outcome"
         id: classify
-        # WHY THIS EXISTS (run 31789137305). Every classifier downstream in
-        # this job -- the PR title/body, the issue comment, the job's own
-        # pass/fail -- branched on `steps.run.outputs.attractor_exit` and
-        # nothing else. That one value cannot carry the truth:
-        #
-        #   * The run step's script executes under the runner's default
-        #     `bash -e`, so when the engine exits non-zero the script aborts
-        #     BEFORE `echo "attractor_exit=$?"`. The output is never written.
-        #     `attractor_exit` is therefore only ever '0' or ABSENT -- a real
-        #     non-zero code can never reach it. That run's own job annotation
-        #     is the proof: "task-runner.dot did not converge (exit=)".
-        #   * GitHub coerces a missing output to 0 in an `== '0'` comparison,
-        #     so ABSENT and CONVERGED are indistinguishable to an `if:`.
-        #
-        # The pipeline records its own verdict independently, in the logs
-        # root the run step already passes as --logs-root: checkpoint.json's
-        # `context.outcome`, written by the engine after EVERY node
-        # (loop-pipeline engine.py: `ctx.set("outcome", outcome.status.value)`).
-        # In run 31789137305 that file said `"outcome": "fail"` while this
-        # job was still deciding whether to ship a fix PR.
-        #
-        # So the done path now requires BOTH: a literal exit 0 AND a recorded
-        # outcome that is not 'fail'. Anything else routes to the
-        # non-convergence path. This is a CROSS-CHECK, not a replacement --
-        # the porcelain guard in the next step is untouched and remains the
-        # last word on whether a tree may be pushed (in that run it was the
-        # correct actor, and it is the reason nothing unproven shipped).
-        #
-        # Deliberately placed BEFORE the scrub step, so it reads the
-        # pipeline's own bytes before anything else rewrites them.
+        # The submit step disables shell errexit only around the client and
+        # always records its literal exit plus retrieval completeness. The
+        # pipeline's checkpoint outcome remains an independent cross-check.
+        # Success requires all three signals: exit 0, checkpoint outcome=success, and
+        # a complete export mirror. This runs before evidence scrubbing.
         if: always() && steps.locate.outputs.skip != 'true'
         env:
           ATTRACTOR_EXIT: ${{ steps.run.outputs.attractor_exit }}
+          RETRIEVAL_COMPLETE: ${{ steps.run.outputs.retrieval_complete }}
         run: |
           set -euo pipefail
           CHECKPOINT="$RUNNER_TEMP/capsule-implement/logs/checkpoint.json"
 
           RECORDED="absent"
           if [ -f "$CHECKPOINT" ]; then
-            RECORDED="$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print((d.get('context') or {}).get('outcome') or 'absent')" "$CHECKPOINT" 2>/dev/null || echo unreadable)"
+            RECORDED="$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); c=d.get('context'); o=c.get('outcome') if isinstance(c,dict) else None; print(o if isinstance(o,str) and o in ('success','fail') else 'outcome-less')" "$CHECKPOINT" 2>/dev/null || echo unreadable)"
           fi
           # The value is engine-written; keep it to a single harmless token so
           # it can never inject extra lines into $GITHUB_OUTPUT.
@@ -349,7 +327,7 @@ jobs:
 
           EXIT="${ATTRACTOR_EXIT:-}"
           CONVERGED=false
-          if [ "$EXIT" = "0" ] && [ "$RECORDED" != "fail" ]; then
+          if [ "$EXIT" = "0" ] && [ "$RECORDED" = "success" ] && [ "$RETRIEVAL_COMPLETE" = "true" ]; then
             CONVERGED=true
           fi
 
@@ -362,6 +340,24 @@ jobs:
             echo "converged=$CONVERGED"
           } >> "$GITHUB_OUTPUT"
           echo "classification: attractor_exit='$EXIT' recorded_outcome='$RECORDED' converged=$CONVERGED"
+
+      - name: "Operational output: a secret finding fails the run, never redacts"
+        id: output_secret_gate
+        if: always() && steps.locate.outputs.skip != 'true'
+        env:
+          CAPSULE_PR_TOKEN: [REDACTED:SECRET]
+          GITHUB_TOKEN: [REDACTED:SECRET]
+        run: |
+          set -euo pipefail
+          echo "output_clean=false" >> "$GITHUB_OUTPUT"
+          if python3 .github/capsule-pipeline/scrub_secrets.py scan \
+              "$RUNNER_TEMP/capsule-implement/out" \
+              "$RUNNER_TEMP/capsule-implement/evidence/artifacts/data/capsule"; then
+            echo "output_clean=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Secret-shaped material found in operational implementation output. fix.diff and its exported duplicate are never redacted in place; apply and PR publication are blocked." >&2
+            exit 1
+          fi
 
       - name: Scrub secrets from run evidence
         # SECURITY (incident, 2026-08): a worker agent dumped its
@@ -389,13 +385,26 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          python3 .github/capsule-pipeline/scrub_secrets.py scrub \
-            "$RUNNER_TEMP/capsule-implement" \
+          ROOTS=(
+            "$RUNNER_TEMP/capsule-implement/logs"
+            "$RUNNER_TEMP/capsule-implement/evidence/metadata"
+            "$RUNNER_TEMP/capsule-implement/evidence/events.jsonl"
+            "$RUNNER_TEMP/capsule-implement/evidence/pipeline_logs"
+            "$RUNNER_TEMP/capsule-implement/evidence/workspace_ai"
+            "$RUNNER_TEMP/capsule-implement/evidence/workspace_resolve"
             "$GITHUB_WORKSPACE/.ai"
+          )
+          if [ -d "$RUNNER_TEMP/capsule-implement/evidence/artifacts/data" ]; then
+            while IFS= read -r -d '' path; do ROOTS+=("$path"); done < <(
+              find "$RUNNER_TEMP/capsule-implement/evidence/artifacts/data" \
+                -mindepth 1 -maxdepth 1 ! -name capsule -print0
+            )
+          fi
+          python3 .github/capsule-pipeline/scrub_secrets.py scrub "${ROOTS[@]}"
 
       - name: Apply the backend-produced fix into the workspace
         id: apply
-        if: steps.locate.outputs.skip != 'true' && steps.run.outputs.attractor_exit == '0' && steps.classify.outputs.converged == 'true'
+        if: steps.locate.outputs.skip != 'true' && steps.run.outputs.attractor_exit == '0' && steps.run.outputs.retrieval_complete == 'true' && steps.classify.outputs.converged == 'true' && steps.output_secret_gate.outputs.output_clean == 'true'
         run: |
           set -euo pipefail
           OUT="$RUNNER_TEMP/capsule-implement/out"
@@ -412,41 +421,13 @@ jobs:
           git apply --index --whitespace=nowarn "$DIFF"
           git commit \
             -m "implement: ${{ steps.locate.outputs.capsule_id }} (via the backend)" \
-            -m "Applied from task-runner.dot on the backend (instance $(cat "$RUNNER_TEMP/capsule-implement-submit/meta/instance_id.txt" 2>/dev/null)); fix retrieved from capsule_out."
+            -m "Applied from task-runner.dot on the backend (instance $(cat "$RUNNER_TEMP/capsule-implement/evidence/metadata/instance_id.txt" 2>/dev/null)); fix retrieved from capsule_out."
 
       - name: Push fix branch and open PR
         id: pr
-        # LOAD-BEARING, AND FRAGILE ON PURPOSE -- READ BEFORE "FIXING" THE
-        # EXIT CAPTURE (issue #220 salvage, both layers).
-        #
-        # This `if:` is the ONLY door the salvage paths have. A non-converged
-        # run reaches this step exclusively through GitHub's absent-output
-        # coercion: the run step above executes under `set -uo pipefail` with
-        # `bash -e` semantics, so when the engine exits non-zero the step
-        # ABORTS BEFORE its `echo "attractor_exit=$?" >> "$GITHUB_OUTPUT"`
-        # line runs at all. The output is therefore never written, and GitHub
-        # coerces a missing output to '0' in an `== '0'` comparison -- which
-        # is precisely why the non-converged path gets in here to salvage and
-        # push. (The `classify` step above exists because that same coercion
-        # makes ABSENT and CONVERGED indistinguishable to an `if:`; it
-        # recovers the truth from checkpoint.json and everything below
-        # branches on `steps.classify.outputs.converged`, not on this value.)
-        #
-        # CONSEQUENCE: if anyone ever makes the run step record
-        # attractor_exit=1 RELIABLY -- an `|| true`, a `set +e`, an explicit
-        # capture into a variable, a composite action -- this condition goes
-        # FALSE on exactly the runs salvage exists for, this step is skipped,
-        # and BOTH salvage layers' commits (task-runner.dot's own `salvage`
-        # node and this step's own Layer-2 commit) strand on a runner that is
-        # about to be destroyed. That is the #220 bug again, reintroduced by a
-        # change that looks like an unambiguous improvement.
-        #
-        # If you fix the exit capture, you MUST widen this condition in the
-        # same commit -- e.g. gate on `steps.locate.outputs.skip != 'true'`
-        # alone and let the `classify` step's `converged` output (already the
-        # sole classifier below) decide converged-vs-salvage. Do not change one
-        # without the other.
-        if: always() && steps.locate.outputs.skip != 'true' && steps.run.outputs.attractor_exit == '0'
+        # Exit and retrieval outputs are captured explicitly. No success or
+        # work-in-progress PR is published from an incomplete evidence mirror.
+        if: always() && steps.locate.outputs.skip != 'true' && steps.run.outputs.retrieval_complete == 'true' && steps.output_secret_gate.outputs.output_clean == 'true'
         # See capsule-specify.yml's "Open capsule PR" step for the
         # confirmed platform limitation this token falls back around:
         # `gh pr create` fails with "GitHub Actions is not permitted to
@@ -624,20 +605,10 @@ jobs:
             GATE_NOTE="Gate files MODIFIED by this PR (measured): ${GATE_CHANGED_ONE_LINE} -- review the gate diff alongside the fix; a gate edit changes what \"passed\" means."
           fi
 
-          # CONVERGED distinguishes the two ways this step is reached (see
-          # this step's \`if:\`), and it is deliberately NOT the exit code
-          # alone. An exit code of '0' is reachable two ways: the engine
-          # genuinely converged, or the run step aborted under the runner's
-          # default \`bash -e\` before \`echo attractor_exit=$?\` ever wrote
-          # the output, and GitHub's expression rules coerced the missing
-          # value to 0 -- which is how this step is reached on the
-          # non-convergence path at all. The "Classify the run" step above
-          # therefore cross-checks that exit code against the pipeline's OWN
-          # recorded outcome (checkpoint.json), and only 'true' here means
-          # genuinely converged. The PR body must say which of the two this
-          # is: run 31335891096 shipped a salvage PR (#178) wearing the
-          # converged template's claims, and run 31789137305 reached this
-          # step with an exit code that said nothing at all.
+          # CONVERGED is deliberately not the exit code alone. The submit
+          # step records the original run exit explicitly, and the classifier
+          # cross-checks it against checkpoint.json plus complete evidence
+          # retrieval. Only all three signals produce true here.
           CONVERGED="${{ steps.classify.outputs.converged }}"
           RECORDED_OUTCOME="${{ steps.classify.outputs.recorded_outcome }}"
           EXIT_RAW="${{ steps.run.outputs.attractor_exit }}"
@@ -797,16 +768,9 @@ jobs:
         # the suspicious spans removed. If the re-scan still finds
         # anything, the upload is blocked exactly as before.
         #
-        # NO --never-redact FENCE IS NEEDED HERE, and that is a fact about
-        # this lane, not an omission: the implement stage produces a FIX
-        # BRANCH from the workspace git tree, not a capsule pair, so
-        # $RUNNER_TEMP/capsule-implement holds only evidence (logs/, the
-        # staged pr-body.md and comment.md). The specify workflows, whose
-        # $RUNNER_TEMP/capsule-run DOES contain the capsule pair under
-        # out/, pass --never-redact for it -- PR #207's rule that the pair
-        # is scanned and never mutated. Should this lane ever stage a
-        # to-be-pushed artifact under $RUNNER_TEMP, it must be fenced the
-        # same way.
+        # The operational fix.diff and its duplicate exported copy are fenced:
+        # both are applied/published bytes, so neither may be rewritten by
+        # entropy quarantine. Any finding inside either subtree blocks.
         if: always() && steps.locate.outputs.skip != 'true'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -817,6 +781,8 @@ jobs:
           set -euo pipefail
           echo "upload_ok=false" >> "$GITHUB_OUTPUT"
           if python3 .github/capsule-pipeline/scrub_secrets.py gate \
+              --never-redact "$RUNNER_TEMP/capsule-implement/out" \
+              --never-redact "$RUNNER_TEMP/capsule-implement/evidence/artifacts/data/capsule" \
               "$RUNNER_TEMP/capsule-implement" \
               "$GITHUB_WORKSPACE/.ai"; then
             echo "upload_ok=true" >> "$GITHUB_OUTPUT"
@@ -825,7 +791,7 @@ jobs:
             exit 1
           fi
 
-      - name: Upload run evidence (logs, .ai state)
+      - name: Upload run evidence (logs, complete remote mirror)
         # Gated: uploads ONLY when the residual secret gate above
         # affirmatively passed. If the gate found something, failed, or
         # never ran, upload_ok != 'true' and this step is skipped --
@@ -843,13 +809,14 @@ jobs:
         if: always() && steps.locate.outputs.skip != 'true'
         run: |
           set -euo pipefail
-          # Cross-checked, not exit-code-only (see "Classify the run"). The
-          # old message printed "(exit=)" on run 31789137305 -- an empty
-          # string where the reader expected a code -- because a non-zero
-          # engine exit never reaches that output at all. Report both halves
-          # of what was actually measured.
+          # Cross-checked, not exit-code-only (see "Classify the run").
+          # Report the explicitly captured original run outcome and checkpoint.
           EXIT="${{ steps.run.outputs.attractor_exit }}"
           RECORDED_OUTCOME="${{ steps.classify.outputs.recorded_outcome }}"
+          if [ "${{ steps.run.outputs.retrieval_complete }}" != "true" ]; then
+            echo "::error::Run evidence retrieval was incomplete. Preserved evidence may be uploaded after secret gating, but no fix was published as successful." >&2
+            exit 1
+          fi
           if [ "${{ steps.classify.outputs.converged }}" != "true" ]; then
             echo "::error::task-runner.dot did not converge (engine exit='${EXIT:-<absent>}', pipeline's own recorded outcome='${RECORDED_OUTCOME}') -- see the postmortem comment posted on the issue and the uploaded run evidence." >&2
             exit 1

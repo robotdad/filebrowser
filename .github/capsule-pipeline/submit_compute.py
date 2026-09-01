@@ -5,8 +5,13 @@ Purpose
 -------
 Submit a dot-graph "custom" pipeline run to a hosted compute backend from a
 GitHub Actions runner, poll it to a terminal state, auto-answer any human-gate
-input requests, and pull the pipeline's `capsule_out` artifacts + event log
-back to the runner filesystem.
+input requests, and mirror the run evidence back to the runner filesystem.
+The evidence mirror is deliberately interpretation-free: it safely extracts
+the platform's raw export archive (artifact data, pipeline logs, optional
+workspace `.resolve`, and raw events), then separately retrieves every `.ai`
+file exposed by the workspace APIs. The selected `capsule_out` path is also
+copied to its historical local location for downstream PR plumbing. Any
+omission, unsafe path, or fetch failure makes retrieval explicitly incomplete.
 
 Design
 ------
@@ -16,7 +21,10 @@ pre-issued BEARER TOKEN from the environment. HTTP contract:
   POST /api/uploads    (multipart)                            -> {"handle"}
   GET  /api/instances/{id}                                    -> {"status"}
   POST /api/instances/{id}/input-requests/{rid}  {"response","text"}
-  GET  /api/instances/{id}/events
+  GET  /api/instances/{id}/export
+  GET  /api/instances/{id}/logs
+  GET  /api/instances/{id}/workspace-tree
+  GET  /api/instances/{id}/workspace/{path}
 
 Auth contract
 -------------
@@ -32,26 +40,33 @@ Usage
       --pipeline custom \
       --params-file params.json \        # the `input` params (dot_content, workspace_repo, base_sha, ...)
       --upload issue_file=./issue.md \   # 0+; uploads file, sets input[<name>]=<handle>
-      --out ./out \                      # capsule_out data tree + events.json land here
-      --data-subpath capsule \           # which /data/<subpath> tree to pull back
+      --out ./out \                      # historical capsule_out destination
+      --evidence-dir ./evidence \        # safely extracted raw export + metadata
+      --workspace-ai-dir ./.ai \         # mapped workspace .ai files
+      --logs-dir ./logs \                # mapped exported pipeline_logs
+      --data-subpath capsule \           # copied from artifacts/data to --out
       [--gate-answer K] [--poll-interval 10] [--timeout 21600]
 
 Exit codes: 0 = instance reached `completed`; 1 = terminal non-success or error;
 2 = auth failure; 3 = network failure. The resolved instance_id is written to
-stdout (last line) and to <out>/instance_id.txt.
+stdout (last line) and to <meta-dir>/instance_id.txt.
 """
 
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import os
 import sys
+import tarfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
+import shutil
 import uuid
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import NoReturn
 
 # Terminal statuses the standard terminal statuses. `awaiting_input`
@@ -60,6 +75,11 @@ from typing import NoReturn
 _SUCCESS = "completed"
 _TERMINAL = frozenset({"completed", "failed", "error", "cancelled", "canceled"})
 _AWAITING = "awaiting_input"
+_REQUIRED_EXPORT_ROOTS = (
+    "events.jsonl",
+    "pipeline_logs",
+    "artifacts/data",
+)
 
 
 def _die(msg: str, code: int = 1) -> NoReturn:
@@ -118,8 +138,8 @@ class Compute:
                 return resp.status, resp.read()
         except urllib.error.HTTPError as exc:
             return exc.code, exc.read()
-        except urllib.error.URLError as exc:
-            _die(f"could not reach {self.url}{path}: {exc.reason}", 3)
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            return 0, f"network error: {exc}".encode()
 
     # --- uploads: POST /api/uploads (multipart) -> {"handle": ...} -----------
     def upload(self, path: Path, timeout: float = 300) -> str:
@@ -214,57 +234,90 @@ class Compute:
                 )
         return answered
 
-    def events_raw(self, instance_id: str) -> bytes:
-        _, body = self._get_bytes(f"/api/instances/{instance_id}/events")
-        return body
+    def export_raw(self, instance_id: str) -> tuple[int, bytes]:
+        return self._get_bytes(f"/api/instances/{instance_id}/export")
 
-    # --- data retrieval (proven contract, docs/capsule-out-probe.md) ----------
-    # GET /data-tree lists paths under the served data root; each FILE is fetched
-    # at GET /data/<rel>, where <rel> already includes the <subpath> prefix
-    # (e.g. capsule/<id>.verify.sh). We strip that prefix when writing locally so
-    # $OUT holds the pair at top level (and $OUT/ai/... beneath it).
-    def fetch_data(self, instance_id: str, subpath: str, out: Path) -> int:
+    def fetch_tree(
+        self,
+        instance_id: str,
+        *,
+        tree_name: str,
+        file_name: str,
+        destination: Path,
+        source_prefix: str = "",
+    ) -> tuple[int, list[str]]:
+        """Mirror every file selected by a structural tree prefix.
+
+        ``source_prefix`` selects the workspace's `.ai` root; it never selects
+        evidence *within* that root.
+        """
+        errors: list[str] = []
         code, parsed, raw = self._request(
-            "GET", f"/api/instances/{instance_id}/data-tree"
+            "GET",
+            f"/api/instances/{instance_id}/{tree_name}"
+            "?include_hidden=true&include_ignored=true",
         )
-        print(f"data-tree HTTP {code}: {raw[:3000]}", file=sys.stderr)
-        rels = _flatten_tree(parsed) if code < 400 and parsed is not None else []
-        pref = subpath.strip("/") + "/"
-        wanted = [r for r in rels if r.startswith(pref)]
-        if not wanted:
-            print(
-                f"WARN: no files under data/{subpath} (tree listed {len(rels)} path(s): "
-                f"{rels[:12]}). If the tree is empty the pipeline wrote no capsule_out.",
-                file=sys.stderr,
-            )
-            # Diagnostic: dump the node status JSONs that carry the reason a run
-            # rejected/short-circuited (bad_input, setup, the folder node).
-            for rel in rels:
-                if any(k in rel for k in ("bad_input", "setup", "RunWorkspaceGraph")):
-                    sc, blob = self._get_bytes(
-                        f"/api/instances/{instance_id}/data/{rel}"
-                    )
-                    if sc < 400:
-                        print(
-                            f"--- {rel} ---\n{blob.decode('utf-8', 'replace')[:2500]}",
-                            file=sys.stderr,
-                        )
-            return 0
+        print(f"{tree_name} HTTP {code}", file=sys.stderr)
+        if code >= 400 or parsed is None:
+            return 0, [f"{tree_name}: HTTP {code}: {raw.strip()[:300]}"]
+        if not isinstance(parsed, list):
+            return 0, [
+                f"{tree_name}: invalid response shape "
+                f"{type(parsed).__name__}; expected a JSON array"
+            ]
+
+        rels = _flatten_tree(parsed)
+        prefix = source_prefix.strip("/")
+        if prefix:
+            wanted = [rel for rel in rels if rel == prefix or rel.startswith(prefix + "/")]
+        else:
+            wanted = rels
+
         fetched = 0
         for rel in wanted:
-            scode, blob = self._get_bytes(f"/api/instances/{instance_id}/data/{rel}")
-            if scode >= 400:
-                print(f"WARN: fetch data/{rel} HTTP {scode}", file=sys.stderr)
+            safe_rel = _safe_relative_path(rel)
+            if safe_rel is None:
+                errors.append(f"{tree_name}: rejected unsafe path {rel!r}")
                 continue
-            dest = out / rel[len(pref) :]
+            local_rel = safe_rel
+            if prefix:
+                if safe_rel == prefix:
+                    errors.append(f"{tree_name}: expected {prefix!r} to be a directory")
+                    continue
+                local_rel = safe_rel[len(prefix) + 1 :]
+            encoded = urllib.parse.quote(safe_rel, safe="/")
+            scode, blob = self._get_bytes(
+                f"/api/instances/{instance_id}/{file_name}/{encoded}"
+            )
+            if scode >= 400 or scode == 0:
+                errors.append(f"{file_name}/{safe_rel}: HTTP {scode}")
+                print(f"WARN: fetch {file_name}/{safe_rel} HTTP {scode}", file=sys.stderr)
+                continue
+            dest = _safe_destination(destination, local_rel)
+            if dest is None:
+                errors.append(f"{tree_name}: local path escaped destination: {local_rel!r}")
+                continue
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(blob)
             fetched += 1
+
         print(
-            f"retrieved {fetched} file(s) under data/{subpath} -> {out}",
+            f"retrieved {fetched}/{len(wanted)} file(s) from {tree_name} -> {destination}",
             file=sys.stderr,
         )
-        return fetched
+        return fetched, errors
+
+    def fetch_workspace_ai(
+        self, instance_id: str, destination: Path
+    ) -> tuple[int, list[str]]:
+        """Mirror every `.ai/` file exposed by the current workspace API."""
+        return self.fetch_tree(
+            instance_id,
+            tree_name="workspace-tree",
+            file_name="workspace",
+            destination=destination,
+            source_prefix=".ai",
+        )
 
 
 def _flatten_tree(node: object, prefix: str = "") -> list[str]:
@@ -277,13 +330,24 @@ def _flatten_tree(node: object, prefix: str = "") -> list[str]:
         for item in node:
             out.extend(_flatten_tree(item, prefix))
     elif isinstance(node, str):
-        out.append(node.lstrip("/"))
+        # Preserve an absolute marker so the safety layer can reject it.
+        out.append(node if node.startswith("/") else node.lstrip("/"))
     elif isinstance(node, dict):
         path = node.get("path")
-        if path and "/" in path.strip("/"):
-            rel = path.lstrip("/")  # full path already; don't re-prefix
+        if path is not None and not isinstance(path, str):
+            return out
+        name = node.get("name")
+        if name is not None and not isinstance(name, str):
+            return out
+        if path and path.startswith("/"):
+            # Preserve an invalid absolute path for the safety layer.
+            rel = path
+        elif path and "/" in path.strip("/"):
+            # Full path already; don't re-prefix. Preserve a leading slash so
+            # an invalid absolute path is rejected rather than normalized.
+            rel = path.lstrip("/")
         else:
-            rel = f"{prefix}{path or node.get('name') or ''}".lstrip("/")
+            rel = f"{prefix}{path or name or ''}".lstrip("/")
         children = node.get("children")
         is_dir = node.get("type") == "dir" or children is not None
         if children:
@@ -292,6 +356,131 @@ def _flatten_tree(node: object, prefix: str = "") -> list[str]:
         elif rel and not is_dir:
             out.append(rel)
     return out
+
+
+def _safe_relative_path(path: str) -> str | None:
+    """Return a normalized POSIX relative path, or None for unsafe input."""
+    if not isinstance(path, str) or not path or "\\" in path or "\x00" in path:
+        return None
+    pure = PurePosixPath(path)
+    if pure.is_absolute() or any(part in ("", ".", "..") for part in pure.parts):
+        return None
+    return pure.as_posix()
+
+
+def _safe_destination(root: Path, relative: str) -> Path | None:
+    safe = _safe_relative_path(relative)
+    if safe is None:
+        return None
+    root_resolved = root.resolve()
+    destination = (root_resolved / safe).resolve()
+    try:
+        destination.relative_to(root_resolved)
+    except ValueError:
+        return None
+    return destination
+
+
+def _copy_data_subpath(data_root: Path, subpath: str, out: Path) -> int:
+    """Copy the historical capsule_out subtree from the complete data mirror."""
+    safe_subpath = _safe_relative_path(subpath.strip("/"))
+    if safe_subpath is None:
+        raise ValueError(f"unsafe --data-subpath: {subpath!r}")
+    source = _safe_destination(data_root, safe_subpath)
+    if source is None or not source.is_dir():
+        print(
+            f"WARN: no files under mirrored data/{safe_subpath}; "
+            "the pipeline may not have packaged capsule_out",
+            file=sys.stderr,
+        )
+        return 0
+    copied = 0
+    for item in source.rglob("*"):
+        if not item.is_file():
+            continue
+        relative = item.relative_to(source)
+        # The shims historically placed selected .ai evidence beneath
+        # capsule_out, and the workflows moved it out before downstream PR
+        # handling. The complete copy now comes from the raw export instead;
+        # keep the operational out/ path's established artifact-only shape.
+        if relative.parts and relative.parts[0] == "ai":
+            continue
+        destination = _safe_destination(out, relative.as_posix())
+        if destination is None:
+            raise ValueError(f"unsafe mirrored capsule path: {relative}")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(item, destination)
+        copied += 1
+    print(f"copied {copied} file(s) from data/{safe_subpath} -> {out}", file=sys.stderr)
+    return copied
+
+
+def _extract_export(archive: bytes, destination: Path) -> tuple[set[str], list[str]]:
+    """Safely extract a platform export without persisting the compressed input.
+
+    Only regular files and directories are accepted. Any unsafe member makes
+    the retrieval incomplete; links and special files are never extracted.
+    """
+    extracted: set[str] = set()
+    errors: list[str] = []
+    try:
+        opened = tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz")
+    except (tarfile.TarError, OSError) as exc:
+        return extracted, [f"export archive unreadable: {exc}"]
+
+    with opened as tar:
+        for member in tar.getmembers():
+            safe_name = _safe_relative_path(member.name.rstrip("/"))
+            if safe_name is None:
+                errors.append(f"export: rejected unsafe member path {member.name!r}")
+                continue
+            if not (member.isdir() or member.isreg()):
+                errors.append(
+                    f"export: rejected non-regular member {member.name!r} "
+                    f"(type={member.type!r})"
+                )
+                continue
+            target = _safe_destination(destination, safe_name)
+            if target is None:
+                errors.append(f"export: member escaped destination {member.name!r}")
+                continue
+            try:
+                if member.isdir():
+                    target.mkdir(parents=True, exist_ok=True)
+                    extracted.add(safe_name)
+                    continue
+                source = tar.extractfile(member)
+                if source is None:
+                    errors.append(f"export: could not read regular member {member.name!r}")
+                    continue
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with source, target.open("wb") as output:
+                    shutil.copyfileobj(source, output)
+                extracted.add(safe_name)
+            except (OSError, tarfile.TarError) as exc:
+                errors.append(f"export: failed to extract {member.name!r}: {exc}")
+    return extracted, errors
+
+
+def _has_member(members: set[str], root: str) -> bool:
+    return root in members or any(name.startswith(root + "/") for name in members)
+
+
+def _copy_tree_files(source: Path, destination: Path) -> int:
+    copied = 0
+    if not source.is_dir():
+        return copied
+    for item in source.rglob("*"):
+        if not item.is_file():
+            continue
+        relative = item.relative_to(source).as_posix()
+        target = _safe_destination(destination, relative)
+        if target is None:
+            raise ValueError(f"unsafe extracted path: {relative!r}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(item, target)
+        copied += 1
+    return copied
 
 
 def main() -> int:
@@ -319,9 +508,22 @@ def main() -> int:
     ap.add_argument(
         "--meta-dir",
         default="",
-        help="dir for run metadata (events.json, final-status.json, instance_id.txt); "
-        "keep it OUT of --out so downstream capsule-artifact secret gates don't scan it. "
-        "Defaults to --out.",
+        help="dir for run metadata; defaults to <evidence-dir>/metadata",
+    )
+    ap.add_argument(
+        "--evidence-dir",
+        required=True,
+        help="dir for the safely extracted raw export and retrieval metadata",
+    )
+    ap.add_argument(
+        "--workspace-ai-dir",
+        required=True,
+        help="dir receiving .ai files fetched through the workspace API",
+    )
+    ap.add_argument(
+        "--logs-dir",
+        required=True,
+        help="dir receiving the authoritative raw pipeline_logs tree",
     )
     ap.add_argument(
         "--data-subpath", default="capsule", help="/data/<subpath> tree to pull back"
@@ -345,8 +547,11 @@ def main() -> int:
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    meta = Path(args.meta_dir) if args.meta_dir else out
+    evidence = Path(args.evidence_dir)
+    evidence.mkdir(parents=True, exist_ok=True)
+    meta = Path(args.meta_dir) if args.meta_dir else evidence / "metadata"
     meta.mkdir(parents=True, exist_ok=True)
+    workspace_ai = Path(args.workspace_ai_dir)
     input_params = json.loads(Path(args.params_file).read_text())
 
     client = Compute(args.url, token)
@@ -368,6 +573,7 @@ def main() -> int:
     # a healthy queued instance). Only a sustained outage gives up.
     started = time.monotonic()
     final: dict = {}
+    poll_failure = ""
     consecutive_fail = 0
     max_consec_fail = 30  # ~5 min at the default 10s interval before giving up
     while True:
@@ -375,17 +581,18 @@ def main() -> int:
         if got is None:
             consecutive_fail += 1
             if consecutive_fail >= max_consec_fail:
-                _die(
-                    f"status poll failed {max_consec_fail}x in a row -- backend "
-                    f"unreachable; last known status "
-                    f"'{final.get('status', '<none>')}'",
-                    1,
+                poll_failure = (
+                    f"status poll failed {max_consec_fail}x in a row; last known "
+                    f"status '{final.get('status', '<none>')}'"
                 )
+                print(f"WARN: {poll_failure}; attempting evidence retrieval", file=sys.stderr)
+                break
             if args.timeout and (time.monotonic() - started) >= args.timeout:
                 print(
                     f"WARN: timeout ({args.timeout}s) during poll failures",
                     file=sys.stderr,
                 )
+                poll_failure = f"poll timeout after {args.timeout}s during status failures"
                 break
             time.sleep(args.poll_interval)
             continue
@@ -402,19 +609,95 @@ def main() -> int:
             print("WARN: awaiting_input but no answerable gate found", file=sys.stderr)
         if args.timeout and (time.monotonic() - started) >= args.timeout:
             print(f"WARN: timeout ({args.timeout}s) still '{st}'", file=sys.stderr)
+            poll_failure = f"poll timeout after {args.timeout}s while status was {st!r}"
             break
         time.sleep(args.poll_interval)
 
-    # Phase 3: pull events + final status into meta (NOT --out, so the capsule
-    # secret gate never scans them), then the capsule_out data into --out.
-    (meta / "events.json").write_bytes(client.events_raw(instance_id))
+    # Phase 3: mirror first, interpret later. This runs for completed,
+    # terminal non-success, timeout, and sustained poll failure outcomes.
+    # Current API composition: /export is authoritative for raw events, logs,
+    # artifact data, and optional workspace .resolve material. Workspace .ai
+    # is independently enumerated and fetched through the workspace API.
+    retrieval_errors: list[str] = []
     (meta / "final-status.json").write_text(json.dumps(final, indent=2))
-    client.fetch_data(instance_id, args.data_subpath, out)
+    if poll_failure:
+        (meta / "poll-failure.txt").write_text(poll_failure + "\n")
+        retrieval_errors.append(
+            f"polling did not reach a known terminal outcome: {poll_failure}"
+        )
+
+    st = final.get("status")
+    run_exit_code = 0 if st == _SUCCESS else 1
+    (meta / "run-exit-code.txt").write_text(f"{run_exit_code}\n")
+
+    # Preserve additional generic metadata exposed by the service. There is
+    # no session-list endpoint, so transcripts are not guessed from UUID-like
+    # strings; all `.ai` paths exposed by the workspace API are fetched.
+    for endpoint, filename in (
+        ("state", "state.json"),
+        ("artifacts", "artifacts.json"),
+        ("logs", "logs.json"),
+    ):
+        code, parsed, raw = client._request(
+            "GET", f"/api/instances/{instance_id}/{endpoint}"
+        )
+        if code < 400 and parsed is not None:
+            (meta / filename).write_text(json.dumps(parsed, indent=2))
+        elif code not in (404,):
+            retrieval_errors.append(f"{endpoint}: HTTP {code}: {raw.strip()[:200]}")
+
+    export_code, export_body = client.export_raw(instance_id)
+    export_members: set[str] = set()
+    if export_code < 400 and export_code != 0:
+        export_members, export_errors = _extract_export(export_body, evidence)
+        retrieval_errors.extend(export_errors)
+    else:
+        retrieval_errors.append(f"export: HTTP {export_code}")
+
+    if "_export_omitted.txt" in export_members:
+        retrieval_errors.append(
+            "export: _export_omitted.txt is present; the platform omitted archive members"
+        )
+
+    for required_root in _REQUIRED_EXPORT_ROOTS:
+        if not _has_member(export_members, required_root):
+            retrieval_errors.append(
+                f"export: required authoritative root {required_root!r} is missing"
+            )
+
+    evidence_workspace_ai = evidence / "workspace_ai"
+    _, workspace_errors = client.fetch_workspace_ai(
+        instance_id, evidence_workspace_ai
+    )
+    retrieval_errors.extend(workspace_errors)
+    _copy_tree_files(evidence_workspace_ai, workspace_ai)
+
+    # Map authoritative raw pipeline logs to the same local logs root the
+    # in-runner workflows upload. Keep the archive-shaped copy in evidence too.
+    logs_destination = Path(args.logs_dir)
+    logs_destination.mkdir(parents=True, exist_ok=True)
+    _copy_tree_files(evidence / "pipeline_logs", logs_destination)
+
+    _copy_data_subpath(evidence / "artifacts" / "data", args.data_subpath, out)
+
+    (meta / "retrieval-errors.json").write_text(
+        json.dumps({"errors": retrieval_errors}, indent=2)
+    )
+    retrieval_complete = not retrieval_errors
+    (meta / "retrieval-complete.txt").write_text(
+        ("true" if retrieval_complete else "false") + "\n"
+    )
 
     print(instance_id)  # last stdout line = instance id (for the workflow)
-    st = final.get("status")
     if st != _SUCCESS:
-        _die(f"instance {instance_id} ended '{st}' (see {meta}/events.json)", 1)
+        detail = poll_failure or f"instance ended {st!r}"
+        _die(f"instance {instance_id}: {detail} (see {meta})", 1)
+    if not retrieval_complete:
+        _die(
+            f"instance {instance_id} completed but evidence retrieval was incomplete "
+            f"(see {meta}/retrieval-errors.json)",
+            1,
+        )
     return 0
 
 
