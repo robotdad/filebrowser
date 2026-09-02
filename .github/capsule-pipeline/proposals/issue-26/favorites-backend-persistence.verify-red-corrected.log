@@ -1,0 +1,59 @@
+=== Favorites backend-persistence gate ===
+Repo root: /tmp/filebrowser-capsule-proof-base
+
+--- AC-1 ---
+Using CPython 3.13.12
+Creating virtual environment at: .venv
+   Building filebrowser @ file:///tmp/filebrowser-capsule-proof-base
+      Built filebrowser @ file:///tmp/filebrowser-capsule-proof-base
+Installed 32 packages in 5ms
+2026-09-01 17:03:55,940 INFO filebrowser.main: Filebrowser starting (log_level=info)
+  new routes discovered: []
+RESULT: ADD=FAIL ROUTE=None
+2026-09-01 17:03:56,205 INFO filebrowser.main: Filebrowser starting (log_level=info)
+  new routes discovered: []
+RESULT: PRESENT=no ROUTE=None
+2026-09-01 17:03:56,421 INFO filebrowser.main: Filebrowser starting (log_level=info)
+  new routes discovered: []
+RESULT: PRESENT=no ROUTE=None
+UNMET AC-1: add='RESULT: ADD=FAIL ROUTE=None' same-data_dir-read='RESULT: PRESENT=no ROUTE=None' cross-data_dir-read='RESULT: PRESENT=no ROUTE=None' (need ADD=OK, PRESENT=yes under the same data_dir, and PRESENT=no under a different data_dir)
+--- AC-2 ---
+2026-09-01 17:03:56,643 INFO filebrowser.main: Filebrowser starting (log_level=info)
+  new routes discovered: []
+RESULT: ADD=FAIL ROUTE=None
+2026-09-01 17:03:56,831 INFO filebrowser.main: Filebrowser starting (log_level=info)
+  new routes discovered: []
+RESULT: ADD=FAIL ROUTE=None
+UNMET AC-2: cannot set up (no working add surface): A='RESULT: ADD=FAIL ROUTE=None' B='RESULT: ADD=FAIL ROUTE=None'
+--- AC-3 ---
+2026-09-01 17:03:57,013 INFO filebrowser.main: Filebrowser starting (log_level=info)
+  new routes discovered: []
+  variant add results for path_a (['/tmp/tmp.ua2RQBBf9N/f07fsMB5nn', '/tmp/tmp.ua2RQBBf9N/f07fsMB5nn/.', '/tmp/tmp.ua2RQBBf9N/f07fsMB5nn/e0le57/..']): [False, False, False]
+  add result for distinct path_b: False
+RESULT: ADDED_A=no COUNT_A=0 PRESENT_B=no
+2026-09-01 17:03:57,224 INFO filebrowser.main: Filebrowser starting (log_level=info)
+  new routes discovered: []
+RESULT: COUNT_A=0 ROUTE=None
+UNMET AC-3: same-process result='RESULT: ADDED_A=no COUNT_A=0 PRESENT_B=no' fresh-process count='RESULT: COUNT_A=0 ROUTE=None' (need ADDED_A=yes, COUNT_A=1 both times, PRESENT_B=yes)
+--- AC-4 [guard] ---
+2026-09-01 17:03:57,444 INFO filebrowser.main: Filebrowser starting (log_level=info)
+2026-09-01 17:03:57,469 INFO filebrowser.services.locations: Location added: id=1 path=/tmp/tmp.ua2RQBBf9N/cCDcrnnFFZ name=cCDcrnnFFZ
+2026-09-01 17:03:57,469 INFO filebrowser.routes.locations: Location added by user=probe-y6ju2p path=/tmp/tmp.ua2RQBBf9N/cCDcrnnFFZ
+2026-09-01 17:03:57,470 INFO httpx: HTTP Request: POST http://testserver/api/locations "HTTP/1.1 200 OK"
+2026-09-01 17:03:57,471 INFO httpx: HTTP Request: GET http://testserver/api/locations "HTTP/1.1 200 OK"
+2026-09-01 17:03:57,473 INFO filebrowser.services.locations: Location removed: id=1
+2026-09-01 17:03:57,473 INFO filebrowser.routes.locations: Location removed by user=probe-pv7odm id=1
+2026-09-01 17:03:57,473 INFO httpx: HTTP Request: DELETE http://testserver/api/locations/1 "HTTP/1.1 200 OK"
+2026-09-01 17:03:57,474 INFO httpx: HTTP Request: GET http://testserver/api/locations "HTTP/1.1 200 OK"
+2026-09-01 17:03:57,476 INFO httpx: HTTP Request: DELETE http://testserver/api/locations/948060 "HTTP/1.1 404 Not Found"
+RESULT: GUARD_HTTP=OK
+..............                                                           [100%]
+14 passed in 0.02s
+MET   AC-4: direct HTTP add/list/delete + negative-space (bad id refused) all behave correctly, AND the repo's own tests/test_locations.py suite passes unchanged
+
+=== Census ===
+AC-1: UNMET
+AC-2: UNMET
+AC-3: UNMET
+AC-4: MET
+Result: SOME ACCEPTANCE CRITERIA UNMET

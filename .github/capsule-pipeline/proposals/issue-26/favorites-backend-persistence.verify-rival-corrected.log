@@ -1,0 +1,111 @@
+=== Favorites backend-persistence gate ===
+Repo root: /tmp/filebrowser-capsule-proof-rival
+
+--- AC-1 ---
+Using CPython 3.13.12
+Creating virtual environment at: .venv
+   Building filebrowser @ file:///tmp/filebrowser-capsule-proof-rival
+      Built filebrowser @ file:///tmp/filebrowser-capsule-proof-rival
+Installed 32 packages in 6ms
+2026-09-01 17:04:05,734 INFO filebrowser.main: Filebrowser starting (log_level=info)
+2026-09-01 17:04:05,767 INFO filebrowser.services.favorites: Favorite added: path=/tmp/tmp.dhLGEQsqJW/UNnpRHcQmy
+2026-09-01 17:04:05,767 INFO filebrowser.routes.favorites: Favorite added by user=probe-65nkin path=/tmp/tmp.dhLGEQsqJW/UNnpRHcQmy
+2026-09-01 17:04:05,768 INFO httpx: HTTP Request: POST http://testserver/api/favorites "HTTP/1.1 200 OK"
+  new routes discovered: [('GET', '/api/favorites'), ('POST', '/api/favorites'), ('DELETE', '/api/favorites')]
+  add candidate /api/favorites: status=200 body='{"path":"/tmp/tmp.dhLGEQsqJW/UNnpRHcQmy"}'
+RESULT: ADD=OK ROUTE=/api/favorites
+2026-09-01 17:04:05,999 INFO filebrowser.main: Filebrowser starting (log_level=info)
+2026-09-01 17:04:06,013 INFO httpx: HTTP Request: GET http://testserver/api/favorites "HTTP/1.1 200 OK"
+  new routes discovered: [('GET', '/api/favorites'), ('POST', '/api/favorites'), ('DELETE', '/api/favorites')]
+  list candidate /api/favorites: status=200
+RESULT: PRESENT=yes ROUTE=/api/favorites
+2026-09-01 17:04:06,218 INFO filebrowser.main: Filebrowser starting (log_level=info)
+2026-09-01 17:04:06,232 INFO httpx: HTTP Request: GET http://testserver/api/favorites "HTTP/1.1 200 OK"
+  new routes discovered: [('GET', '/api/favorites'), ('POST', '/api/favorites'), ('DELETE', '/api/favorites')]
+  list candidate /api/favorites: status=200
+RESULT: PRESENT=no ROUTE=None
+MET   AC-1: add via HTTP API in process 1, present via HTTP API in a fresh process 2 against the same data_dir (/tmp/tmp.dhLGEQsqJW/Alx2XVwO4B), and absent via HTTP API in a fresh process 3 against a different data_dir (/tmp/tmp.dhLGEQsqJW/ewHhs9XC7g)
+--- AC-2 ---
+2026-09-01 17:04:06,429 INFO filebrowser.main: Filebrowser starting (log_level=info)
+2026-09-01 17:04:06,443 INFO filebrowser.services.favorites: Favorite added: path=/tmp/tmp.dhLGEQsqJW/eR2J7Wgs6B
+2026-09-01 17:04:06,443 INFO filebrowser.routes.favorites: Favorite added by user=probe-2dwcfs path=/tmp/tmp.dhLGEQsqJW/eR2J7Wgs6B
+2026-09-01 17:04:06,444 INFO httpx: HTTP Request: POST http://testserver/api/favorites "HTTP/1.1 200 OK"
+  new routes discovered: [('GET', '/api/favorites'), ('POST', '/api/favorites'), ('DELETE', '/api/favorites')]
+  add candidate /api/favorites: status=200 body='{"path":"/tmp/tmp.dhLGEQsqJW/eR2J7Wgs6B"}'
+RESULT: ADD=OK ROUTE=/api/favorites
+2026-09-01 17:04:06,656 INFO filebrowser.main: Filebrowser starting (log_level=info)
+2026-09-01 17:04:06,669 INFO filebrowser.services.favorites: Favorite added: path=/tmp/tmp.dhLGEQsqJW/caLqtlA8Xr
+2026-09-01 17:04:06,669 INFO filebrowser.routes.favorites: Favorite added by user=probe-un62xf path=/tmp/tmp.dhLGEQsqJW/caLqtlA8Xr
+2026-09-01 17:04:06,669 INFO httpx: HTTP Request: POST http://testserver/api/favorites "HTTP/1.1 200 OK"
+  new routes discovered: [('GET', '/api/favorites'), ('POST', '/api/favorites'), ('DELETE', '/api/favorites')]
+  add candidate /api/favorites: status=200 body='{"path":"/tmp/tmp.dhLGEQsqJW/caLqtlA8Xr"}'
+RESULT: ADD=OK ROUTE=/api/favorites
+  AC-2 removal target chosen at runtime: A (first-added); expected survivor: B (second-added)
+2026-09-01 17:04:06,883 INFO filebrowser.main: Filebrowser starting (log_level=info)
+2026-09-01 17:04:06,897 INFO filebrowser.services.favorites: Favorite removed: path=/tmp/tmp.dhLGEQsqJW/eR2J7Wgs6B
+2026-09-01 17:04:06,897 INFO filebrowser.routes.favorites: Favorite removed by user=probe-0megz1 path=/tmp/tmp.dhLGEQsqJW/eR2J7Wgs6B
+2026-09-01 17:04:06,898 INFO httpx: HTTP Request: DELETE http://testserver/api/favorites?path=%2Ftmp%2Ftmp.dhLGEQsqJW%2FeR2J7Wgs6B "HTTP/1.1 200 OK"
+  new routes discovered: [('GET', '/api/favorites'), ('POST', '/api/favorites'), ('DELETE', '/api/favorites')]
+  remove candidate /api/favorites (query): status=200
+RESULT: REMOVE=OK ROUTE=/api/favorites
+2026-09-01 17:04:07,110 INFO filebrowser.main: Filebrowser starting (log_level=info)
+2026-09-01 17:04:07,125 INFO httpx: HTTP Request: GET http://testserver/api/favorites "HTTP/1.1 200 OK"
+  new routes discovered: [('GET', '/api/favorites'), ('POST', '/api/favorites'), ('DELETE', '/api/favorites')]
+  list candidate /api/favorites: status=200
+RESULT: PRESENT=no ROUTE=None
+2026-09-01 17:04:07,337 INFO filebrowser.main: Filebrowser starting (log_level=info)
+2026-09-01 17:04:07,350 INFO httpx: HTTP Request: GET http://testserver/api/favorites "HTTP/1.1 200 OK"
+  new routes discovered: [('GET', '/api/favorites'), ('POST', '/api/favorites'), ('DELETE', '/api/favorites')]
+  list candidate /api/favorites: status=200
+RESULT: PRESENT=yes ROUTE=/api/favorites
+MET   AC-2: path-identified remove of the RUNTIME-CHOSEN target (A (first-added)) in process 1, absence of that target AND continued presence of the non-targeted sibling (B (second-added)) both confirmed via HTTP API in fresh processes (data_dir=/tmp/tmp.dhLGEQsqJW/s30rDvMAkL) -- proves disk-backed, path-selective removal that cannot be satisfied by insertion-order position alone
+--- AC-3 ---
+2026-09-01 17:04:07,538 INFO filebrowser.main: Filebrowser starting (log_level=info)
+2026-09-01 17:04:07,550 INFO filebrowser.services.favorites: Favorite added: path=/tmp/tmp.dhLGEQsqJW/J4oMdRQDB7
+2026-09-01 17:04:07,550 INFO filebrowser.routes.favorites: Favorite added by user=probe-y2m6yq path=/tmp/tmp.dhLGEQsqJW/J4oMdRQDB7
+2026-09-01 17:04:07,550 INFO httpx: HTTP Request: POST http://testserver/api/favorites "HTTP/1.1 200 OK"
+2026-09-01 17:04:07,551 INFO filebrowser.routes.favorites: Favorite added by user=probe-7cn4gl path=/tmp/tmp.dhLGEQsqJW/J4oMdRQDB7/.
+2026-09-01 17:04:07,552 INFO httpx: HTTP Request: POST http://testserver/api/favorites "HTTP/1.1 200 OK"
+2026-09-01 17:04:07,553 INFO filebrowser.routes.favorites: Favorite added by user=probe-x6lq8u path=/tmp/tmp.dhLGEQsqJW/J4oMdRQDB7/wa6w5d/..
+2026-09-01 17:04:07,554 INFO httpx: HTTP Request: POST http://testserver/api/favorites "HTTP/1.1 200 OK"
+2026-09-01 17:04:07,556 INFO filebrowser.services.favorites: Favorite added: path=/tmp/tmp.dhLGEQsqJW/btUE3aPoQ7
+2026-09-01 17:04:07,556 INFO filebrowser.routes.favorites: Favorite added by user=probe-ovxobe path=/tmp/tmp.dhLGEQsqJW/btUE3aPoQ7
+2026-09-01 17:04:07,556 INFO httpx: HTTP Request: POST http://testserver/api/favorites "HTTP/1.1 200 OK"
+2026-09-01 17:04:07,558 INFO httpx: HTTP Request: GET http://testserver/api/favorites "HTTP/1.1 200 OK"
+2026-09-01 17:04:07,560 INFO httpx: HTTP Request: GET http://testserver/api/favorites "HTTP/1.1 200 OK"
+  new routes discovered: [('GET', '/api/favorites'), ('POST', '/api/favorites'), ('DELETE', '/api/favorites')]
+  add candidate /api/favorites: status=200 body='{"path":"/tmp/tmp.dhLGEQsqJW/J4oMdRQDB7"}'
+  add candidate /api/favorites: status=200 body='{"path":"/tmp/tmp.dhLGEQsqJW/J4oMdRQDB7"}'
+  add candidate /api/favorites: status=200 body='{"path":"/tmp/tmp.dhLGEQsqJW/J4oMdRQDB7"}'
+  variant add results for path_a (['/tmp/tmp.dhLGEQsqJW/J4oMdRQDB7', '/tmp/tmp.dhLGEQsqJW/J4oMdRQDB7/.', '/tmp/tmp.dhLGEQsqJW/J4oMdRQDB7/wa6w5d/..']): [True, True, True]
+  add candidate /api/favorites: status=200 body='{"path":"/tmp/tmp.dhLGEQsqJW/btUE3aPoQ7"}'
+  add result for distinct path_b: True
+  list candidate /api/favorites: status=200
+RESULT: ADDED_A=yes COUNT_A=1 PRESENT_B=yes
+2026-09-01 17:04:07,732 INFO filebrowser.main: Filebrowser starting (log_level=info)
+2026-09-01 17:04:07,746 INFO httpx: HTTP Request: GET http://testserver/api/favorites "HTTP/1.1 200 OK"
+  new routes discovered: [('GET', '/api/favorites'), ('POST', '/api/favorites'), ('DELETE', '/api/favorites')]
+RESULT: COUNT_A=1 ROUTE=/api/favorites
+MET   AC-3: 3 differently-spelled resolved-equal variants of one path collapsed to exactly 1 stored entry, a genuinely distinct path was NOT merged into it, and the count-of-1 survived a fresh OS process (data_dir=/tmp/tmp.dhLGEQsqJW/ppOjiHPEtX)
+--- AC-4 [guard] ---
+2026-09-01 17:04:07,949 INFO filebrowser.main: Filebrowser starting (log_level=info)
+2026-09-01 17:04:07,962 INFO filebrowser.services.locations: Location added: id=1 path=/tmp/tmp.dhLGEQsqJW/chN90haKrA name=chN90haKrA
+2026-09-01 17:04:07,962 INFO filebrowser.routes.locations: Location added by user=probe-m85sy4 path=/tmp/tmp.dhLGEQsqJW/chN90haKrA
+2026-09-01 17:04:07,963 INFO httpx: HTTP Request: POST http://testserver/api/locations "HTTP/1.1 200 OK"
+2026-09-01 17:04:07,965 INFO httpx: HTTP Request: GET http://testserver/api/locations "HTTP/1.1 200 OK"
+2026-09-01 17:04:07,966 INFO filebrowser.services.locations: Location removed: id=1
+2026-09-01 17:04:07,966 INFO filebrowser.routes.locations: Location removed by user=probe-ru4vg3 id=1
+2026-09-01 17:04:07,966 INFO httpx: HTTP Request: DELETE http://testserver/api/locations/1 "HTTP/1.1 200 OK"
+2026-09-01 17:04:07,968 INFO httpx: HTTP Request: GET http://testserver/api/locations "HTTP/1.1 200 OK"
+2026-09-01 17:04:07,969 INFO httpx: HTTP Request: DELETE http://testserver/api/locations/920604 "HTTP/1.1 404 Not Found"
+RESULT: GUARD_HTTP=OK
+..............                                                           [100%]
+14 passed in 0.02s
+MET   AC-4: direct HTTP add/list/delete + negative-space (bad id refused) all behave correctly, AND the repo's own tests/test_locations.py suite passes unchanged
+
+=== Census ===
+AC-1: MET
+AC-2: MET
+AC-3: MET
+AC-4: MET
+Result: ALL ACCEPTANCE CRITERIA MET

@@ -1,0 +1,186 @@
+diff --git a/filebrowser/favorites_store.py b/filebrowser/favorites_store.py
+new file mode 100644
+index 0000000..ce17fba
+--- /dev/null
++++ b/filebrowser/favorites_store.py
+@@ -0,0 +1,96 @@
++"""Plain-function, atomic-write persistence for pinned favorite folders.
++
++Deliberately NOT a service class mirroring LocationsService: favorites here
++are a top-level module of plain functions (no class, no instance state),
++the on-disk representation is a flat JSON list of resolved path strings
++(not a dict-with-"favorites"-key-of-dicts like locations.json), and writes
++go through a temp-file-then-os.replace atomic swap rather than a direct
++write_text overwrite. This is a genuinely different mechanical shape than
++a LocationsService-style class -- same observable durability/dedup/removal
++outcomes the acceptance criteria bind, different internal decomposition.
++"""
++
++import json
++import logging
++import os
++import tempfile
++from pathlib import Path
++
++logger = logging.getLogger(__name__)
++
++STORE_FILENAME = "pinned.json"
++
++
++def _store_path(data_dir: Path) -> Path:
++    return data_dir / STORE_FILENAME
++
++
++def load_favorites(data_dir: Path) -> list[str]:
++    """Return the list of stored favorite path strings (insertion order)."""
++    store = _store_path(data_dir)
++    if not store.exists():
++        return []
++    try:
++        data = json.loads(store.read_text(encoding="utf-8"))
++    except (json.JSONDecodeError, OSError):
++        logger.warning("Corrupted pinned.json \u2013 resetting")
++        return []
++    if isinstance(data, list):
++        return [str(p) for p in data]
++    return []
++
++
++def save_favorites(data_dir: Path, favorites: list[str]) -> None:
++    """Atomically persist the favorites list.
++
++    Writes to a sibling temp file and then os.replace()s it into place, so
++    a process killed mid-write can never leave a half-written store. This
++    is a different persistence strategy than a direct write_text overwrite.
++    """
++    data_dir.mkdir(parents=True, exist_ok=True)
++    store = _store_path(data_dir)
++    fd, tmp_name = tempfile.mkstemp(
++        dir=str(data_dir), prefix=".pinned-", suffix=".tmp"
++    )
++    try:
++        with os.fdopen(fd, "w", encoding="utf-8") as fh:
++            json.dump(favorites, fh, indent=2)
++        os.replace(tmp_name, store)
++    except BaseException:
++        try:
++            os.unlink(tmp_name)
++        except OSError:
++            pass
++        raise
++
++
++def resolved(path_value: str) -> str:
++    return str(Path(path_value).resolve())
++
++
++def add_favorite(data_dir: Path, path_value: str) -> str:
++    """Pin path_value; idempotent under resolved/canonicalized equality
++    (the same Path(...).resolve() rule the sibling locations feature uses).
++    Returns the stored path string (existing entry if already pinned)."""
++    target = resolved(path_value)
++    favorites = load_favorites(data_dir)
++    for existing in favorites:
++        if resolved(existing) == target:
++            return existing
++    favorites.append(target)
++    save_favorites(data_dir, favorites)
++    logger.info("Favorite pinned: path=%s", target)
++    return target
++
++
++def remove_favorite(data_dir: Path, path_value: str) -> bool:
++    """Unpin whichever stored entry resolves equal to path_value. Returns
++    True if an entry was removed, False if none matched."""
++    target = resolved(path_value)
++    favorites = load_favorites(data_dir)
++    kept = [p for p in favorites if resolved(p) != target]
++    if len(kept) == len(favorites):
++        return False
++    save_favorites(data_dir, kept)
++    logger.info("Favorite unpinned: path=%s", target)
++    return True
+diff --git a/filebrowser/main.py b/filebrowser/main.py
+index 8c5a0c7..308422f 100644
+--- a/filebrowser/main.py
++++ b/filebrowser/main.py
+@@ -1,11 +1,13 @@
+ import logging
+ from pathlib import Path
+ 
+-from fastapi import FastAPI, Request
++from fastapi import Body, Depends, FastAPI, HTTPException, Request
+ from fastapi.responses import JSONResponse
+ from fastapi.staticfiles import StaticFiles
+ 
++from filebrowser.auth import require_auth
+ from filebrowser.config import settings
++from filebrowser.favorites_store import add_favorite, load_favorites, remove_favorite
+ from filebrowser.routes import auth, files, locations
+ 
+ logging.basicConfig(
+@@ -36,6 +38,64 @@ app.include_router(auth.router)
+ app.include_router(files.router)
+ app.include_router(locations.router)
+ 
++
++# --- Pinned favorites -------------------------------------------------------
++# Deliberately NOT a separate routes/favorites.py + services/favorites.py
++# pair mirroring the locations feature's module split: these three
++# endpoints are declared directly on `app` and call straight into the
++# plain functions in filebrowser/favorites_store.py (no service class, no
++# per-request instance to construct). Same observable behavior the
++# acceptance criteria bind (durable add/remove by path value, resolved-path
++# dedup), different module placement and decomposition.
++
++
++@app.get("/api/favorites")
++async def get_favorites(username: str = Depends(require_auth)):
++    return load_favorites(settings.data_dir)
++
++
++@app.post("/api/favorites")
++async def post_favorite(payload: dict = Body(...), username: str = Depends(require_auth)):
++    path_value = payload.get("path")
++    if not path_value:
++        raise HTTPException(
++            status_code=400,
++            detail={"error": "Missing path value", "code": "MISSING_PATH"},
++        )
++    stored = add_favorite(settings.data_dir, path_value)
++    logger.info("Favorite pinned by user=%s path=%s", username, stored)
++    return {"path": stored}
++
++
++@app.delete("/api/favorites")
++async def delete_favorite(
++    request: Request,
++    path: str | None = None,
++    username: str = Depends(require_auth),
++):
++    path_value = path
++    if not path_value:
++        try:
++            body = await request.json()
++        except Exception:
++            body = None
++        if isinstance(body, dict):
++            path_value = body.get("path")
++    if not path_value:
++        raise HTTPException(
++            status_code=400,
++            detail={"error": "Missing path value", "code": "MISSING_PATH"},
++        )
++    removed = remove_favorite(settings.data_dir, path_value)
++    if not removed:
++        raise HTTPException(
++            status_code=404,
++            detail={"error": "Favorite not found", "code": "NOT_FOUND"},
++        )
++    logger.info("Favorite unpinned by user=%s path=%s", username, path_value)
++    return {"ok": True}
++
++
+ if settings.terminal_enabled:
+     from filebrowser.routes import terminal
+ 

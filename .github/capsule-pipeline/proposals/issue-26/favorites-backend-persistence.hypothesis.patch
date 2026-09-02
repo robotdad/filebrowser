@@ -1,0 +1,169 @@
+diff --git a/filebrowser/main.py b/filebrowser/main.py
+index 8c5a0c7..834194c 100644
+--- a/filebrowser/main.py
++++ b/filebrowser/main.py
+@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
+ from fastapi.staticfiles import StaticFiles
+ 
+ from filebrowser.config import settings
+-from filebrowser.routes import auth, files, locations
++from filebrowser.routes import auth, favorites, files, locations
+ 
+ logging.basicConfig(
+     level=getattr(logging, settings.log_level.upper(), logging.INFO),
+@@ -35,6 +35,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
+ app.include_router(auth.router)
+ app.include_router(files.router)
+ app.include_router(locations.router)
++app.include_router(favorites.router)
+ 
+ if settings.terminal_enabled:
+     from filebrowser.routes import terminal
+diff --git a/filebrowser/routes/favorites.py b/filebrowser/routes/favorites.py
+new file mode 100644
+index 0000000..248c573
+--- /dev/null
++++ b/filebrowser/routes/favorites.py
+@@ -0,0 +1,72 @@
++import logging
++
++from fastapi import APIRouter, Depends, HTTPException, Request
++from pydantic import BaseModel
++
++from filebrowser.auth import require_auth
++from filebrowser.config import settings
++from filebrowser.services.favorites import FavoritesService
++
++logger = logging.getLogger(__name__)
++
++router = APIRouter(prefix="/api/favorites", tags=["favorites"])
++
++
++def get_favorites_service() -> FavoritesService:
++    return FavoritesService(settings.data_dir)
++
++
++@router.get("")
++async def list_favorites(
++    username: str = Depends(require_auth),
++    svc: FavoritesService = Depends(get_favorites_service),
++):
++    return svc.list()
++
++
++class AddFavoriteRequest(BaseModel):
++    path: str
++
++
++@router.post("")
++async def add_favorite(
++    body: AddFavoriteRequest,
++    username: str = Depends(require_auth),
++    svc: FavoritesService = Depends(get_favorites_service),
++):
++    entry = svc.add(body.path)
++    logger.info("Favorite added by user=%s path=%s", username, body.path)
++    return entry
++
++
++@router.delete("")
++async def remove_favorite(
++    request: Request,
++    path: str | None = None,
++    username: str = Depends(require_auth),
++    svc: FavoritesService = Depends(get_favorites_service),
++):
++    # The path value may arrive as a query string parameter OR as a JSON
++    # request body (the acceptance criteria explicitly allow either shape).
++    if not path:
++        try:
++            body = await request.json()
++        except Exception:
++            body = None
++        if isinstance(body, dict):
++            path = body.get("path")
++
++    if not path:
++        raise HTTPException(
++            status_code=400,
++            detail={"error": "Missing path value", "code": "MISSING_PATH"},
++        )
++
++    try:
++        svc.remove(path)
++    except KeyError as exc:
++        raise HTTPException(
++            status_code=404, detail={"error": str(exc), "code": "NOT_FOUND"}
++        )
++    logger.info("Favorite removed by user=%s path=%s", username, path)
++    return {"ok": True}
+diff --git a/filebrowser/services/favorites.py b/filebrowser/services/favorites.py
+new file mode 100644
+index 0000000..d78a12a
+--- /dev/null
++++ b/filebrowser/services/favorites.py
+@@ -0,0 +1,64 @@
++import json
++import logging
++from pathlib import Path
++
++logger = logging.getLogger(__name__)
++
++_INITIAL_STATE: dict = {"favorites": []}
++
++
++class FavoritesService:
++    """On-disk store for pinned favorite folders, mirroring the persistence
++    pattern of the sibling LocationsService but identifying entries by
++    resolved path value rather than a numeric id (per the acceptance
++    criteria: favorites are added/removed by path, not id)."""
++
++    def __init__(self, data_dir: Path) -> None:
++        self._data_dir = data_dir
++        self._store = data_dir / "favorites.json"
++
++    def _load(self) -> dict:
++        if not self._store.exists():
++            return {"favorites": []}
++        try:
++            return json.loads(self._store.read_text(encoding="utf-8"))
++        except (json.JSONDecodeError, OSError):
++            logger.warning("Corrupted favorites.json – resetting")
++            return {"favorites": []}
++
++    def _save(self, state: dict) -> None:
++        self._data_dir.mkdir(parents=True, exist_ok=True)
++        self._store.write_text(json.dumps(state, indent=2), encoding="utf-8")
++
++    def list(self) -> list[dict]:
++        return self._load()["favorites"]
++
++    def add(self, path: str) -> dict:
++        """Add a favorite by path. Idempotent: if a resolved-equal path is
++        already stored, returns the existing entry rather than creating a
++        duplicate (per AC-3's resolved/canonicalized equality rule)."""
++        resolved = Path(path).resolve()
++        state = self._load()
++
++        for fav in state["favorites"]:
++            if Path(fav["path"]).resolve() == resolved:
++                return fav
++
++        entry: dict = {"path": str(resolved)}
++        state["favorites"].append(entry)
++        self._save(state)
++        logger.info("Favorite added: path=%s", resolved)
++        return entry
++
++    def remove(self, path: str) -> None:
++        """Remove a favorite identified by its (resolved) path value."""
++        resolved = Path(path).resolve()
++        state = self._load()
++        before = len(state["favorites"])
++        state["favorites"] = [
++            fav for fav in state["favorites"] if Path(fav["path"]).resolve() != resolved
++        ]
++        if len(state["favorites"]) == before:
++            raise KeyError(f"Favorite not found: {path}")
++        self._save(state)
++        logger.info("Favorite removed: path=%s", resolved)
