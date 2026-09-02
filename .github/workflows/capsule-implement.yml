@@ -345,8 +345,8 @@ jobs:
         id: output_secret_gate
         if: always() && steps.locate.outputs.skip != 'true'
         env:
-          CAPSULE_PR_TOKEN: [REDACTED:SECRET]
-          GITHUB_TOKEN: [REDACTED:SECRET]
+          CAPSULE_PR_TOKEN: ${{ secrets.CAPSULE_PR_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           echo "output_clean=false" >> "$GITHUB_OUTPUT"

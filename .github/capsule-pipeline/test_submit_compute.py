@@ -476,18 +476,23 @@ class WorkflowContractTests(unittest.TestCase):
     def _text(self, name: str) -> str:
         return (self.WORKFLOWS / name).read_text()
 
-    def test_timeout_headroom_is_at_least_thirty_minutes(self) -> None:
+    def test_timeout_headroom_matches_each_workflow_floor(self) -> None:
         expected = {
-            "capsule-specify.yml": (360, 19800),
-            "feature-specify.yml": (250, 12600),
-            "capsule-implement.yml": (330, 17400),
+            "capsule-specify.yml": (360, 19800, 1800),
+            # A real run overshot the graph's between-node fuse by about three
+            # minutes. Keep the client at 240 minutes so it sees the terminal
+            # state, with 10 minutes left for retrieval and publication.
+            "feature-specify.yml": (250, 14400, 600),
+            "capsule-implement.yml": (330, 17400, 1800),
         }
-        for name, (job_minutes, client_seconds) in expected.items():
+        for name, (job_minutes, client_seconds, minimum_headroom) in expected.items():
             with self.subTest(workflow=name):
                 text = self._text(name)
                 self.assertRegex(text, rf"timeout-minutes:\s*{job_minutes}\b")
                 self.assertRegex(text, rf"--timeout\s+{client_seconds}\b")
-                self.assertGreaterEqual(job_minutes * 60 - client_seconds, 1800)
+                self.assertGreaterEqual(
+                    job_minutes * 60 - client_seconds, minimum_headroom
+                )
 
     def test_run_exit_and_retrieval_outputs_are_captured_despite_shell_errexit(self) -> None:
         for name in (
