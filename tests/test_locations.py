@@ -1,5 +1,8 @@
 """Tests for LocationsService."""
 
+import os
+import unittest.mock
+
 import pytest
 
 from filebrowser.services.locations import LocationsService
@@ -127,3 +130,62 @@ class TestIdsAreStable:
         ids = [e["id"] for e in entries]
         assert ids == list(range(1, 6))
         assert len(set(ids)) == 5  # all unique
+
+
+# ---------------------------------------------------------------------------
+# NEW TESTS -- added to satisfy goal item 2 (durable writes in LocationsService)
+# ---------------------------------------------------------------------------
+
+
+class TestDurableWritesLocations:
+    """Goal item 2: interrupted write must not corrupt the locations store."""
+
+    def test_prior_locations_survive_simulated_write_failure(self, tmp_path):
+        """Simulate a failed save during a second add.
+
+        The first add must have committed its data durably; after the
+        simulated failure the first entry must still be readable.
+        """
+        data_dir = tmp_path / "data"
+        svc = LocationsService(data_dir)
+        d1 = tmp_path / "loc1"
+        d1.mkdir()
+
+        # First add succeeds.
+        svc.add(str(d1))
+
+        def fail_replace(src, dst):
+            try:
+                os.unlink(src)
+            except OSError:
+                pass
+            raise OSError("simulated disk failure")
+
+        d2 = tmp_path / "loc2"
+        d2.mkdir()
+
+        with unittest.mock.patch("os.replace", side_effect=fail_replace):
+            with pytest.raises(OSError, match="simulated disk failure"):
+                svc.add(str(d2))
+
+        # The store must still be readable and contain only the first entry.
+        reloaded = LocationsService(data_dir)
+        locations = reloaded.list()
+        assert len(locations) == 1, (
+            f"Expected 1 location after failed write, got {locations!r}"
+        )
+        assert locations[0]["path"] == str(d1)
+
+    def test_partial_temp_file_does_not_corrupt_store(self, svc, real_dir):
+        """A leftover .tmp file in the data dir must not affect _load."""
+        svc.add(str(real_dir))
+
+        # Manually drop a partial/invalid temp file next to the store.
+        tmp_debris = svc._data_dir / ".locations_debris.tmp"
+        tmp_debris.write_text("{ broken json", encoding="utf-8")
+
+        # The store must still load cleanly.
+        reloaded = LocationsService(svc._data_dir)
+        locations = reloaded.list()
+        assert len(locations) == 1
+        assert locations[0]["path"] == str(real_dir)

@@ -1,5 +1,11 @@
 """Tests for FavoritesService and the /api/favorites HTTP route."""
 
+import concurrent.futures
+import json
+import os
+import threading
+import unittest.mock
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -144,15 +150,27 @@ class TestRemove:
 
 @pytest.fixture
 def client(tmp_path):
-    """TestClient exercising the real /api/favorites HTTP route."""
+    """TestClient exercising the real /api/favorites HTTP route.
+
+    ``settings.home_dir`` is patched to ``tmp_path`` so that directories
+    created under ``tmp_path`` pass the containment guard introduced by
+    the path-validation layer.
+    """
+    import filebrowser.routes.favorites as fav_route
+
     app = FastAPI()
     app.include_router(favorites_router)
     app.dependency_overrides[get_favorites_service] = lambda: FavoritesService(
         tmp_path / "data"
     )
     app.dependency_overrides[require_auth] = lambda: "testuser"
-    with TestClient(app) as c:
-        yield c
+    with unittest.mock.patch.object(
+        fav_route.settings, "home_dir", tmp_path
+    ), unittest.mock.patch.object(
+        fav_route.settings, "data_dir", tmp_path / "data"
+    ):
+        with TestClient(app) as c:
+            yield c
 
 
 class TestHttpRoute:
@@ -215,3 +233,325 @@ class TestHttpRoute:
     def test_remove_missing_path_value_is_rejected(self, client):
         response = client.request("DELETE", "/api/favorites")
         assert response.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# NEW TESTS -- added to satisfy goal items 1-7
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def validated_client(tmp_path):
+    """TestClient with settings.home_dir patched to tmp_path so that
+    path-validation tests can exercise the containment guard without
+    touching the real home directory."""
+    import filebrowser.routes.favorites as fav_route
+
+    app = FastAPI()
+    app.include_router(favorites_router)
+    app.dependency_overrides[get_favorites_service] = lambda: FavoritesService(
+        tmp_path / "data"
+    )
+    app.dependency_overrides[require_auth] = lambda: "testuser"
+
+    with unittest.mock.patch.object(
+        fav_route.settings, "home_dir", tmp_path
+    ), unittest.mock.patch.object(
+        fav_route.settings, "data_dir", tmp_path / "data"
+    ):
+        with TestClient(app) as c:
+            yield c, tmp_path
+
+
+class TestDurableWritesFavorites:
+    """Goal item 1: interrupted write must not corrupt the store."""
+
+    def test_prior_favorites_survive_simulated_write_failure(self, svc, real_dir):
+        """Simulate a failed save (e.g. disk full) during a second add.
+
+        The first add must have committed its data durably; after the
+        simulated failure the first entry must still be readable.
+        """
+        # Commit a first entry successfully.
+        svc.add(str(real_dir))
+
+        # Now simulate a write failure during the next save by patching
+        # os.replace to raise OSError after the temp file is written.
+        original_replace = os.replace
+
+        call_count = {"n": 0}
+
+        def fail_replace(src, dst):
+            call_count["n"] += 1
+            # Clean up the temp file to avoid leaving debris, then raise.
+            try:
+                os.unlink(src)
+            except OSError:
+                pass
+            raise OSError("simulated disk failure")
+
+        second_dir = real_dir.parent / "second"
+        second_dir.mkdir()
+
+        with unittest.mock.patch("os.replace", side_effect=fail_replace):
+            with pytest.raises(OSError, match="simulated disk failure"):
+                svc.add(str(second_dir))
+
+        # The store must still be readable and must contain the first entry.
+        reloaded = FavoritesService(svc._data_dir)
+        favorites = reloaded.list()
+        assert len(favorites) == 1, (
+            f"Expected 1 favorite after failed write, got {favorites!r}"
+        )
+        assert favorites[0]["path"] == str(real_dir)
+
+    def test_partial_temp_file_does_not_corrupt_store(self, svc, real_dir):
+        """A leftover .tmp file in the data dir must not affect _load."""
+        svc.add(str(real_dir))
+
+        # Manually drop a partial/invalid temp file next to the store.
+        tmp_debris = svc._data_dir / ".favorites_debris.tmp"
+        tmp_debris.write_text("{ broken json", encoding="utf-8")
+
+        # The store must still load cleanly.
+        reloaded = FavoritesService(svc._data_dir)
+        favorites = reloaded.list()
+        assert len(favorites) == 1
+        assert favorites[0]["path"] == str(real_dir)
+
+
+class TestDurableWritesLocations:
+    """Goal item 2: interrupted write must not corrupt the locations store."""
+
+    def test_prior_locations_survive_simulated_write_failure(self, tmp_path):
+        from filebrowser.services.locations import LocationsService
+
+        data_dir = tmp_path / "ldata"
+        svc = LocationsService(data_dir)
+        d1 = tmp_path / "loc1"
+        d1.mkdir()
+
+        svc.add(str(d1))
+
+        call_count = {"n": 0}
+
+        def fail_replace(src, dst):
+            call_count["n"] += 1
+            try:
+                os.unlink(src)
+            except OSError:
+                pass
+            raise OSError("simulated disk failure")
+
+        d2 = tmp_path / "loc2"
+        d2.mkdir()
+
+        with unittest.mock.patch("os.replace", side_effect=fail_replace):
+            with pytest.raises(OSError, match="simulated disk failure"):
+                svc.add(str(d2))
+
+        reloaded = LocationsService(data_dir)
+        locations = reloaded.list()
+        assert len(locations) == 1, (
+            f"Expected 1 location after failed write, got {locations!r}"
+        )
+        assert locations[0]["path"] == str(d1)
+
+
+class TestConcurrentFavorites:
+    """Goal item 3: concurrent add/remove must not lose updates."""
+
+    def test_concurrent_adds_no_lost_updates(self, tmp_path):
+        """Two threads each add a distinct directory; both must be stored."""
+        data_dir = tmp_path / "data"
+        dirs = []
+        for i in range(10):
+            d = tmp_path / f"dir{i}"
+            d.mkdir()
+            dirs.append(d)
+
+        errors = []
+
+        def add_all(worker_dirs):
+            svc = FavoritesService(data_dir)
+            for d in worker_dirs:
+                try:
+                    svc.add(str(d))
+                except Exception as exc:
+                    errors.append(exc)
+
+        half = len(dirs) // 2
+        t1 = threading.Thread(target=add_all, args=(dirs[:half],))
+        t2 = threading.Thread(target=add_all, args=(dirs[half:],))
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        assert not errors, f"Concurrent add raised errors: {errors}"
+
+        final = FavoritesService(data_dir).list()
+        stored_paths = {f["path"] for f in final}
+        for d in dirs:
+            assert str(d) in stored_paths, (
+                f"Lost update: {d} not in final store {stored_paths}"
+            )
+
+    def test_concurrent_add_and_remove_no_lost_updates(self, tmp_path):
+        """One thread adds entries while another removes them; the final
+        state must be consistent (no KeyError leaks, no phantom entries)."""
+        data_dir = tmp_path / "data"
+        svc = FavoritesService(data_dir)
+
+        # Pre-populate entries that the remover will target.
+        dirs_to_remove = []
+        for i in range(5):
+            d = tmp_path / f"remove_me_{i}"
+            d.mkdir()
+            svc.add(str(d))
+            dirs_to_remove.append(d)
+
+        dirs_to_add = []
+        for i in range(5):
+            d = tmp_path / f"add_me_{i}"
+            d.mkdir()
+            dirs_to_add.append(d)
+
+        errors = []
+
+        def adder():
+            s = FavoritesService(data_dir)
+            for d in dirs_to_add:
+                try:
+                    s.add(str(d))
+                except Exception as exc:
+                    errors.append(("add", exc))
+
+        def remover():
+            s = FavoritesService(data_dir)
+            for d in dirs_to_remove:
+                try:
+                    s.remove(str(d))
+                except KeyError:
+                    pass  # already removed by another thread -- acceptable
+                except Exception as exc:
+                    errors.append(("remove", exc))
+
+        t1 = threading.Thread(target=adder)
+        t2 = threading.Thread(target=remover)
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        assert not errors, f"Concurrent add/remove raised errors: {errors}"
+
+        final = FavoritesService(data_dir).list()
+        stored_paths = {f["path"] for f in final}
+
+        # Every successfully added entry must be present.
+        for d in dirs_to_add:
+            assert str(d) in stored_paths, (
+                f"Lost add: {d} not in final store {stored_paths}"
+            )
+
+        # None of the removed entries should remain.
+        for d in dirs_to_remove:
+            assert str(d) not in stored_paths, (
+                f"Phantom entry after remove: {d} still in {stored_paths}"
+            )
+
+
+class TestPathValidation:
+    """Goal items 4, 5, 6, 7: POST /api/favorites path validation."""
+
+    def test_empty_path_rejected_with_4xx(self, validated_client):
+        client, tmp_path = validated_client
+        response = client.post("/api/favorites", json={"path": ""})
+        assert 400 <= response.status_code < 500, (
+            f"Expected 4xx for empty path, got {response.status_code}: {response.text}"
+        )
+        # Must not be stored.
+        assert client.get("/api/favorites").json() == []
+
+    def test_empty_path_not_stored(self, validated_client):
+        """Empty path must not resolve to CWD and be stored."""
+        client, tmp_path = validated_client
+        client.post("/api/favorites", json={"path": ""})
+        favorites = client.get("/api/favorites").json()
+        # CWD must not appear as a stored favorite.
+        import os as _os
+        cwd = str(_os.getcwd())
+        stored_paths = [f["path"] for f in favorites]
+        assert cwd not in stored_paths
+
+    def test_nonexistent_path_rejected_with_4xx(self, validated_client):
+        client, tmp_path = validated_client
+        nonexistent = str(tmp_path / "does_not_exist")
+        response = client.post("/api/favorites", json={"path": nonexistent})
+        assert 400 <= response.status_code < 500, (
+            f"Expected 4xx for nonexistent path, got {response.status_code}"
+        )
+        assert client.get("/api/favorites").json() == []
+
+    def test_file_path_rejected_with_4xx(self, validated_client):
+        client, tmp_path = validated_client
+        f = tmp_path / "regular_file.txt"
+        f.write_text("hello")
+        response = client.post("/api/favorites", json={"path": str(f)})
+        assert 400 <= response.status_code < 500, (
+            f"Expected 4xx for file path, got {response.status_code}"
+        )
+        assert client.get("/api/favorites").json() == []
+
+    def test_path_outside_home_rejected_with_4xx(self, validated_client):
+        """An absolute path outside home_dir must be rejected."""
+        client, tmp_path = validated_client
+        # /tmp itself is outside tmp_path (the patched home_dir).
+        import tempfile as _tempfile
+        outside = _tempfile.gettempdir()
+        response = client.post("/api/favorites", json={"path": outside})
+        assert 400 <= response.status_code < 500, (
+            f"Expected 4xx for path outside root, got {response.status_code}: {response.text}"
+        )
+        assert client.get("/api/favorites").json() == []
+
+    def test_parent_relative_path_outside_root_rejected(self, validated_client):
+        """A path that traverses above home_dir must be rejected."""
+        client, tmp_path = validated_client
+        # Create a subdir inside home so we can attempt to escape from it.
+        sub = tmp_path / "sub"
+        sub.mkdir()
+        # Construct a path that escapes: sub/../.. goes above tmp_path.
+        escaping = str(sub) + "/../../.."
+        response = client.post("/api/favorites", json={"path": escaping})
+        assert 400 <= response.status_code < 500, (
+            f"Expected 4xx for escaping path, got {response.status_code}: {response.text}"
+        )
+
+    def test_rejections_are_never_500(self, validated_client):
+        """All rejection cases must return client-error (4xx), never 500."""
+        client, tmp_path = validated_client
+        cases = [
+            {"path": ""},
+            {"path": str(tmp_path / "nonexistent")},
+            {"path": "/tmp"},  # outside patched home_dir
+        ]
+        for body in cases:
+            r = client.post("/api/favorites", json=body)
+            assert r.status_code != 500, (
+                f"Got 500 for body={body!r}: {r.text}"
+            )
+            assert r.status_code < 500, (
+                f"Got server error {r.status_code} for body={body!r}: {r.text}"
+            )
+
+    def test_valid_path_inside_home_accepted(self, validated_client):
+        """A real directory inside home_dir must be accepted."""
+        client, tmp_path = validated_client
+        inside = tmp_path / "valid_folder"
+        inside.mkdir()
+        response = client.post("/api/favorites", json={"path": str(inside)})
+        assert response.status_code == 200, (
+            f"Expected 200 for valid path, got {response.status_code}: {response.text}"
+        )
