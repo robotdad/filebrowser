@@ -14,6 +14,7 @@ DOM-mutation step that follows sanitization.
 """
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -25,8 +26,53 @@ REWRITER_JS = STATIC_DIR / "js" / "lib" / "rewrite-image-src.js"
 
 NODE = shutil.which("node")
 
+
+def _find_jsdom_cwd() -> Path | None:
+    """Locate a directory from which Node can resolve ``jsdom``.
+
+    jsdom is an optional developer dependency: it is not vendored in this repo
+    and there is no package.json at the root. Candidate roots are probed in
+    order and the first one from which ``require.resolve('jsdom')`` succeeds is
+    used. Returns None when jsdom is not installed anywhere we can see, in
+    which case these tests skip rather than fail -- a missing optional test
+    dependency is not a product defect.
+    """
+    if NODE is None:
+        return None
+
+    candidates = []
+    env_dir = os.environ.get("FILEBROWSER_JSDOM_DIR")
+    if env_dir:
+        candidates.append(Path(env_dir))
+    candidates.append(Path(__file__).parent.parent)  # repo root
+    candidates.append(Path.cwd())
+
+    for candidate in candidates:
+        if not candidate.is_dir():
+            continue
+        probe = subprocess.run(
+            [NODE, "-e", "require.resolve('jsdom')"],
+            capture_output=True,
+            text=True,
+            cwd=str(candidate),
+        )
+        if probe.returncode == 0:
+            return candidate
+    return None
+
+
+JSDOM_CWD = _find_jsdom_cwd()
+
 requires_node = pytest.mark.skipif(
     NODE is None, reason="node is required to execute the JS rewrite-image-src module"
+)
+
+requires_jsdom = pytest.mark.skipif(
+    JSDOM_CWD is None,
+    reason=(
+        "jsdom is not resolvable by node; install it (npm install jsdom) or set "
+        "FILEBROWSER_JSDOM_DIR to a directory whose node_modules contains it"
+    ),
 )
 
 
@@ -73,12 +119,13 @@ def _run_dom_rewrite_scenario(current_file: str, html_fragment: str) -> str:
         capture_output=True,
         text=True,
         check=True,
-        cwd=str(Path("/tmp/jsdom-test")),  # so require('jsdom') resolves
+        cwd=str(JSDOM_CWD),  # a dir from which node can resolve jsdom
     )
     return result.stdout
 
 
 @requires_node
+@requires_jsdom
 class TestDomLevelImageRewrite:
     """DOM-level proof that renderMarkdown rewrites relative and leaves absolute sources."""
 

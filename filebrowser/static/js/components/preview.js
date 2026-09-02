@@ -15,8 +15,6 @@ import { graphviz as d3Graphviz } from 'd3-graphviz';
 import GraphvizSvg from '../graphviz-svg.js';
 import { createLogger } from '../logger.js';
 import * as pdfjsLib from 'pdfjs-dist';
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
 
 const log = createLogger('Preview');
 
@@ -155,12 +153,6 @@ function ImageViewer({ contentUrl, filePath }) {
     `;
 }
 
-// Sanitize markdown text to safe HTML. Used as a fallback renderer when
-// markdown content appears in non-markdown contexts (e.g. README inside HTML).
-function sanitizeMarkdownPreview(text) {
-    return DOMPurify.sanitize(marked.parse(text || ''));
-}
-
 function HtmlViewer({ text, path, contentUrl, onSave, onDirtyChange, confirmOverwrite = false }) {
     const [mode, setMode] = useState('preview'); // 'preview' | 'source' | 'edit'
     const [editText, setEditText] = useState(text);
@@ -224,7 +216,7 @@ function HtmlViewer({ text, path, contentUrl, onSave, onDirtyChange, confirmOver
                             onUndo=${handleUndo} onRedo=${handleRedo} />
             `}
             ${mode === 'preview'
-                ? html`<iframe class="html-preview-frame" srcdoc=${text} sandbox=""></iframe>`
+                ? html`<iframe class="html-preview-frame" srcdoc=${text} sandbox="allow-scripts"></iframe>`
                 : html`<${CodeEditor}
                     doc=${mode === 'edit' ? editText : text}
                     path=${path}
