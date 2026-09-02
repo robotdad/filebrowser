@@ -11,6 +11,7 @@ from pathlib import Path
 
 STATIC_DIR = Path(__file__).parent.parent / "filebrowser" / "static"
 PREVIEW_JS = STATIC_DIR / "js" / "components" / "preview.js"
+MARKDOWN_EDITOR_JS = STATIC_DIR / "js" / "components" / "markdown-editor.js"
 INDEX_HTML = STATIC_DIR / "index.html"
 
 
@@ -20,28 +21,54 @@ def read_preview() -> str:
 
 
 @lru_cache(maxsize=1)
+def read_markdown_editor() -> str:
+    return MARKDOWN_EDITOR_JS.read_text()
+
+
+@lru_cache(maxsize=1)
 def read_html() -> str:
     return INDEX_HTML.read_text()
 
 
 class TestMarkdownSanitization:
+    """Markdown rendering and sanitization live in markdown-editor.js.
+
+    They were moved there from preview.js when MarkdownEditor was introduced
+    (commit 0da3877); these assertions follow the code to its current home
+    rather than scanning the file it used to live in.
+    """
+
     def test_dompurify_imported(self):
-        """preview.js must import DOMPurify."""
-        assert "import DOMPurify from 'dompurify'" in read_preview(), (
-            "DOMPurify import not found in preview.js"
+        """markdown-editor.js must import DOMPurify."""
+        assert "import DOMPurify from 'dompurify'" in read_markdown_editor(), (
+            "DOMPurify import not found in markdown-editor.js"
         )
 
     def test_dompurify_sanitize_used(self):
-        """preview.js must call DOMPurify.sanitize() on the marked output."""
-        assert "DOMPurify.sanitize(" in read_preview(), (
-            "DOMPurify.sanitize() call not found in preview.js"
+        """markdown-editor.js must call DOMPurify.sanitize()."""
+        assert "DOMPurify.sanitize(" in read_markdown_editor(), (
+            "DOMPurify.sanitize() call not found in markdown-editor.js"
         )
 
     def test_sanitize_wraps_marked_parse(self):
-        """DOMPurify.sanitize must wrap marked.parse, not replace it."""
-        preview = read_preview()
-        assert re.search(r"DOMPurify\.sanitize\(.*marked\.parse\(", preview), (
-            "Expected DOMPurify.sanitize(marked.parse(...)) pattern not found"
+        """The marked.parse() output must flow through DOMPurify.sanitize().
+
+        marked.parse() result is assigned to a local, and that local must be an
+        argument to DOMPurify.sanitize() -- proving sanitization wraps the
+        rendered markdown rather than replacing or bypassing it.
+        """
+        source = read_markdown_editor()
+
+        parsed_var = re.search(r"(?:const|let|var)\s+(\w+)\s*=\s*marked\.parse\(", source)
+        assert parsed_var, "No `<var> = marked.parse(...)` assignment found"
+        var_name = parsed_var.group(1)
+
+        sanitize_call = re.search(r"DOMPurify\.sanitize\(([^)]*)\)", source)
+        assert sanitize_call, "No DOMPurify.sanitize(...) call found"
+
+        assert var_name in sanitize_call.group(1), (
+            f"marked.parse() output ({var_name!r}) is not passed to "
+            f"DOMPurify.sanitize(); got: {sanitize_call.group(1)!r}"
         )
 
 
