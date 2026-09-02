@@ -1,0 +1,87 @@
+summary: >
+  Markdown View resolves relative image sources through the authenticated
+  file-content API (/api/files/content?path=...) so that images embedded
+  with relative paths in a Markdown file render correctly in the browser.
+
+software_type: web_app
+
+entry_points:
+  - type: url
+    value: "http://<container_ip>:58080/"
+    label: "FileBrowser SPA (DTU, auth-bypassed)"
+
+tests:
+  - description: "Relative image in Markdown View renders and its request returns HTTP 200 with image/svg+xml."
+    type: browser
+    steps:
+      - action: >
+          Prepare two sibling files in the browse root:
+          (1) a Markdown file (e.g. image-test.md) containing
+              `![diagram](diagram.svg)`
+          (2) an SVG file (diagram.svg) at the same level.
+          Open the FileBrowser SPA and navigate to image-test.md.
+        expect: >
+          The View tab is active (or can be selected) and the Markdown file
+          opens in the markdown editor.
+      - action: "Select the View tab for image-test.md."
+        expect: >
+          The rendered Markdown shows an <img> element whose src attribute
+          is `/api/files/content?path=diagram.svg` (i.e. the relative
+          reference has been rewritten to the authenticated content API
+          endpoint), not the bare relative path `diagram.svg`.
+      - action: >
+          Observe the network request made by the browser for the image
+          (inspect DevTools Network tab or equivalent).
+        expect: >
+          The browser issues a GET request to
+          `/api/files/content?path=diagram.svg`.
+          The response status is HTTP 200 and the Content-Type header is
+          `image/svg+xml` (or starts with `image/svg`).
+      - action: >
+          Inspect the rendered <img> element's naturalWidth and naturalHeight
+          properties (via DevTools console:
+          `document.querySelector('.markdown-viewer img').naturalWidth`).
+        expect: >
+          Both naturalWidth and naturalHeight are greater than zero,
+          confirming the browser successfully decoded the SVG image.
+
+  - description: "Absolute and external image sources are NOT rewritten."
+    type: browser
+    steps:
+      - action: >
+          Open a Markdown file that contains an absolute image reference such as
+          `![ext](https://example.com/image.png)` alongside a relative one.
+        expect: >
+          In the rendered View tab, the <img> for the absolute URL retains
+          its original `https://example.com/image.png` src — it is not
+          rewritten to `/api/files/content?path=...`.
+
+  - description: "Relative image in a subdirectory resolves correctly against the Markdown file's directory."
+    type: browser
+    steps:
+      - action: >
+          Create a Markdown file at `docs/page.md` containing
+          `![logo](../assets/logo.svg)` and place an SVG at `assets/logo.svg`.
+          Open docs/page.md in the View tab.
+        expect: >
+          The rendered <img> src is
+          `/api/files/content?path=assets%2Flogo.svg`
+          (the `..` segment has been resolved relative to `docs/`, collapsing
+          to the repo-root `assets/` directory, with no `..` remaining in the
+          encoded path).
+
+metadata:
+  source_spec: "Goal: Markdown View renders relative images through the authenticated content API"
+  feature_area: "markdown-image-rewrite"
+  tags: ["markdown", "images", "content-api", "relative-paths"]
+  priorities:
+    "Relative image in Markdown View renders": "high"
+    "Absolute sources are NOT rewritten": "high"
+    "Subdirectory relative path resolves correctly": "high"
+
+assumptions:
+  - "Substitute the real DTU container IP for <container_ip>; not reachable on localhost."
+  - "The browse root is the fixtures/ directory or equivalent writable directory."
+  - "The SVG file used in tests is a valid SVG document with non-zero intrinsic dimensions."
+  - "The FileBrowser application is running with authentication bypassed (DTU mode)."
+  - "The /api/files/content endpoint serves file bytes with the correct Content-Type."

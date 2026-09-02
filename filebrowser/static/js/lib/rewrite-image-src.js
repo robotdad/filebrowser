@@ -13,8 +13,64 @@
 //
 // Extracted as a standalone module (like preprocess-markdown.js) so path resolution
 // can be unit-tested without a DOM or bundler.
+//
+// NOTE: This module is loaded directly by the browser as a plain ES module.
+// It must not import any Node built-ins (node:path, node:fs, etc.).
+// Path operations are implemented inline to stay browser-compatible.
 
-import { dirname, join, normalize } from 'node:path/posix';
+/**
+ * Return the directory portion of a POSIX path (everything up to and including
+ * the last slash, or an empty string if there is no slash).
+ *
+ * @param {string} p - A POSIX path string
+ * @returns {string}
+ */
+function posixDirname(p) {
+    const idx = p.lastIndexOf('/');
+    if (idx === -1) return '';
+    if (idx === 0) return '/';
+    return p.slice(0, idx);
+}
+
+/**
+ * Join two POSIX path segments.  If `b` is absolute (starts with '/') it wins
+ * outright; otherwise the segments are concatenated with a single '/'.
+ *
+ * @param {string} a
+ * @param {string} b
+ * @returns {string}
+ */
+function posixJoin(a, b) {
+    if (!a) return b;
+    if (!b) return a;
+    if (b.startsWith('/')) return b;
+    return a.replace(/\/$/, '') + '/' + b;
+}
+
+/**
+ * Normalize a POSIX path: collapse redundant slashes, resolve `.` and `..`
+ * segments.  The result never ends with a trailing slash (unless it is the root
+ * '/').  Leading `..` segments that would escape the root are dropped (they
+ * can't be represented in a repo-relative path anyway).
+ *
+ * @param {string} p
+ * @returns {string}
+ */
+function posixNormalize(p) {
+    const parts = p.split('/');
+    const out = [];
+    for (const part of parts) {
+        if (part === '' || part === '.') {
+            // skip
+        } else if (part === '..') {
+            if (out.length > 0) out.pop();
+            // else: leading '..' at repo root — drop it
+        } else {
+            out.push(part);
+        }
+    }
+    return out.join('/');
+}
 
 /**
  * Test whether an image source is already an absolute/non-file reference that
@@ -56,6 +112,6 @@ export function rewriteImageSrc(currentFile, imageSource) {
         return imageSource;
     }
 
-    const resolvedPath = normalize(join(dirname(currentFile), imageSource));
+    const resolvedPath = posixNormalize(posixJoin(posixDirname(currentFile), imageSource));
     return `/api/files/content?path=${encodeURIComponent(resolvedPath)}`;
 }

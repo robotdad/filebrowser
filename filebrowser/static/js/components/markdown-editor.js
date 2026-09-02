@@ -18,11 +18,19 @@ import { WysiwygBar } from './wysiwyg-bar.js';
 import { undo, redo } from '@codemirror/commands';
 import { createLogger } from '../logger.js';
 import { stripFrontmatter, transformWikilinks, renderFrontmatter } from '../lib/preprocess-markdown.js';
+import { rewriteImageSrc } from '../lib/rewrite-image-src.js';
 
 const log = createLogger('MarkdownEditor');
 
-/** Render markdown text to sanitized HTML. */
-function renderMarkdown(text) {
+/**
+ * Render markdown text to sanitized HTML, with relative image sources rewritten
+ * to the authenticated `/api/files/content?path=...` endpoint.
+ *
+ * @param {string} text - Raw markdown source
+ * @param {string} currentFile - Repo-relative path of the markdown file being rendered
+ * @returns {string} Sanitized HTML string
+ */
+function renderMarkdown(text, currentFile) {
     // Strip YAML frontmatter and transform Obsidian wikilinks before parsing
     const { frontmatter, body } = stripFrontmatter(text || '');
     const processedBody = transformWikilinks(body);
@@ -32,7 +40,18 @@ function renderMarkdown(text) {
     const bodyHtml = marked.parse(processedBody);
     
     // Sanitize the combined HTML (frontmatter panel + body)
-    return DOMPurify.sanitize(frontmatterHtml + bodyHtml);
+    const sanitized = DOMPurify.sanitize(frontmatterHtml + bodyHtml);
+
+    // Rewrite relative img src attributes to the authenticated content API.
+    // We parse the sanitized HTML fragment, mutate img elements, and serialise
+    // back to a string -- all in-process, no network requests.
+    if (!currentFile) return sanitized;
+    const template = document.createElement('template');
+    template.innerHTML = sanitized;
+    template.content.querySelectorAll('img').forEach((img) => {
+        img.src = rewriteImageSrc(currentFile, img.getAttribute('src') || '');
+    });
+    return template.innerHTML;
 }
 
 /**
@@ -51,7 +70,7 @@ export function MarkdownEditor({ text, path, onSave, onDirtyChange, confirmOverw
     useEffect(() => { if (onDirtyChange) onDirtyChange(dirty); }, [dirty, onDirtyChange]);
     const [saving, setSaving] = useState(false);
     const [cursor, setCursor] = useState(null);
-    const [previewHtml, setPreviewHtml] = useState(() => renderMarkdown(text));
+    const [previewHtml, setPreviewHtml] = useState(() => renderMarkdown(text, path));
     const editorViewRef = useRef(null);       // CodeMirror EditorView (Source tab)
     const wysiwygEditorRef = useRef(null);    // Tiptap Editor (Edit tab)
     const sourceInitRef = useRef(false);      // tracks first open of Source tab
@@ -64,9 +83,9 @@ export function MarkdownEditor({ text, path, onSave, onDirtyChange, confirmOverw
     // Sync editText when text prop changes (new file or post-save)
     useEffect(() => {
         setEditText(text);
-        setPreviewHtml(renderMarkdown(text));
+        setPreviewHtml(renderMarkdown(text, path));
         setDirty(false);
-    }, [text]);
+    }, [text, path]);
 
     // Live preview for Source tab (immediate on first open, debounced after)
     useEffect(() => {
@@ -78,19 +97,19 @@ export function MarkdownEditor({ text, path, onSave, onDirtyChange, confirmOverw
 
         if (!sourceInitRef.current) {
             sourceInitRef.current = true;
-            setPreviewHtml(renderMarkdown(editText));
+            setPreviewHtml(renderMarkdown(editText, path));
             return;
         }
 
         let cancelled = false;
         const timer = setTimeout(() => {
-            if (!cancelled) setPreviewHtml(renderMarkdown(editText));
+            if (!cancelled) setPreviewHtml(renderMarkdown(editText, path));
         }, 300);
         return () => { cancelled = true; clearTimeout(timer); };
-    }, [editText, activeTab]);
+    }, [editText, activeTab, path]);
 
     // Rendered HTML for View tab (memoized from saved text only)
-    const viewHtml = useMemo(() => renderMarkdown(text), [text]);
+    const viewHtml = useMemo(() => renderMarkdown(text, path), [text, path]);
 
     // Stable save callback via ref to avoid stale closures
     const saveRef = useRef(null);
