@@ -15,8 +15,9 @@ import { html } from '../html.js';
  *   onCopyRelativePath(path, pinnedRoot) — copy path relative to pinned folder
  *   onTogglePin(path) — pin/unpin directories
  *   isPinned          — whether the current item is pinned
+ *   isExternalRoot    — whether the current item is a registered location root
  */
-export function ContextMenu({ menu, onClose, onOpen, onDownload, onRename, onDelete, onCopyPath, onCopyRelativePath, onTogglePin, isPinned, onOpenTerminal }) {
+export function ContextMenu({ menu, onClose, onOpen, onDownload, onRename, onDelete, onCopyPath, onCopyRelativePath, onTogglePin, isPinned, isExternalRoot, onOpenTerminal }) {
     const ref = useRef(null);
 
     // Close on outside click or Escape
@@ -78,8 +79,8 @@ export function ContextMenu({ menu, onClose, onOpen, onDownload, onRename, onDel
             `}
             ${menu.type === 'directory' && onTogglePin && html`
                 <button class="context-menu-item" onClick=${act(onTogglePin)}>
-                    <i class="ph ${isPinned ? 'ph-push-pin-simple-slash' : 'ph-push-pin-simple'}"></i>
-                    ${isPinned ? 'Unpin from favorites' : 'Pin to favorites'}
+                    <i class="ph ${isExternalRoot ? 'ph-map-pin-line' : (isPinned ? 'ph-push-pin-simple-slash' : 'ph-push-pin-simple')}"></i>
+                    ${isExternalRoot ? 'Remove location' : (isPinned ? 'Unpin from favorites' : 'Pin to favorites')}
                 </button>
                 <div class="context-menu-divider"></div>
             `}

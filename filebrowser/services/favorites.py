@@ -3,21 +3,28 @@ import logging
 import os
 import tempfile
 import threading
+import weakref
+from hashlib import sha256
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Module-level lock registry so every FavoritesService that shares the same
-# data_dir path shares the same in-process lock.
-_lock_registry: dict[str, threading.Lock] = {}
+# Module-level weak lock registry so every live FavoritesService that shares a
+# store path shares the same in-process lock without retaining one lock per
+# former authenticated user forever.
+_lock_registry: weakref.WeakValueDictionary[str, threading.Lock] = (
+    weakref.WeakValueDictionary()
+)
 _registry_lock = threading.Lock()
 
 
 def _get_lock(store_path: str) -> threading.Lock:
     with _registry_lock:
-        if store_path not in _lock_registry:
-            _lock_registry[store_path] = threading.Lock()
-        return _lock_registry[store_path]
+        lock = _lock_registry.get(store_path)
+        if lock is None:
+            lock = threading.Lock()
+            _lock_registry[store_path] = lock
+        return lock
 
 
 class FavoritesService:
@@ -48,16 +55,23 @@ class FavoritesService:
     so that concurrent add/remove calls from different threads do not race.
     """
 
-    def __init__(self, data_dir: Path) -> None:
+    def __init__(self, data_dir: Path, username: str | None = None) -> None:
         self._data_dir = data_dir
-        self._store = data_dir / "favorites.json"
+        if username is not None and not username:
+            raise ValueError("Username must not be empty")
+
+        if username is None:
+            self._store = data_dir / "favorites.json"
+        else:
+            user_key = sha256(username.encode("utf-8")).hexdigest()
+            self._store = data_dir / "favorites-users" / f"{user_key}.json"
         self._lock = _get_lock(str(self._store.resolve()))
 
     def _load(self) -> dict:
-        if not self._store.exists():
-            return {"favorites": []}
         try:
             return json.loads(self._store.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return {"favorites": []}
         except (json.JSONDecodeError, OSError):
             logger.warning("Corrupted favorites.json \u2013 resetting")
             return {"favorites": []}
@@ -69,11 +83,11 @@ class FavoritesService:
         filesystem, so a reader always sees either the old complete file or
         the new complete file -- never a partial write.
         """
-        self._data_dir.mkdir(parents=True, exist_ok=True)
+        self._store.parent.mkdir(parents=True, exist_ok=True)
         # Write to a sibling temp file in the same directory so that
         # os.replace stays on the same filesystem (required for atomicity).
         fd, tmp_path = tempfile.mkstemp(
-            dir=self._data_dir, prefix=".favorites_", suffix=".tmp"
+            dir=self._store.parent, prefix=".favorites_", suffix=".tmp"
         )
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as fh:
@@ -81,6 +95,14 @@ class FavoritesService:
                 fh.flush()
                 os.fsync(fh.fileno())
             os.replace(tmp_path, self._store)
+            directory_fd = os.open(
+                self._store.parent,
+                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+            )
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
         except Exception:
             # Best-effort cleanup of the temp file on failure.
             try:

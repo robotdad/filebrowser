@@ -14,8 +14,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/favorites", tags=["favorites"])
 
 
-def get_favorites_service() -> FavoritesService:
-    return FavoritesService(settings.data_dir)
+def get_favorites_service(
+    username: str = Depends(require_auth),
+) -> FavoritesService:
+    return FavoritesService(settings.data_dir, username)
 
 
 def _validate_favorite_path(raw_path: str) -> Path:

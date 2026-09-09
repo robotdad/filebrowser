@@ -12,6 +12,8 @@ dist/
 
 # Testing
 .pytest_cache/
+# Local browser-test fixtures, logs, screenshots, and process metadata
+.work/
 
 # Amplifier
 .discovery/

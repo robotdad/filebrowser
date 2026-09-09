@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'preact/hooks';
 import { html } from '../html.js';
 import { api } from '../api.js';
 import { Breadcrumb } from './breadcrumb.js';
@@ -12,8 +12,17 @@ import { useTabManager } from '../hooks/use-tab-manager.js';
 import { TabBar } from './tab-bar.js';
 import { hasChanged, classifyDiskState } from '../lib/change-detector.js';
 import { createLogger } from '../logger.js';
+import {
+    createFavoritesController,
+    externalLocationForFavoriteRoot,
+    favoriteVirtualToPhysicalPath,
+    mapFavoritePaths,
+    mergeFavoritePaths,
+    orderFavoritePaths,
+} from '../favorites.js';
 
 const log = createLogger('Layout');
+const EMPTY_PATHS = [];
 
 export function Layout({ username, authSource, terminalEnabled, homeDir, onLogout }) {
     // ── Core state ────────────────────────────────────────────────────────────
@@ -51,64 +60,163 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
     const isTerminalResizing = useRef(false);
 
     // ── Pinned favorites ──────────────────────────────────────────────────────
-    const [favorites, setFavorites] = useState(() => {
-        try { return JSON.parse(localStorage.getItem('fb-favorites') || '[]'); }
-        catch { return []; }
-    });
+    // The API keeps physical paths; FileTree consumes the virtual paths
+    // derived below. No browser storage is used for favorites.
+    const [favoritePaths, setFavoritePaths] = useState([]);
+    const [favoritesLoaded, setFavoritesLoaded] = useState(false);
+    const [favoritesUsername, setFavoritesUsername] = useState(null);
+    const [favoriteOrder, setFavoriteOrder] = useState([]);
+    const favoritesControllerRef = useRef(null);
+
+    if (!favoritesControllerRef.current) {
+        favoritesControllerRef.current = createFavoritesController({
+            loadFavorites: () => api.get('/api/favorites'),
+            addFavorite: (physicalPath) => api.post('/api/favorites', { path: physicalPath }),
+            removeFavorite: (physicalPath) =>
+                api.del(`/api/favorites?path=${encodeURIComponent(physicalPath)}`),
+            onChange: ({ paths, loaded }) => {
+                setFavoritePaths(paths);
+                setFavoritesLoaded(loaded);
+            },
+        });
+    }
 
     const [externalLocations, setExternalLocations] = useState([]);
+    const [externalLocationsUsername, setExternalLocationsUsername] = useState(null);
+    const locationLoadTokenRef = useRef(0);
+    const locationRevisionRef = useRef(0);
+    const locationRemovalsRef = useRef(new Set());
 
     useEffect(() => {
-        api.get('/api/locations').then(setExternalLocations).catch(() => {});
-    }, []);
+        const requestToken = ++locationLoadTokenRef.current;
+        const requestRevision = locationRevisionRef.current;
+        let cancelled = false;
+        setExternalLocationsUsername(username);
+        setExternalLocations([]);
 
-    // Sync external locations into favorites when locations load/change
+        api.get('/api/locations')
+            .then((locations) => {
+                if (
+                    cancelled
+                    || requestToken !== locationLoadTokenRef.current
+                    || requestRevision !== locationRevisionRef.current
+                ) {
+                    return;
+                }
+                setExternalLocations(Array.isArray(locations) ? locations : []);
+            })
+            .catch(() => {});
+
+        return () => {
+            cancelled = true;
+            if (requestToken === locationLoadTokenRef.current) {
+                locationLoadTokenRef.current += 1;
+            }
+        };
+    }, [username]);
+
     useEffect(() => {
-        if (!externalLocations.length) return;
-        setFavorites(prev => {
-            const extPaths = externalLocations.map(l => `@ext/${l.id}`);
-            const existing = new Set(prev);
-            const toAdd = extPaths.filter(p => !existing.has(p));
-            if (!toAdd.length) return prev;
-            const next = [...prev, ...toAdd];
-            localStorage.setItem('fb-favorites', JSON.stringify(next));
-            return next;
-        });
-    }, [externalLocations]);
-
-    const saveFavorites = (next) => {
-        setFavorites(next);
-        localStorage.setItem('fb-favorites', JSON.stringify(next));
-    };
+        setFavoritesUsername(username);
+        const session = favoritesControllerRef.current.activate(username);
+        setFavoriteOrder([]);
+        return () => favoritesControllerRef.current.deactivate(session);
+    }, [username]);
 
     const addLocation = async (path, name) => {
+        const requestToken = locationLoadTokenRef.current;
         const location = await api.post('/api/locations', { path, name });
-        setExternalLocations(prev => [...prev, location]);
-        // The useEffect above will auto-add to favorites
+        if (requestToken !== locationLoadTokenRef.current) {
+            return location;
+        }
+        locationRevisionRef.current += 1;
+        setExternalLocations((previous) => (
+            previous.some((candidate) => candidate.id === location.id)
+                ? previous
+                : [...previous, location]
+        ));
+        return location;
     };
 
-    const toggleFavorite = async (path) => {
-        if (favorites.includes(path)) {
-            // Unpinning
-            saveFavorites(favorites.filter(p => p !== path));
-            // If it's an external location, also remove from backend
-            if (path.startsWith('@ext/')) {
-                const id = parseInt(path.split('/')[1], 10);
-                try {
-                    await api.del(`/api/locations/${id}`);
-                    setExternalLocations(prev => prev.filter(l => l.id !== id));
-                } catch { /* toast shown */ }
-            }
-        } else {
-            saveFavorites([...favorites, path]);
+    const removeExternalLocation = (location) => {
+        if (!location) return;
+        const requestToken = locationLoadTokenRef.current;
+        const requestedUsername = username;
+        const pendingKey = `${requestToken}\u0000${location.id}`;
+        if (locationRemovalsRef.current.has(pendingKey)) return;
+
+        locationRemovalsRef.current.add(pendingKey);
+        void api.del(`/api/locations/${location.id}`)
+            .then(() => {
+                if (requestToken !== locationLoadTokenRef.current) {
+                    return;
+                }
+                locationRevisionRef.current += 1;
+                setExternalLocations((previous) => (
+                    previous.filter((candidate) => candidate.id !== location.id)
+                ));
+            })
+            .catch(() => {})
+            .then(() => {
+                locationRemovalsRef.current.delete(pendingKey);
+            });
+    };
+
+    const activeFavoritePaths = favoritesUsername === username ? favoritePaths : EMPTY_PATHS;
+    const activeExternalLocations = externalLocationsUsername === username
+        ? externalLocations
+        : EMPTY_PATHS;
+    const hasCurrentFavorites = favoritesUsername === username && favoritesLoaded;
+    const mappedFavoritePaths = useMemo(() => mapFavoritePaths(
+        activeFavoritePaths,
+        homeDir,
+        activeExternalLocations,
+    ), [
+        activeFavoritePaths,
+        homeDir,
+        activeExternalLocations,
+    ]);
+    const favorites = useMemo(() => orderFavoritePaths(
+        mergeFavoritePaths(mappedFavoritePaths, activeExternalLocations),
+        favoriteOrder,
+    ), [
+        mappedFavoritePaths,
+        activeExternalLocations,
+        favoriteOrder,
+    ]);
+
+    const toggleFavorite = (path) => {
+        const externalLocation = externalLocationForFavoriteRoot(path, activeExternalLocations);
+        if (externalLocation) {
+            removeExternalLocation(externalLocation);
+            return;
         }
+        if (!hasCurrentFavorites) return;
+
+        const physicalPath = favoriteVirtualToPhysicalPath(
+            path,
+            homeDir,
+            activeExternalLocations,
+        );
+        if (!physicalPath) return;
+
+        // The controller catches API failures and only publishes after success.
+        void favoritesControllerRef.current.toggle(username, physicalPath);
     };
 
     const reorderFavorite = (fromIndex, toIndex) => {
+        if (
+            fromIndex === toIndex
+            || fromIndex < 0
+            || toIndex < 0
+            || fromIndex >= favorites.length
+            || toIndex >= favorites.length
+        ) {
+            return;
+        }
         const next = [...favorites];
         const [moved] = next.splice(fromIndex, 1);
         next.splice(toIndex, 0, moved);
-        saveFavorites(next);
+        setFavoriteOrder(next);
     };
 
     // Must be memoized: checkFileChanges depends on `refresh`, and the file-change
@@ -475,8 +583,15 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
     };
 
     const handleCtxCopyPath = (path) => {
-        const fullPath = homeDir ? `${homeDir}/${path}` : path;
-        navigator.clipboard?.writeText(fullPath).then(() => showToast('Path copied!'));
+        const fullPath = favoriteVirtualToPhysicalPath(
+            path,
+            homeDir,
+            activeExternalLocations,
+        ) || path;
+        if (!navigator.clipboard) return;
+        navigator.clipboard.writeText(fullPath)
+            .then(() => showToast('Path copied!'))
+            .catch(() => {});
     };
 
     const handleCtxCopyRelativePath = (path, pinnedRoot) => {
@@ -488,7 +603,10 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
         } else {
             rel = path;
         }
-        navigator.clipboard?.writeText(rel).then(() => showToast('Relative path copied!'));
+        if (!navigator.clipboard) return;
+        navigator.clipboard.writeText(rel)
+            .then(() => showToast('Relative path copied!'))
+            .catch(() => {});
     };
 
     // ── Stable dirty-change callback ──────────────────────────────────────────
@@ -500,6 +618,14 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
     const handleDirtyChange = useCallback((dirty) => {
         tabManager.setDirty(tabManager.activeTabId, dirty);
     }, [tabManager.setDirty, tabManager.activeTabId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const contextExternalLocation = contextMenu
+        ? externalLocationForFavoriteRoot(contextMenu.path, activeExternalLocations)
+        : null;
+    const contextIsExternalRoot = Boolean(contextExternalLocation);
+    const contextIsPinned = contextIsExternalRoot || (
+        hasCurrentFavorites && contextMenu && mappedFavoritePaths.includes(contextMenu.path)
+    );
 
     return html`
         <div
@@ -589,7 +715,7 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
                         onReorder=${reorderFavorite}
                         onUnpin=${toggleFavorite}
                         sortBy=${sortBy}
-                        externalLocations=${externalLocations}
+                        externalLocations=${activeExternalLocations}
                     />
 
                     <${FileTree}
@@ -674,7 +800,8 @@ export function Layout({ username, authSource, terminalEnabled, homeDir, onLogou
                 onCopyPath=${handleCtxCopyPath}
                 onCopyRelativePath=${handleCtxCopyRelativePath}
                 onTogglePin=${toggleFavorite}
-                isPinned=${contextMenu && favorites.includes(contextMenu.path)}
+                isPinned=${contextIsPinned}
+                isExternalRoot=${contextIsExternalRoot}
                 onOpenTerminal=${terminalEnabled ? openTerminal : null}
             />
 

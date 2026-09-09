@@ -1,0 +1,1 @@
+"""Favorites lane test fixtures."""
