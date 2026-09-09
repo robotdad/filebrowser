@@ -6,7 +6,7 @@
  *   Edit   — WYSIWYG rich-text editor (Tiptap v2 + tiptap-markdown)
  *   Source — Split-pane: CodeMirror 6 editor + live rendered preview
  */
-import { useState, useEffect, useRef, useMemo, useCallback } from 'preact/hooks';
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'preact/hooks';
 import { html } from '../html.js';
 import { api } from '../api.js';
 import { marked } from 'marked';
@@ -62,7 +62,16 @@ function renderMarkdown(text, currentFile) {
  *   path    — file path (for save API and language detection)
  *   onSave  — callback after successful save, receives new text
  */
-export function MarkdownEditor({ text, path, onSave, onDirtyChange, confirmOverwrite = false }) {
+export function MarkdownEditor(props) {
+    // File identity owns every buffer and pending-save lifetime, even when the
+    // caller reuses this component rather than keying its preview container.
+    return html`<${MarkdownEditorDocument} ...${props} key=${props.path} />`;
+}
+
+function MarkdownEditorDocument({
+    text, path, onSave, onSaveStarted, onSaveSettled, onSaveFailed, onDirtyChange,
+    confirmOverwrite = false, saveLocked = false,
+}) {
     const [activeTab, setActiveTab] = useState('view');
     const [editText, setEditText] = useState(text);
     const [dirty, setDirty] = useState(false);
@@ -72,19 +81,40 @@ export function MarkdownEditor({ text, path, onSave, onDirtyChange, confirmOverw
     const [cursor, setCursor] = useState(null);
     const [previewHtml, setPreviewHtml] = useState(() => renderMarkdown(text, path));
     const editorViewRef = useRef(null);       // CodeMirror EditorView (Source tab)
-    const wysiwygEditorRef = useRef(null);    // Tiptap Editor (Edit tab)
     const sourceInitRef = useRef(false);      // tracks first open of Source tab
+    const savedTextRef = useRef(text);        // content baseline for dirty checks
+    const draftRef = useRef(text);           // includes edits made before a render
+    const savingRef = useRef(false);         // synchronous duplicate-save lock
+    const aliveRef = useRef(true);
+    const loadVersionRef = useRef(0);
+    const [loadVersion, setLoadVersion] = useState(0);
+    const [richEditBlockReason, setRichEditBlockReason] = useState(null);
+
+    useLayoutEffect(() => {
+        aliveRef.current = true;
+        return () => { aliveRef.current = false; };
+    }, []);
 
     // Log component mount with initial tab
     useEffect(() => {
         log.debug('mount: mode=%s', activeTab);
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Sync editText when text prop changes (new file or post-save)
-    useEffect(() => {
+    // Own-save acknowledgements equal the saved baseline. They must not replace
+    // edits made while that PUT was in flight. An actual external replacement
+    // invalidates pending callbacks and remounts the mount-only editor widgets.
+    useLayoutEffect(() => {
+        if (text === savedTextRef.current) return;
+        loadVersionRef.current += 1;
+        setLoadVersion(loadVersionRef.current);
+        savedTextRef.current = text;
+        draftRef.current = text;
+        // A reload invalidates the acknowledgement, not the outstanding write.
+        // Keep saving locked until it settles to prevent out-of-order PUTs.
         setEditText(text);
         setPreviewHtml(renderMarkdown(text, path));
         setDirty(false);
+        setRichEditBlockReason(null);
     }, [text, path]);
 
     // Live preview for Source tab (immediate on first open, debounced after)
@@ -114,61 +144,70 @@ export function MarkdownEditor({ text, path, onSave, onDirtyChange, confirmOverw
     // Stable save callback via ref to avoid stale closures
     const saveRef = useRef(null);
     saveRef.current = async () => {
-        if (!dirty || saving) return;
+        if (draftRef.current === savedTextRef.current || savingRef.current || saveLocked) return;
         if (confirmOverwrite && !confirm('This file changed on disk since you kept your version. Overwrite the on-disk changes?')) return;
+        const contentToSave = draftRef.current;
+        const saveVersion = loadVersionRef.current;
+        const isCurrent = () => aliveRef.current && loadVersionRef.current === saveVersion;
+        savingRef.current = true;
         setSaving(true);
         try {
-            log.debug('save: path=%s size=%d', path, editText.length);
-            const response = await api.put('/api/files/content', { path, content: editText });
-            setDirty(false);
+            log.debug('save: path=%s size=%d', path, contentToSave.length);
+            if (onSaveStarted) onSaveStarted(path, contentToSave);
+            const response = await api.put('/api/files/content', { path, content: contentToSave });
+            // The parent owns cross-remount reconciliation.  It must see a
+            // completed save even if this editor was unmounted while awaiting
+            // the response, whereas this document must not update itself then.
+            if (onSaveSettled) onSaveSettled(path, contentToSave, response);
+            if (!isCurrent()) return;
+            savedTextRef.current = contentToSave;
+            setDirty(draftRef.current !== contentToSave);
             log.info('saved: path=%s', path);
-            if (onSave) onSave(editText, response);
+            if (onSave && !onSaveSettled) onSave(contentToSave, response);
         } catch (e) {
             log.error('save failed', e);
+            if (onSaveFailed) onSaveFailed(path);
         } finally {
-            setSaving(false);
+            if (aliveRef.current) {
+                savingRef.current = false;
+                setSaving(false);
+            }
         }
     };
     const handleSave = useCallback(() => saveRef.current?.(), []);
 
     // CodeMirror doc-change handler (Source tab)
     const handleDocChange = useCallback((newDoc) => {
+        draftRef.current = newDoc;
         setEditText(newDoc);
-        setDirty(newDoc !== text);
-    }, [text]);
+        setDirty(newDoc !== savedTextRef.current);
+        setRichEditBlockReason(null);
+    }, []);
 
     // WYSIWYG doc-change handler (Edit tab)
     const handleWysiwygChange = useCallback((newMarkdown) => {
+        draftRef.current = newMarkdown;
         setEditText(newMarkdown);
-        setDirty(newMarkdown !== text);
-    }, [text]);
+        setDirty(newMarkdown !== savedTextRef.current);
+    }, []);
 
     const handleUndo = useCallback(() => { if (editorViewRef.current) undo(editorViewRef.current); }, []);
     const handleRedo = useCallback(() => { if (editorViewRef.current) redo(editorViewRef.current); }, []);
 
-    // Flush WYSIWYG editor's current markdown to editText before switching away
-    const flushWysiwyg = useCallback(() => {
-        const editor = wysiwygEditorRef.current;
-        if (editor && !editor.isDestroyed) {
-            const md = editor.storage.markdown.getMarkdown();
-            setEditText(md);
-            return md;
-        }
-        return editText;
-    }, [editText]);
-
-    // Tab switching — flush WYSIWYG on exit, warn when discarding to View
+    // Tab switching — WYSIWYG changes are synchronized only by onUpdate.
+    // Never serialize merely because the user leaves the tab.
     const handleTabSwitch = useCallback((newTab) => {
+        if (newTab === 'wysiwyg') setRichEditBlockReason(null);
         if (newTab === 'view' && dirty) {
             if (!confirm('Discard unsaved changes?')) return;
-            setEditText(text);
+            draftRef.current = savedTextRef.current;
+            setEditText(savedTextRef.current);
             setDirty(false);
             setActiveTab(newTab);
-            return; // skip flush — we're discarding
+            return;
         }
-        if (activeTab === 'wysiwyg') flushWysiwyg();
         setActiveTab(newTab);
-    }, [activeTab, dirty, text, flushWysiwyg]);
+    }, [dirty]);
 
     // Track Tiptap editor instance for the toolbar
     const [tiptapEditor, setTiptapEditor] = useState(null);
@@ -178,6 +217,12 @@ export function MarkdownEditor({ text, path, onSave, onDirtyChange, confirmOverw
     }, [activeTab]);
     const handleEditorReady = useCallback((editor) => {
         setTiptapEditor(editor);
+    }, []);
+    const handleUnsafeWysiwyg = useCallback(() => {
+        setRichEditBlockReason(
+            'Rich editing blocked: this editor cannot preserve this Markdown. Use Source to edit it; original unchanged.'
+        );
+        setActiveTab('source');
     }, []);
 
     return html`
@@ -196,6 +241,11 @@ export function MarkdownEditor({ text, path, onSave, onDirtyChange, confirmOverw
                     </button>
                 </div>
             </div>
+            ${richEditBlockReason && html`
+                <div class="markdown-rich-edit-notice" role="alert">
+                    ${richEditBlockReason}
+                </div>
+            `}
             ${activeTab === 'view' && html`
                 <div class="markdown-viewer"
                      dangerouslySetInnerHTML=${{ __html: viewHtml }}></div>
@@ -203,21 +253,21 @@ export function MarkdownEditor({ text, path, onSave, onDirtyChange, confirmOverw
             ${activeTab === 'wysiwyg' && html`
                 <div class="wysiwyg-pane">
                     <${WysiwygBar} editor=${tiptapEditor} dirty=${dirty}
-                                   saving=${saving} onSave=${handleSave} />
+                                   saving=${saving || saveLocked} onSave=${handleSave} />
                     <${WysiwygEditor}
                         doc=${editText}
                         onDocChange=${handleWysiwygChange}
                         onSave=${handleSave}
-                        editorRef=${wysiwygEditorRef}
                         onEditorReady=${handleEditorReady}
-                        key=${path + ':wysiwyg'} />
+                        onUnsafe=${handleUnsafeWysiwyg}
+                        key=${path + ':' + loadVersion + ':wysiwyg'} />
                 </div>
             `}
             ${activeTab === 'source' && html`
                 <div class="markdown-edit-pane">
                     <div class="markdown-edit-editor">
                         <${EditBar} dirty=${dirty} saving=${saving} language="Markdown"
-                                    cursor=${cursor} onSave=${handleSave}
+                                    cursor=${cursor} saving=${saving || saveLocked} onSave=${handleSave}
                                     onUndo=${handleUndo} onRedo=${handleRedo} />
                         <${CodeEditor}
                             doc=${editText}
@@ -227,7 +277,7 @@ export function MarkdownEditor({ text, path, onSave, onDirtyChange, confirmOverw
                             onCursorChange=${setCursor}
                             onSave=${handleSave}
                             viewRef=${editorViewRef}
-                            key=${path + ':source'} />
+                            key=${path + ':' + loadVersion + ':source'} />
                     </div>
                     <div class="markdown-edit-preview"
                          dangerouslySetInnerHTML=${{ __html: previewHtml }}></div>

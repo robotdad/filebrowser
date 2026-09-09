@@ -766,14 +766,23 @@ export function PreviewPane({ filePath, onDirtyChange, diskChangeInfo, onFileSav
     const dirtyRef = useRef(false);
     const contentScrollerRef = useRef(null);
     const reloadTokenRef = useRef(null);
+    // Keep pending save ownership in reactive, path-keyed state.  A scalar
+    // current-path flag loses A's lock when B starts or settles a save.
+    const [pendingMarkdownSaves, setPendingMarkdownSaves] = useState(() => new Map());
+    const contentEpochRef = useRef(new Map());
     // Declared before the render switch below, which passes it to child viewers.
     const confirmOverwrite = pendingSaveConflict;
 
     // Helper: fetch text content and set state (shared by normal + force-load paths)
     const loadTextContent = useCallback((path, type) => {
+        const contentEpoch = contentEpochRef.current.get(path) || 0;
         return api.get(`/api/files/content?path=${encodeURIComponent(path)}`, { cache: 'no-store' })
             .then((text) => {
-                if (prevPath.current === path) {
+                // A GET issued before our own PUT settled can complete after
+                // it.  Its old disk snapshot must never replace the confirmed
+                // save in a remounted editor.
+                if (prevPath.current === path
+                    && (contentEpochRef.current.get(path) || 0) === contentEpoch) {
                     setContent({ type, text });
                     log.debug('render complete: path=%s', path);
                 }
@@ -911,6 +920,39 @@ export function PreviewPane({ filePath, onDirtyChange, diskChangeInfo, onFileSav
         setPendingSaveConflict(false);
     }, [filePath, onFileSaved]);
 
+    const handleMarkdownSaveStarted = useCallback((savedPath, text) => {
+        setPendingMarkdownSaves(current => {
+            const next = new Map(current);
+            next.set(savedPath, text);
+            return next;
+        });
+    }, []);
+
+    const handleMarkdownSaveSettled = useCallback((savedPath, text, response) => {
+        setPendingMarkdownSaves(current => {
+            const next = new Map(current);
+            next.delete(savedPath);
+            return next;
+        });
+        contentEpochRef.current.set(
+            savedPath, (contentEpochRef.current.get(savedPath) || 0) + 1,
+        );
+        if (prevPath.current !== savedPath) return;
+        setContent(prev => prev ? { ...prev, text } : prev);
+        if (response?.modified != null && response?.size != null && onFileSaved) {
+            onFileSaved(savedPath, response.modified, response.size);
+        }
+        setPendingSaveConflict(false);
+    }, [onFileSaved]);
+
+    const handleMarkdownSaveFailed = useCallback((savedPath) => {
+        setPendingMarkdownSaves(current => {
+            const next = new Map(current);
+            next.delete(savedPath);
+            return next;
+        });
+    }, []);
+
     if (!filePath) return html`<div class="preview-empty">Select a file to preview</div>`;
 
     if (loading) return html`
@@ -961,7 +1003,13 @@ export function PreviewPane({ filePath, onDirtyChange, diskChangeInfo, onFileSav
                                              onSave=${handleContentSave} onDirtyChange=${handleDirtyChange} confirmOverwrite=${confirmOverwrite} />`;
             break;
         case 'markdown':
-            inner = html`<${MarkdownEditor} text=${content.text} path=${filePath} onSave=${handleContentSave} onDirtyChange=${handleDirtyChange} confirmOverwrite=${confirmOverwrite} />`;
+            inner = html`<${MarkdownEditor} text=${content.text} path=${filePath}
+                                         onSaveStarted=${handleMarkdownSaveStarted}
+                                         onSaveSettled=${handleMarkdownSaveSettled}
+                                         onSaveFailed=${handleMarkdownSaveFailed}
+                                         saveLocked=${pendingMarkdownSaves.has(filePath)}
+                                         onDirtyChange=${handleDirtyChange}
+                                         confirmOverwrite=${confirmOverwrite} />`;
             break;
         case 'html':
             inner = html`<${HtmlViewer} text=${content.text} path=${filePath} contentUrl=${contentUrl} onSave=${handleContentSave} onDirtyChange=${handleDirtyChange} confirmOverwrite=${confirmOverwrite} />`;
